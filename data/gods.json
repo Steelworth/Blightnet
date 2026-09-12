@@ -1,0 +1,1940 @@
+[
+  {
+    "id": "aegir",
+    "name": "Aegir",
+    "aka": "Of the ale-sea, the drowning hall under the wave",
+    "kind": "norse",
+    "pantheon": "norse",
+    "align": "neutral evil",
+    "domains": "Tempest, Trickery",
+    "symbol": "A foaming ale-horn over a wave, or a drowning net",
+    "rank": "lesser",
+    "look": "A huge, gold-generous sea-giant in sea-dark robes, brewing in a cauldron the size of a boat, hall-pillars of whalebone, green water-light. Clothed, hospitable, dangerous.",
+    "blurb": "The sea as a host who sometimes keeps the guests.",
+    "text": "Aegir brews for the gods and drowns sailors with the same hospitality. His hall is under the water. If you are invited, bring a gift. If you are not, you are the gift.\n\nClerics of Aegir are brewers and wreckers. They bless ships they like. A party that dumps ballast on a sacred skerry has RSVP'd.",
+    "worship": "The first ale into the sea. A gold ring if you want a calm crossing.",
+    "hooks": [
+      "A ship arrived with no crew and a full cask. Aegir wants the cask delivered, not drunk.",
+      "Fishermen pulled up a hall-pillar. The sea has been knocking on the village palisade since."
+    ]
+  },
+  {
+    "id": "anubis",
+    "name": "Anubis",
+    "aka": "Jackal of the weighing, of the careful dead",
+    "kind": "egyptian",
+    "pantheon": "egyptian",
+    "align": "lawful good",
+    "domains": "Death, Knowledge, Life",
+    "symbol": "A black jackal, or a scale with a feather",
+    "rank": "greater",
+    "look": "A black jackal-headed man in white priest-linen and gold pectoral, holding a small scale, a feather on one pan, tomb-gold light. Dignified, no mummies in frame.",
+    "blurb": "Funerals done right. He is the reason a soul gets a fair weighing and a grave-robber does not.",
+    "text": "Anubis invented the funeral that works. He weighs the heart against a feather and he does not take bribes in gold — only in a life that was not a lie.\n\nHis clerics are embalmers and detectives. Speak with dead, gentle repose, zone of truth. A party that cracks a tomb 'just to look' has made a jackal-headed appointment.",
+    "worship": "Linen, natron, a true name, a feather if you have one. Do not open a mouth that was closed on purpose.",
+    "hooks": [
+      "A heart was stolen from a canopic jar. The shade cannot be weighed. It is haunting the thief's meals.",
+      "A cult is selling 'guaranteed passage.' Anubis wants the stall closed and the money given to actual funerals."
+    ]
+  },
+  {
+    "id": "apep",
+    "name": "Apep",
+    "aka": "The night-serpent, enemy of the barque",
+    "kind": "egyptian",
+    "pantheon": "egyptian",
+    "align": "chaotic evil",
+    "domains": "Trickery, Tempest",
+    "symbol": "A coiled serpent eating a sun, or a knot that will not untie",
+    "rank": "greater",
+    "look": "A vast dark serpent of starless scale coiled around a dimming sun-disk in a cosmic cavern, no people, no gore, awe and threat.",
+    "blurb": "The thing that tries to stop tomorrow. Not a god you keep. A god you keep off.",
+    "text": "Apep is the eclipse with a will. He is not worshipped by anyone the other gods would sit with. Cults that feed him want the world still.\n\nThere are almost no true clerics of Apep at a healthy table. There are cultists. If a PC goes this way, they are the campaign's problem, and the sun-cults will notice.",
+    "worship": "Do not. If you must: a knot, a confession of wanting the dark, and the knowledge that Re's people will come.",
+    "hooks": [
+      "An eclipse is three days long and still going. Someone is feeding a snake in a basement.",
+      "A 'serpent amulet' unknots every rope in a mile. Sailors are already drowning in harbour."
+    ]
+  },
+  {
+    "id": "aphrodite",
+    "name": "Aphrodite",
+    "aka": "Of the foam, of desire that starts wars",
+    "kind": "greek",
+    "pantheon": "greek",
+    "align": "chaotic good",
+    "domains": "Life, Light, Trickery",
+    "symbol": "A scallop, a rose, or a golden apple",
+    "rank": "greater",
+    "look": "A graceful woman in a rose-gold peplos and sea-pearl jewelry, standing at a shore with foam at her ankles, not unclothed, painted like a Titian court portrait.",
+    "blurb": "Love as weather. She can end a feud or start a ten-year war with the same glance.",
+    "text": "Aphrodite is not 'nice.' She is the force that makes people stupid and brave in the same hour. Her gift is wanting. What you do with it is still your crime.\n\nClerics of Aphrodite are diplomats, matchmakers, and saboteurs. Charm person is their handshake. A party that mocks a lonely NPC in her temple finds their next persuasion check is against themselves.",
+    "worship": "Leave a rose and a true compliment, not a purchased one. She can tell.",
+    "hooks": [
+      "A golden apple has shown up at a wedding with 'for the fairest' on it. Three queens are already armed.",
+      "A sailor offered her a false lover's name. His ship will not catch wind until he says the real one."
+    ]
+  },
+  {
+    "id": "apollo",
+    "name": "Apollo",
+    "aka": "Of the lyre, the far shot, and the honest plague",
+    "kind": "greek",
+    "pantheon": "greek",
+    "align": "chaotic good",
+    "domains": "Light, Knowledge, Life",
+    "symbol": "A lyre, a laurel, or a silver bow",
+    "rank": "greater",
+    "look": "A youthful, sun-browned god in a laurel crown and a white-gold chiton, lyre in one hand, unstrung bow in the other, Delphic light behind him. Clothed, classical.",
+    "blurb": "Music, prophecy, medicine, and arrows that are also fevers. He is the bright twin.",
+    "text": "Apollo heals and he sends plague with the same bow. He speaks in riddles at Delphi because the truth, said plainly, would start a war before lunch.\n\nHis clerics keep a lyre and a kit. They are the ones who know the oracle is technically correct and still a menace. Lesser restoration and guiding bolt live in the same bag.",
+    "worship": "Sing what you know. Do not fake an omen. He hates a counterfeit prophecy more than a quiet temple.",
+    "hooks": [
+      "The oracle said a PC would 'die of gold.' A merchant is already wrapping them in gilded mail.",
+      "A plague of arrows — actual arrows — falls at noon. Apollo wants a hymn that is also an apology."
+    ]
+  },
+  {
+    "id": "arawn",
+    "name": "Arawn",
+    "aka": "Lord of Annwn, Huntsman of the Otherworld",
+    "kind": "celtic",
+    "pantheon": "celtic",
+    "align": "lawful neutral",
+    "domains": "Life, Trickery, Knowledge",
+    "symbol": "A white hound with red ears, or a crowned stag skull",
+    "rank": "greater",
+    "look": "A pale hunter in grey-green, crowned faintly, a pack of white hounds with red ears at his knee. No gore. A winter wood behind him.",
+    "blurb": "The otherworld is a court, not a pit. Arawn keeps the dead in order and hunts those who cheat the hunt.",
+    "text": "Arawn rules Annwn as a king rules a winter estate: guests, laws, and a hunt that is not for sport. He has swapped faces with mortal princes to settle a feud, and he still expects the bargain kept.\n\nClerics of Arawn bury the named dead properly and refuse to raise them cheaply. They are the ones who know which barrow is a door. If the party raids a tomb for coin, they have made an appointment.",
+    "worship": "Offer a clean kill and a true name at a barrow-gate. Speak softly. His hounds hear boast.",
+    "hooks": [
+      "A mortal lord wore Arawn's face for a year and never gave it back. The hounds are in the fields.",
+      "A barrow opened itself. The dead inside are polite, and they want a living champion for a hunt."
+    ]
+  },
+  {
+    "id": "ares",
+    "name": "Ares",
+    "aka": "Of the spear-din, unashamed war",
+    "kind": "greek",
+    "pantheon": "greek",
+    "align": "chaotic evil",
+    "domains": "War",
+    "symbol": "A bronze helm and a spear, or a wild boar",
+    "rank": "greater",
+    "look": "A grim, bearded warrior in bronze panoply, helm under one arm, spear grounded, a red cloak, battlefield smoke but no corpses in frame.",
+    "blurb": "War without a speech. He is the hour when the plan is over and the shouting has a god.",
+    "text": "Ares is not strategy. Athena is strategy. Ares is the moment the line meets. Cities that pretend they do not need him still call him when the gate is on fire.\n\nClerics of Ares are not paladins. They are the people who keep you standing when the morale dice have failed. They take offence at a war fought only on paper.",
+    "worship": "Offer a broken spear, not a clean one. He wants proof you were there.",
+    "hooks": [
+      "Two armies have agreed to a duel of champions. Ares wants it to be a real fight, not a show.",
+      "A general has banned his name in camp. The sentries keep falling asleep standing up."
+    ]
+  },
+  {
+    "id": "artemis",
+    "name": "Artemis",
+    "aka": "Of the wild wood, the unwed hunt, the moon's edge",
+    "kind": "greek",
+    "pantheon": "greek",
+    "align": "neutral good",
+    "domains": "Nature, Life",
+    "symbol": "A crescent, a stag, or a hunter's bow",
+    "rank": "greater",
+    "look": "A young woman in a short hunting chiton and boots, silver bow, a stag beside her in moonlit pines. Fully clothed, chaste classical pose.",
+    "blurb": "The hunt that feeds, the grove that is not for kings, the moon that does not ask permission.",
+    "text": "Artemis keeps the places maps call blank. She protects children, animals, and anyone who asked to be left alone. Actaeon is the sermon: do not look where you were not invited.\n\nHer rangers and clerics mark groves. A logging concession without her leave is a combat encounter with the forest itself.",
+    "worship": "The first of the hunt is left on a stone. No trophies of what you did not eat.",
+    "hooks": [
+      "A prince is hunting in a grove with a closed gate. The stags have human eyes this week.",
+      "A missing child walked into her wood and will not come out until a vow is rewritten."
+    ]
+  },
+  {
+    "id": "athena",
+    "name": "Athena",
+    "aka": "Of the city, the aegis, the useful war",
+    "kind": "greek",
+    "pantheon": "greek",
+    "align": "lawful good",
+    "domains": "Knowledge, War",
+    "symbol": "An owl, a spear, or the aegis with a quiet face",
+    "rank": "greater",
+    "look": "A grey-eyed woman in a crested helm and a peplos under a goatskin aegis, spear upright, owl on the spear-butt, a city on a hill behind her. Fully clothed, calm.",
+    "blurb": "Wisdom that still knows how to hold a spear. She is the war you win because you thought.",
+    "text": "Athena is the patron of people who read the night before the battle. She invented useful things and then made sure they had laws. She is not kind to clever cruelty.\n\nClerics of Athena keep libraries and drill-yards in the same building. Shield of faith and identify are both hers. A party that wins by a trick she respects will find a grey owl on the tent-ridge.",
+    "worship": "Offer a solved problem, not a trophy. Oil on a spear-point is traditional.",
+    "hooks": [
+      "A city is about to vote for a stupid war. Her priest has one night to make them read the map.",
+      "An owl dropped a bronze owl-coin in a PC's lap. Athena wants a labyrinth disarmed, not looted."
+    ]
+  },
+  {
+    "id": "auril",
+    "name": "Auril",
+    "aka": "Frostmaiden, Icedawn, the Cold Goddess",
+    "kind": "baldur",
+    "pantheon": "baldur",
+    "align": "neutral evil",
+    "domains": "Tempest, Nature",
+    "symbol": "A six-pointed snowflake, or a white diamond on ice-blue",
+    "rank": "lesser",
+    "look": "A pale woman in a high-collared cloak of white fur and rime, crown of icicles, lips blue, eyes like winter water. Fully clothed. A frozen harbor behind her.",
+    "blurb": "Winter that does not leave when the calendar says it should. Beauty that bites.",
+    "text": "Auril is the reason a Sword Coast winter feels personal. She is not a storm you wait out. She is the decision that the harvest failed and the pass stays shut.\n\nClerics of Auril keep cold the way other priests keep a flame. They bless ice over a lock. They ask a price for thaw. In Baldur's Gate she is a dockside superstition: do not mock the frost on the rigging. In the north she is a state.\n\nAt the table she is leverage. A party that burns her shrine for warmth has made an enemy of the next cold snap. A party that leaves an offering of unmelted ice at a crossroads may find the wolves walking around them.",
+    "worship": "Leave something that will not thaw. Speak little. Do not light a fire in her sight unless you are ready to pay for it.",
+    "hooks": [
+      "The Rivington wells froze in Tarsakh. A white-cloaked priestess will thaw one — if the party fetches a heart of true ice from the Coast Way.",
+      "A ship is locked in the harbor by a sheet that will not break. The crew is eating the cargo. Auril wants a name spoken on the ice."
+    ]
+  },
+  {
+    "id": "bahamut",
+    "name": "Bahamut",
+    "aka": "The Platinum Dragon, King of the Good Dragons, Grandfather of Dragons",
+    "kind": "baldur",
+    "pantheon": "baldur",
+    "align": "lawful good",
+    "domains": "War, Life",
+    "symbol": "A rising platinum dragon, or a star over a shield",
+    "rank": "greater",
+    "look": "A noble elder in silver-white plate with a draconic helm under one arm, platinum cloak, calm eyes. Behind him the suggestion of vast wings, not a full beast-shot. Clothed, kingly.",
+    "blurb": "Justice with patience, and a temper he spends like a hoard.",
+    "text": "Bahamut does not rule a street. He rules the idea that power should be used on behalf of people who cannot hoard it. Paladins who keep him are rare on the Sword Coast and conspicuous when they arrive.\n\nHe opposes Tiamat as a matter of family and of law. A cleric of Bahamut will not start a tavern brawl. They will finish one if a child is in it.\n\nAt the table he is a high bar. His signs are small: a platinum scale left on a pillow, a dream of flying over a city that is on fire and choosing which roof to land on. He does not want a cult. He wants the work done.",
+    "worship": "Kneel only to swear. Then stand up and keep the oath. Gold given to the poor counts. Gold given to a statue does not.",
+    "hooks": [
+      "A platinum scale was found in a Lower City well. Three churches claim it. Something in the sewers is hunting the claimants.",
+      "A young metallic dragon is hiding in a warehouse as a man. Tiamat's cult has the address. Bahamut wants the man walked out, not displayed."
+    ]
+  },
+  {
+    "id": "balder",
+    "name": "Balder",
+    "aka": "The bright one, whose death is a season the world has not finished",
+    "kind": "norse",
+    "pantheon": "norse",
+    "align": "neutral good",
+    "domains": "Life, Light",
+    "symbol": "A sprig of mistletoe, or a sun on a shield",
+    "rank": "greater",
+    "look": "A luminous, kind young lord in white-and-gold, unarmed, a shield at rest, mistletoe small in the scene, summer hall. Clothed, tragic, not a corpse.",
+    "blurb": "Joy that was so complete the world had to find a loophole. He is beauty, peace, and the coming grief.",
+    "text": "Balder was loved so well that everything swore not to hurt him — except the joke plant. The stories do not hide how that ends. At a table he is the peace everyone wants and the vulnerability no one budgeted for.\n\nClerics of Balder are peacemakers who still know a spear. They are the reason a truce holds until mistletoe gets involved.",
+    "worship": "A kind word that costs you something. Do not make a joke of a sworn peace.",
+    "hooks": [
+      "Mistletoe has started growing on every spear in a keep. Balder wants the joke disarmed.",
+      "A lord who cannot be harmed by anything but 'a child's toy' is about to sit in a hall of children. Someone sent an invitation."
+    ]
+  },
+  {
+    "id": "bane",
+    "name": "Bane",
+    "aka": "The Black Lord, Lord of Darkness, the Strife",
+    "kind": "baldur",
+    "pantheon": "baldur",
+    "align": "lawful evil",
+    "domains": "War, Trickery",
+    "symbol": "A black gauntleted fist, or a green-black sunburst on iron",
+    "rank": "greater",
+    "look": "A tall tyrant in black plate chased with green, visor up on a hard face, one gauntlet raised as if the room already belongs to him. No gore. A hall of banners behind.",
+    "blurb": "Order as a boot. Fear as administration.",
+    "text": "Bane is one of the Dead Three, and the one who still thinks like a general. He does not want chaos. He wants a chain of command with himself at the top and everyone else grateful they were allowed a rank.\n\nIn Baldur's Gate his people do not always wear a fist. They wear a badge, a contract, a quiet monopoly. Banites prefer a city that already has laws. They just want to own the laws.\n\nA cleric of Bane at the table is a problem you can negotiate with, which is worse. They keep their word the way a siege keeps a timetable.",
+    "worship": "Kneel. Mean it. Bring him a victory, not a prayer. He has enough prayers.",
+    "hooks": [
+      "A Fist captain has started quoting a black book in briefings. The book is new. The fist on the cover is not.",
+      "A Banite cell is offering to 'stabilize' the Outer City after a gang war. Their price is a seat on the next council."
+    ]
+  },
+  {
+    "id": "bast",
+    "name": "Bast",
+    "aka": "Of the cat, the joy, the sudden claw",
+    "kind": "egyptian",
+    "pantheon": "egyptian",
+    "align": "chaotic good",
+    "domains": "War, Trickery, Life",
+    "symbol": "A cat, a sistrum, or an aegis with a lioness face",
+    "rank": "greater",
+    "look": "A graceful woman with a black cat's head, gold earrings, white-and-red linen dress, sistrum in hand, temple cats at her feet. Fully clothed, elegant, not sexualized.",
+    "blurb": "Pleasure, protection, and the reminder that a house-cat is also a lion.",
+    "text": "Bast is music in the afternoon and a lioness at the gate. She is the god of people who keep cats because mice eat grain and because loneliness is a plague too.\n\nHer clerics dance, keep watch, and do not explain the claw. A party that hurts a temple cat has started a war with an entire neighbourhood.",
+    "worship": "Perfume, a song, a bowl of milk. Do not kick a cat even as a joke in her town.",
+    "hooks": [
+      "All the cats left a city in one night. The rats are already in the granary.",
+      "A temple dancer was arrested for 'riot.' Bast wants her back before the festival, or there will be one."
+    ]
+  },
+  {
+    "id": "belenus",
+    "name": "Belenus",
+    "aka": "The Shining, Bright One",
+    "kind": "celtic",
+    "pantheon": "celtic",
+    "align": "neutral good",
+    "domains": "Light, Life",
+    "symbol": "A sun-disc on a wheeled shrine, or a sprig of bel-fire",
+    "rank": "greater",
+    "look": "A fair, bearded rider in pale gold wool, sun-wheel at his breast, standing before a hill-fire at dawn. Clothed, warm, no glare-text.",
+    "blurb": "Hill-fires and healing light. He is the year turning over, and the fever breaking.",
+    "text": "Belenus is kept where people still light fires on the first of summer. His light is not a courtroom. It is the thing that makes cattle well and wounds close.\n\nA cleric of Belenus carries a lantern they never bought. In a plague year they are more useful than a paladin. In a war they are the reason the night-watch can see the ditch.",
+    "worship": "Light a fire on a high place at dawn. Heal by daylight when you can.",
+    "hooks": [
+      "The beltane fire went out in a storm. Until it is relit from a true flame, calves are stillborn.",
+      "A rival cult claims his sun-wheel. The hill is already arguing."
+    ]
+  },
+  {
+    "id": "bes",
+    "name": "Bes",
+    "aka": "Dwarf-lion of the household, scarer of nightmares",
+    "kind": "egyptian",
+    "pantheon": "egyptian",
+    "align": "chaotic good",
+    "domains": "Life, Trickery, War",
+    "symbol": "A grinning dwarf-lion face, or a tambourine",
+    "rank": "lesser",
+    "look": "A short, lion-maned household god in a plumed headdress and kilt, grinning, tambourine in hand, standing in a doorway as a protector. Comic and fierce, clothed.",
+    "blurb": "The ugly little god who stands in the bedroom door so worse things do not.",
+    "text": "Bes is not handsome and does not care. He is carved on headboards and sword-pommels. He frightens nightmares and assists births. He is the most popular god in any street that has children.\n\nClerics of Bes are midwives, bouncers, and the person who sleeps across your threshold when you are fevered. Protection from evil is his whole personality.",
+    "worship": "A laugh at a real fear. A carved face on a door. Do not mock a short guardian.",
+    "hooks": [
+      "Nightmares in a barracks have a shape. Bes wants his image put back on the headboards someone scraped off.",
+      "A noble banned 'ugly gods' from the quarter. Infant sleep ended the same week."
+    ]
+  },
+  {
+    "id": "beshaba",
+    "name": "Beshaba",
+    "aka": "Maid of Misfortune, Lady Doom, the Black Bess",
+    "kind": "baldur",
+    "pantheon": "baldur",
+    "align": "chaotic evil",
+    "domains": "Trickery, Tempest",
+    "symbol": "A rack of antlers on black, or a red field of disaster",
+    "rank": "greater",
+    "look": "A sharp-smiling woman with a wild dark mane, small horns, mauve-and-black gown, a broken coin in one hand. Fully clothed. Dice and spilled wine at her feet, not blood.",
+    "blurb": "Luck's cruel sister. She arrives when you say it cannot get worse.",
+    "text": "Beshaba is Tymora's opposite and will not let anyone forget it. Where Tymora winks, Beshaba trips the stool. Sailors on the Chionthar spit if her name is said aboard.\n\nHer clerics do not heal. They arrange. A rope frays. A watchman looks left. A 'lucky' charm is hers if it was never paid for.\n\nAt the table she is a timer. If the party boasts, she is listening. If they leave an offering of spilt wine and a broken tool at a crossroads, she may torment someone else tonight.",
+    "worship": "Do not toast luck in her hearing. Leave a little disaster on purpose so she does not invent a large one.",
+    "hooks": [
+      "Every lockpick in the party has snapped in the same week. A mauve ribbon was tied to the last one.",
+      "A gambling house in the Lower City has had three 'impossible' losing streaks. The dealer wears antler pins."
+    ]
+  },
+  {
+    "id": "bhaal",
+    "name": "Bhaal",
+    "aka": "Lord of Murder, the Dread Lord, Faerûn's last knife",
+    "kind": "baldur",
+    "pantheon": "baldur",
+    "align": "neutral evil",
+    "domains": "War, Trickery",
+    "symbol": "A skull surrounded by a ring of bloody droplets, or a dagger laid on a palm",
+    "rank": "greater",
+    "look": "A bald, severe man in close black-and-crimson robes, ritual dagger reversed against his palm, calm as a clerk. No open wounds. A dim stone chapel, candles, a floor-mosaic of a skull.",
+    "blurb": "Murder as vocation. Not rage. A calling.",
+    "text": "Bhaal is the Dead Three's knife. Baldur's Gate has never been rid of him. His name is on the city's oldest panic and its newest alley. He does not want a battlefield. He wants a person who was alive this morning and is not, and a reason that belongs to him.\n\nBhaalists keep lists. They prefer murders that teach a city to flinch. A cleric of Bhaal at the table is not a berserker. They are patient. They ask who would be most useful dead.\n\nHis return is a rumor that keeps being true. If the party finds a shrine of still-wet palms, they have found work whether they wanted it or not.",
+    "worship": "A drop of blood on a stone. A name spoken once. Do not kill in anger; that is someone else's domain. Kill as an offering.",
+    "hooks": [
+      "Seven victims in the Lower City, no theft, each left with a clean palm-cut. The Flaming Fist wants it quiet. Bhaal wants it famous.",
+      "A child of Bhaal is hiding in a temple of another god, trying not to be a prophecy. Both churches will pay. Neither will tell you the truth."
+    ]
+  },
+  {
+    "id": "brigantia",
+    "name": "Brigantia",
+    "aka": "High One, lady of rivers and high places",
+    "kind": "celtic",
+    "pantheon": "celtic",
+    "align": "neutral good",
+    "domains": "Life, War, Nature",
+    "symbol": "A crown of rushes over a spear, or a river-horse",
+    "rank": "greater",
+    "look": "A tall woman in a green cloak pinned with gold, spear grounded, a river behind her and a hill-fort on the far bank. Fully clothed.",
+    "blurb": "Sovereignty of the land. Rivers, high forts, and the right to hold them.",
+    "text": "Brigantia is the name you give a river when it is also a queen. She blesses the people who keep the fords honest and the forts repaired.\n\nHer clerics settle border fights with a spear planted, not a speech. If the party is hired to take a hill, they may be taking it from her.",
+    "worship": "Pour water from the local river over a spear-point. Do not dam a sacred stream for a mill without asking.",
+    "hooks": [
+      "A new mill is starving the old ford of water. The salmon have left. So has the luck.",
+      "A war-band took her hill-fort and hung their own banner. The well tastes of rust."
+    ]
+  },
+  {
+    "id": "corellon",
+    "name": "Corellon Larethian",
+    "aka": "Creator of the Elves, First of the Seldarine, Coronal of Arvandor",
+    "kind": "baldur",
+    "pantheon": "baldur",
+    "align": "chaotic good",
+    "domains": "Light, War, Knowledge",
+    "symbol": "A crescent moon, a starburst, or an artist-warrior's longsword",
+    "rank": "greater",
+    "look": "An androgynous elf in pearl and leaf-green silk, a painter's brush in one hand and a slender sword in the other, starlight in the hair. Fully clothed, ageless, slightly amused.",
+    "blurb": "Art as a way of fighting, and fighting as a way of remaining beautiful.",
+    "text": "Corellon made the elves and has been arguing with the result ever since. Lolth is the argument that went to war. He is worshipped in Baldur's Gate wherever elves still keep a shrine that is also a studio.\n\nClerics of Corellon bless a blade the way they bless a song: it should be excellent. They dislike ugliness more than they dislike evil, which gets them in trouble with paladins.\n\nAt the table he is a patron of daring. A plan that is clever and a little theatrical may receive help. A plan that is merely efficient may not.",
+    "worship": "Make something before you ask. A sketch, a verse, a clean kill. Do not worship him with copied work.",
+    "hooks": [
+      "An elven shrine in the Upper City was vandalized with spider-sign. Corellon's priest wants the web cut before dawn, quietly.",
+      "A stolen painting is a door. Someone walked through it. The frame is still warm."
+    ]
+  },
+  {
+    "id": "cyric",
+    "name": "Cyric",
+    "aka": "Prince of Lies, the Dark Sun, the Mad God",
+    "kind": "baldur",
+    "pantheon": "baldur",
+    "align": "chaotic evil",
+    "domains": "Trickery, War",
+    "symbol": "A white jawless skull on a dark sunburst, or a black sun",
+    "rank": "greater",
+    "look": "A lean, fever-eyed man in black and purple, a pale skull-mask pushed up on his brow like a hat he forgot, smiling at a joke no one else heard. Fully clothed. A shattered altar behind him.",
+    "blurb": "Madness with a press office. Lies that become true if enough people repeat them.",
+    "text": "Cyric murdered his way into godhood and has been rewriting the minutes ever since. He hates the other gods the way a forger hates a signature. Baldur's Gate hears him as rumor: a new prophet every season, a pamphlet that contradicts itself and still sells.\n\nHis clerics cannot be trusted, including by each other. That is the point. A Cyricist at the table is a plot device that walks.\n\nUse him when the party needs an enemy who will betray their own side for the poetry of it.",
+    "worship": "Swear on a lie and keep the lie until it hardens. Never tell the same story twice.",
+    "hooks": [
+      "A street preacher in the Wide is telling three versions of the party's last job. All of them are almost true. One of them will get someone hanged.",
+      "A holy book of Cyric was found blank. Words appear when a specific person lies. The Flaming Fist has that person in a cell."
+    ]
+  },
+  {
+    "id": "demeter",
+    "name": "Demeter",
+    "aka": "Of the grain, the grief that winters the world",
+    "kind": "greek",
+    "pantheon": "greek",
+    "align": "neutral good",
+    "domains": "Life, Nature",
+    "symbol": "A sheaf of wheat, or a torch in a field",
+    "rank": "greater",
+    "look": "A mature woman in a harvest-coloured peplos, wheat in one arm, a torch in the other, a field half gold and half winter behind her. Clothed, grave, kind.",
+    "blurb": "Bread, and the mother who will stop the year if her child is taken.",
+    "text": "Demeter taught people to farm, which is to say she taught them to stay. When Persephone is below, she lets the world go hungry. That is not a tantrum. That is a god explaining the cost of a kidnapping.\n\nHer clerics keep granaries honest. Plant growth and hero's feast are their liturgy. Starve a village to fund an army in her country and the seed will not come up.",
+    "worship": "The first loaf of a harvest on the altar. Do not waste grain in front of her name.",
+    "hooks": [
+      "Winter is three weeks late to leave. Someone has Persephone's token in a locked box.",
+      "A landlord is hoarding seed-grain. The mice will not touch it. Demeter will."
+    ]
+  },
+  {
+    "id": "diancecht",
+    "name": "Diancecht",
+    "aka": "Physician of the Tuatha",
+    "kind": "celtic",
+    "pantheon": "celtic",
+    "align": "lawful good",
+    "domains": "Life, Knowledge",
+    "symbol": "A bowl of healing water and a leaf of mistletoe",
+    "rank": "lesser",
+    "look": "A calm, grey-haired physician in a linen apron over a tunic, hands clean, a silver bowl and herbs on a stone table. No gore.",
+    "blurb": "The god who puts people back together. He does not like sloppy miracles.",
+    "text": "Diancecht healed a king so well the king forgot to be grateful. He drowned his own son's better work out of pride, and the old stories do not hide that. A god of medicine who has been jealous is a useful warning at a table.\n\nHis clerics are surgeons. They will not raise the dead if a living patient is waiting. They keep a well that heals — once — and they know the difference between a cure and a story.",
+    "worship": "Wash the wound in running water and name the injury honestly. Lies about how it happened spoil the work.",
+    "hooks": [
+      "A well of Diancecht will heal one person a day. A war has a queue. Someone is selling places.",
+      "His son's surviving work — a living silver arm — has been stolen from a tomb and fitted to a bandit."
+    ]
+  },
+  {
+    "id": "dionysus",
+    "name": "Dionysus",
+    "aka": "Of the vine, the mask, the holy riot",
+    "kind": "greek",
+    "pantheon": "greek",
+    "align": "chaotic neutral",
+    "domains": "Life, Trickery",
+    "symbol": "A grape-cluster, a thyrsus, or a theatre mask",
+    "rank": "greater",
+    "look": "A long-haired youth in a panther-spotted cloak over a tunic, ivy crown, a pine-cone staff, theatre masks at his feet, vineyard twilight. Clothed, ecstatic not lewd.",
+    "blurb": "Wine, theatre, and the moment a crowd becomes one animal.",
+    "text": "Dionysus is the god of getting out of your own life without dying. He is theatre and vintage and the riot that starts when a king bans the play. He is not 'party guy.' He is the reminder that order without joy rots.\n\nClerics of Dionysus are actors, vintners, and the people who know when a feast is a spell. Confusion and charm are both on the list. A tyrant who bans masks in his city has made an enemy with a chorus.",
+    "worship": "Pour the first wine on the ground. Put on a mask if you are going to tell the truth.",
+    "hooks": [
+      "A king has banned theatre. The statues of the gods have started reciting lines at night.",
+      "A vintage bottled in a hero's skull is being sold as a relic. Dionysus wants it drunk, not worshipped."
+    ]
+  },
+  {
+    "id": "dunatis",
+    "name": "Dunatis",
+    "aka": "God of the peaks and the cairn",
+    "kind": "celtic",
+    "pantheon": "celtic",
+    "align": "neutral",
+    "domains": "Nature, Tempest",
+    "symbol": "A cairn of nine stones, or a ram's horn",
+    "rank": "lesser",
+    "look": "A weathered hill-man in a sheepskin cloak, standing on a windy cairn, mountains stacked behind him like a court.",
+    "blurb": "Mountains, passes, and the stone piles that mark them.",
+    "text": "Dunatis does not come down. You go up. Cairns on the ridge are his parish. Travellers who add a stone get the next pass. Travellers who kick one down get weather.\n\nClerics of Dunatis are guides. They know which mountain is a door and which is only rock. A flying enemy is an insult they take personally.",
+    "worship": "Add a stone to a cairn before you cross. Do not camp on a summit without leaving food for the next fool.",
+    "hooks": [
+      "Someone pulled down a cairn to build a watchtower. The pass has been in cloud for a week.",
+      "A ram with a gold collar is leading sheep off a cliff. Dunatis wants it walked home, not killed."
+    ]
+  },
+  {
+    "id": "forseti",
+    "name": "Forseti",
+    "aka": "Of the fair sitting, the god who ends a feud without a grave",
+    "kind": "norse",
+    "pantheon": "norse",
+    "align": "lawful good",
+    "domains": "Knowledge, Life",
+    "symbol": "A golden axe at rest, or a set of balanced scales",
+    "rank": "lesser",
+    "look": "A calm, golden-haired judge in a simple rich cloak, seated in a hall of pale wood, an unused axe on the table, two angry chieftains silent. Clothed, still.",
+    "blurb": "Law as a hall you can walk out of alive. He is the best ending a saga did not want to write.",
+    "text": "Forseti settles cases so well that even the stubborn leave quiet. His axe is a symbol because it is not being used. That is the miracle.\n\nClerics of Forseti are law-speakers. Zone of truth, calm emotions. A party that solves a murder with a massacre in his district will be asked to sit, for a long time.",
+    "worship": "Tell the whole story. Leave the weapon on the table, not in it.",
+    "hooks": [
+      "A feud is about to become a burning. Forseti wants one sitting, tonight, with the party as witnesses who cannot leave.",
+      "His golden axe was stolen and used. It will not come out of the beam until a true verdict is spoken."
+    ]
+  },
+  {
+    "id": "frey",
+    "name": "Frey",
+    "aka": "Of the harvest, the boar, the sword he should not have given away",
+    "kind": "norse",
+    "pantheon": "norse",
+    "align": "neutral good",
+    "domains": "Life, Nature, Light",
+    "symbol": "A golden boar, a ship that folds, or a sheaf",
+    "rank": "greater",
+    "look": "A handsome harvest-lord in green-gold, a golden-bristled boar at his side, a folded ship like a toy in his hand, fields in good weather. Clothed, generous.",
+    "blurb": "Peace, rain, and the fertility of fields and herds. He once traded his sword for love and the last war will notice.",
+    "text": "Frey is the good year. His boar lights the dark. His ship holds an army and folds into a pocket. He gave away the sword he will want at the end of things. That is a campaign hook with a god's name on it.\n\nClerics of Frey keep markets and marriages. Plant growth. A famine in his country is a crime scene.",
+    "worship": "The first loaf, the first ale, a kind marriage. Do not starve a neighbour to raise a price.",
+    "hooks": [
+      "His folding-ship is in a tax-booth as a 'curiosity.' It is unfolding.",
+      "A drought ends at the border of one farm. That farmer sold Frey's sword last winter."
+    ]
+  },
+  {
+    "id": "freya",
+    "name": "Freya",
+    "aka": "Of the necklace, the falcon-cloak, the slain she chooses first",
+    "kind": "norse",
+    "pantheon": "norse",
+    "align": "neutral good",
+    "domains": "Life, War, Trickery",
+    "symbol": "A falcon, a necklace of many fires, or a cat-drawn cart",
+    "rank": "greater",
+    "look": "A commanding woman in a falcon-feather cloak over a rich gown, Brisingamen at her throat, two cats at the cart, a distant battlefield she is choosing from. Fully clothed, regal, not a pin-up.",
+    "blurb": "Love, seiðr, and the first pick of the slain. She is not Odin's assistant. She is the other hall.",
+    "text": "Freya taught the gods a magic they still side-eye. She rides to war and takes half the dead. She weeps gold. She is the patron of people who will not be only one thing.\n\nClerics of Freya are seers and captains. They keep cats and secrets. A party that treats her as 'the love goddess' will meet the war goddess on the same day.",
+    "worship": "Amber, a song, a truth you did not want to say. Do not cage a cat in her town.",
+    "hooks": [
+      "Half a battlefield's dead sat up and walked toward the sea. Freya wants to know who is poaching her share.",
+      "Brisingamen has a fake in a queen's box. The real one is hunting the thief as a necklace-shaped heat."
+    ]
+  },
+  {
+    "id": "frigga",
+    "name": "Frigga",
+    "aka": "Of the keyed hall, the knowing she will not say",
+    "kind": "norse",
+    "pantheon": "norse",
+    "align": "neutral good",
+    "domains": "Life, Knowledge, Trickery",
+    "symbol": "A bunch of keys, a spinning-wheel, or a cloud-cloak",
+    "rank": "greater",
+    "look": "A mature queen in a cloud-grey gown and a key-ring at her belt, spinning white wool, a wide window on the worlds. Fully clothed, still, omniscient calm.",
+    "blurb": "Queenship, foresight, and the choice not to spoil the ending. She already knows. She will not always tell.",
+    "text": "Frigga sees more than Odin and spends less of it. She is the hall, the marriage, the cloud. She bound the world to spare Balder and the loophole still happened. She is not a failure. She is a god who understands limits.\n\nClerics of Frigga keep households and secrets. They are terrifying at court. A divination in her name may come back as 'you already know.'",
+    "worship": "A key on the altar. Spin a thread for someone you mean to keep.",
+    "hooks": [
+      "A queen is spinning a thread that is a person's lifespan. Frigga wants the wheel stopped, not the queen killed.",
+      "Every key in a keep opened the wrong door. She wants a promise kept that was made in a kitchen."
+    ]
+  },
+  {
+    "id": "goibhniu",
+    "name": "Goibhniu",
+    "aka": "Smith of the Tuatha, brewer of the feast",
+    "kind": "celtic",
+    "pantheon": "celtic",
+    "align": "neutral good",
+    "domains": "Knowledge, War",
+    "symbol": "An anvil and a cup of ale",
+    "rank": "lesser",
+    "look": "A thick-armed smith in a leather apron, hammer raised over gold-hot iron, a drinking-horn on the anvil's horn. Sparks, no text.",
+    "blurb": "Weapons that do not miss, and ale that heals the people who made it through the day.",
+    "text": "Goibhniu forges the spears that always find their mark, and he brews for the feast after. His work is not pretty for its own sake. It is correct.\n\nA cleric of Goibhniu is a smith with a domain. They can bless a blade for a night. They will not bless a blade that will be used on a guest.",
+    "worship": "Strike the anvil three times and pour the first cup on the coals.",
+    "hooks": [
+      "A spear he made has been used in a murder. It will not leave the wound until a smith-priest sees it.",
+      "His feast-ale recipe is in a giant's kitchen. The giant thinks it is soup."
+    ]
+  },
+  {
+    "id": "gond",
+    "name": "Gond",
+    "aka": "Wonderbringer, the Holy Maker, Lord of All Smiths",
+    "kind": "baldur",
+    "pantheon": "baldur",
+    "align": "neutral",
+    "domains": "Knowledge, War",
+    "symbol": "A toothed cog, a smith's hammer on an anvil, or a mechanical arm",
+    "rank": "greater",
+    "look": "A stout craftsman in a leather apron over good clothes, one forearm a beautiful brass-and-steel mechanism, hammer in the living hand, a workbench of unfinished wonders. No text on the tools. Sparks, concentration.",
+    "blurb": "Invention as worship. If it works, it is a prayer that passed.",
+    "text": "Gond is the god of making things that did not exist this morning. Lantan loves him. Baldur's Gate keeps a High House of Wonders and a street full of people who think a better lock is a moral act.\n\nGondians will bless a firearm, a clock, a prosthetic, a mill. They will not bless a tool they cannot take apart. A cleric of Gond at the table is the reason the party has a device with a nickname.\n\nHe is not kind about shoddy work. A miracle that is also sloppy offends him more than a crime that is well built.",
+    "worship": "Offer a working model, not a speech. Break nothing you cannot improve.",
+    "hooks": [
+      "The High House of Wonders is missing a prototype that walks. It was last seen heading for the sewers with a child's drawing of a map.",
+      "A Gondian will arm the party if they retrieve a crate of smokepowder from a ship that is on fire in a useful way."
+    ]
+  },
+  {
+    "id": "gruumsh",
+    "name": "Gruumsh",
+    "aka": "One-Eye, He Who Never Sleeps, the Great God of the Orcs",
+    "kind": "baldur",
+    "pantheon": "baldur",
+    "align": "chaotic evil",
+    "domains": "War, Tempest",
+    "symbol": "A single unblinking eye, or a bloodied spear",
+    "rank": "greater",
+    "look": "A massive orc war-chief in hide and iron, left eye a ruin, right eye burning, spear taller than a man, a storm behind the camp. Clothed, furious, not a caricature.",
+    "blurb": "The god who was denied a seat and took a continent instead.",
+    "text": "Gruumsh is the orc answer to every other god's map. He does not want a temple with pews. He wants the next hill. On the Sword Coast his name is a warning in the Wood of Sharp Teeth and a recruiting poster in the wrong taverns.\n\nClerics of Gruumsh bless the first charge and the last stand. They do not write doctrine. They remember grudges.\n\nAt the table he is a war-band with theology. A party that treats orcs as scenery will meet his eye. A party that treats an orc as a person may still have to fight the god.",
+    "worship": "Take something that was refused. Do not blink. The spear is the prayer.",
+    "hooks": [
+      "An orc war-priest is offering a truce if the party blinds a statue of Corellon in the Upper City. He is telling most of the truth.",
+      "A one-eyed raven has been circling the camp. It drops spearheads. They are warm."
+    ]
+  },
+  {
+    "id": "hades",
+    "name": "Hades",
+    "aka": "Of the unseen house, rich in the dark earth",
+    "kind": "greek",
+    "pantheon": "greek",
+    "align": "lawful evil",
+    "domains": "Knowledge, Trickery, Life",
+    "symbol": "A bident, a helm of dusk, or a key",
+    "rank": "greater",
+    "look": "A dark-bearded king in a black-and-gold himation, bident in hand, seated on a stone throne, subterranean gold light, no corpses, no gore, living ruler.",
+    "blurb": "The dead are his citizens. He is not theatrical about it. He is a landlord with a very large building.",
+    "text": "Hades is grim because his work is grim, not because he eats babies. He keeps the gates. He hates people who steal from graves and people who skip the funeral. Wealth under the earth is his; miners pray whether they admit it or not.\n\nClerics of Hades are undertakers with jurisdiction. Speak with dead is a court appointment. Raise dead without his leave is theft.",
+    "worship": "A coin under the tongue of the dead, and a clean name on the stone. Do not rob a grave for 'research.'",
+    "hooks": [
+      "A necromancer is running a side door in Hades' house. The shades want a living lawyer.",
+      "A mine struck a throne-room. The miners who came back will not speak of gold, only of a key."
+    ]
+  },
+  {
+    "id": "hathor",
+    "name": "Hathor",
+    "aka": "Of the sycamore, the sistrum, the sky as a cow of gold",
+    "kind": "egyptian",
+    "pantheon": "egyptian",
+    "align": "neutral good",
+    "domains": "Life, Light",
+    "symbol": "A cow's horns with a sun disk, or a sistrum",
+    "rank": "greater",
+    "look": "A woman in a tripartite wig with cow horns and sun disk, gold-and-turquoise linen, sistrum raised, a sycamore behind her. Fully clothed, warm, queenly.",
+    "blurb": "Joy, music, and the sky that nurses the world. When she is angry, the joy becomes a lion.",
+    "text": "Hathor is the good day. She is also, in the old story, the eye of Re that almost ended people when they forgot to be kind. Her clerics keep that story as a warning, not a threat they enjoy.\n\nMusic, beer, and mercy. A feast in her name can stop a massacre if it is sincere. A fake feast makes her send the lioness aspect, and no one wants that at a table by accident.",
+    "worship": "Beer, a song, a green branch. Mean joy is not an offering.",
+    "hooks": [
+      "A festival was cancelled to fund a wall. The wall is already cracking in the shape of a smile.",
+      "A sistrum in a tomb will not stop rattling. Hathor wants a dance in the street it was stolen from."
+    ]
+  },
+  {
+    "id": "hecate",
+    "name": "Hecate",
+    "aka": "Of the three ways, of keys and the night-work",
+    "kind": "greek",
+    "pantheon": "greek",
+    "align": "chaotic good",
+    "domains": "Knowledge, Trickery",
+    "symbol": "A three-way torch, a key, or a pair of hounds",
+    "rank": "lesser",
+    "look": "A composed woman in a dark peplos, three-faced in the old icon way or holding three torches, keys at her belt, two calm hounds. Crossroads at night, clothed.",
+    "blurb": "Crossroads, witchcraft that has rules, and the key you were not supposed to copy.",
+    "text": "Hecate stands where three roads meet and hears all three rumours. She is the patron of people who work at night because the day will not have them. She is not 'evil magic.' She is magic that admits it is magic.\n\nHer clerics keep keys and dogs. They bless thresholds. A party that takes a third path at a fork without an offering has chosen her, whether they meant to.",
+    "worship": "Leave food at a crossroads for dogs and the hungry. Do not pick the lock on a shrine.",
+    "hooks": [
+      "Every lock in a town opened at midnight. Hecate wants to know who copied her key.",
+      "A crossroads shrine was paved over. People who take that road arrive yesterday."
+    ]
+  },
+  {
+    "id": "heimdall",
+    "name": "Heimdall",
+    "aka": "White god of the bridge, who hears the grass grow",
+    "kind": "norse",
+    "pantheon": "norse",
+    "align": "lawful good",
+    "domains": "Light, Knowledge, War",
+    "symbol": "A horn, a rainbow bridge, or a golden tooth",
+    "rank": "greater",
+    "look": "A pale, keen-eyed watchman in white-and-gold mail, Gjallarhorn at his hip, standing on a rainbow bridge over mist, seeing past the viewer. Clothed, alert.",
+    "blurb": "The watch that does not blink. He will blow the horn when the end starts, and not before.",
+    "text": "Heimdall can hear wool grow on a sheep three worlds away. He sleeps less than a bird. He is the reason a sneak attack on the gods' road is a bad career.\n\nClerics of Heimdall are sentries. They hate surprise for its own sake. Alarm and see invisibility. A party that tries to 'just sneak in' to a holy bridge has a new enemy with a horn.",
+    "worship": "A watch kept until relieved. A horn-call only for a true emergency.",
+    "hooks": [
+      "The rainbow bridge has a crack that only the deaf can see. Heimdall wants a mason who is also a listener.",
+      "Someone stole a note of his horn. Every alarm in a city now sounds like the end of the world, once a day."
+    ]
+  },
+  {
+    "id": "hel",
+    "name": "Hel",
+    "aka": "Of the rain-dark hall, keeper of those who did not die in song",
+    "kind": "norse",
+    "pantheon": "norse",
+    "align": "neutral evil",
+    "domains": "Knowledge, Trickery, Life",
+    "symbol": "A half-dark face, or a down-facing hall",
+    "rank": "greater",
+    "look": "A composed woman, one side living and fair, one side shadowed like stone, seated on a low throne in a vast quiet hall, living attendants, no corpses, no gore, sovereign.",
+    "blurb": "The dead who did not go to a war-hall still have a queen. She is not a devil. She is a host with a long guest-list.",
+    "text": "Hel keeps those who died of sickbed and winter. Her hall is not a torture-show unless a table makes it one. She is due respect because everyone visits.\n\nClerics of Hel are undertakers and the people who speak for the unheroic dead. They hate a funeral that pretends a farmer was a king, and they hate a king who dumps the poor in a ditch.",
+    "worship": "A bowl of food at a funeral for the one who cannot eat it. Do not mock a quiet death.",
+    "hooks": [
+      "The sick of a town are dying in their sleep with no disease. Hel wants a stolen name-list back.",
+      "A war-priest declared that plague-dead 'do not count.' Their graves have opened as doors, not as monsters — yet."
+    ]
+  },
+  {
+    "id": "helm",
+    "name": "Helm",
+    "aka": "The Watcher, He of the Unsleeping Eyes, the Vigilant",
+    "kind": "baldur",
+    "pantheon": "baldur",
+    "align": "lawful neutral",
+    "domains": "War, Life",
+    "symbol": "An open staring eye on a gauntlet, or a full helm with no visor-slit you can find",
+    "rank": "greater",
+    "look": "A still figure in unadorned full plate, helm down, a large eye-device on the shield, standing a watch that has no end of shift. No face. Only the feeling of being seen.",
+    "blurb": "Duty after the reason for the duty has gone home.",
+    "text": "Helm is the god of the door that stays shut because someone has to. He is not kind and he is not cruel. He is the watch. Baldur's Gate understands him: walls, fists, harbors, the feeling that if you look away the city will be stolen.\n\nHis clerics take shifts seriously. They will guard a thing they dislike if they swore to. They will not abandon a post because the party has a better plan.\n\nAt the table Helm is a lock. A Helmite NPC is the one who will not be bribed and will not be hurried. If the party is the watch tonight, they are doing his work whether they pray or not.",
+    "worship": "Stand the watch you named. Do not sit. Do not close both eyes. A report is a prayer.",
+    "hooks": [
+      "A Helmite has been on the same wall for three days without relief. He will not leave. Something on the far side of the wall does not want him to.",
+      "The party is hired to watch a door until dawn. Helm will know if they dice."
+    ]
+  },
+  {
+    "id": "hephaestus",
+    "name": "Hephaestus",
+    "aka": "Lame smith of Olympus, maker of working miracles",
+    "kind": "greek",
+    "pantheon": "greek",
+    "align": "neutral good",
+    "domains": "Knowledge, War",
+    "symbol": "An anvil and a hammer, or a lame donkey",
+    "rank": "greater",
+    "look": "A powerful, work-stained smith with a bad leg, leather apron over a tunic, hammer and tongs, bronze automata half-made on the bench, volcanic glow. Clothed, dignified.",
+    "blurb": "The god who makes the tools the other gods only wear. He is craft, fire, and the right to be ugly and indispensable.",
+    "text": "Hephaestus was thrown off a mountain and answered by inventing the world the rest of them live in: thrones, armour, bronze servants. He is the patron of anyone who was discarded and then became load-bearing.\n\nClerics of Hephaestus are smiths and inventors. Heat metal is a sermon. A cursed item on the table may simply be something he wants repaired, not destroyed.",
+    "worship": "The first work of the day on the altar — a nail will do if it is true.",
+    "hooks": [
+      "A bronze woman has walked out of a wrecked workshop and is looking for her maker's mark.",
+      "The party's magic weapon was made here. It will not attune until they return a stolen hammer."
+    ]
+  },
+  {
+    "id": "hera",
+    "name": "Hera",
+    "aka": "Queen of the gods, of marriage and the watchful sky",
+    "kind": "greek",
+    "pantheon": "greek",
+    "align": "lawful neutral",
+    "domains": "Life, Trickery, Knowledge",
+    "symbol": "A peacock fan, or a crowned diadem",
+    "rank": "greater",
+    "look": "A regal woman in a peplos of deep blue and gold, diademed, a peacock at her side, looking at the viewer as if they have already broken a vow. Fully clothed.",
+    "blurb": "Queenship, marriage, and the memory of every slight. She is not cruel for sport. She is exact.",
+    "text": "Hera is the oath you swore in public. She blesses households that keep faith and unmakes ones that treat a spouse as furniture. The old stories make her jealous. At the table, treat that as a goddess who will not be made a fool.\n\nClerics of Hera officiate, negotiate, and ruin affairs that were going to ruin a city anyway. A ring blessed in her name is a contract with teeth.",
+    "worship": "Keep the vow you said in front of people. A peacock feather on the altar is enough if the vow is real.",
+    "hooks": [
+      "A royal marriage is a treaty. One side is already in another bed. Hera's priest knows, and is waiting in the courtyard.",
+      "Peacocks have filled a palace. They will leave when the false dowry is admitted."
+    ]
+  },
+  {
+    "id": "hercules",
+    "name": "Hercules",
+    "aka": "The hero who became a god by surviving his own story",
+    "kind": "greek",
+    "pantheon": "greek",
+    "align": "chaotic good",
+    "domains": "War, Life, Tempest",
+    "symbol": "A lion skin and a club, or twelve marks on a belt",
+    "rank": "lesser",
+    "look": "A massive, weary hero in the Nemean lion skin over a tunic, olive-wood club, twelve small tokens on a baldric. Human, clothed, not a nude statue.",
+    "blurb": "Strength that had to be earned the long way. He is the patron of labours that were meant to kill you.",
+    "text": "Heracles — Hercules in the tavern-book — did twelve jobs that were supposed to be the end of him and then had to live with the reputation. He is a god now because the work did not stop when it should have.\n\nHis clerics take on ugly tasks. Enhance ability is their cantrip in spirit. A party on a 'simple errand' that has become a saga is already in his parish.",
+    "worship": "Finish the job you named. Offer sweat, not incense.",
+    "hooks": [
+      "A local tyrant is issuing 'labours' to political enemies. Hercules wants one of them done correctly, in public.",
+      "The lion skin in a trophy hall is still warm. It wants to go home."
+    ]
+  },
+  {
+    "id": "hermes",
+    "name": "Hermes",
+    "aka": "Of the road, the lie, the letter, the luck",
+    "kind": "greek",
+    "pantheon": "greek",
+    "align": "chaotic good",
+    "domains": "Trickery, Knowledge",
+    "symbol": "Winged sandals, a caduceus, or a roadside herm",
+    "rank": "greater",
+    "look": "A lean traveller in a short cloak and winged hat, caduceus in hand, a road unwinding behind him, coin-pouch honest-looking. Clothed, sly, kind.",
+    "blurb": "Messages, thieves, merchants, and the dead on their first day of travel. He is the god of getting there.",
+    "text": "Hermes invented the lyre, stealing, and the excuse. He walks the living and escorts the newly dead. A letter that arrives in time is his miracle. A purse that changes owners is also his miracle.\n\nClerics of Hermes are couriers and con-artists with a code: do not steal from the ones who feed you. Dimension door is a professional courtesy.",
+    "worship": "A coin at a roadside marker. Do not open other people's letters unless you are the mail.",
+    "hooks": [
+      "Every message in a city arrived swapped. Hermes thinks it is funny. The duke does not.",
+      "A psychopomp duty was skipped. A ghost is following the party because no one showed them the road."
+    ]
+  },
+  {
+    "id": "hermod",
+    "name": "Hermod",
+    "aka": "The bold rider, messenger down the long road",
+    "kind": "norse",
+    "pantheon": "norse",
+    "align": "chaotic good",
+    "domains": "Trickery, War",
+    "symbol": "A rider on a eight-legged shadow, or a sealed letter",
+    "rank": "lesser",
+    "look": "A young, grim rider in a travel-cloak, on a great horse, a sealed message in hand, a dark road toward a distant hall. Clothed, in motion.",
+    "blurb": "The errand into death and back. He is the patron of messages that should have been impossible.",
+    "text": "Hermod rode to Hel to bargain for Balder and almost made it work. He is the god of the last try. Couriers, envoys, and people who volunteer for the stupid brave job keep him.\n\nClerics of Hermod deliver. Expeditious retreat, sending. A party that opens a sealed letter in his name finds the words have left the page and gone ahead.",
+    "worship": "A letter delivered unopened. A horse watered before the rider drinks.",
+    "hooks": [
+      "A message to Hel was never sent. The living addressee is aging a year a day.",
+      "Hermod wants a rider for a road that only exists at dusk. Pay is a true name and a way back."
+    ]
+  },
+  {
+    "id": "hestia",
+    "name": "Hestia",
+    "aka": "Of the hearth that does not travel",
+    "kind": "greek",
+    "pantheon": "greek",
+    "align": "neutral good",
+    "domains": "Life, Knowledge",
+    "symbol": "A hearth-flame, or a circle of keys",
+    "rank": "greater",
+    "look": "A quiet woman in a plain cinnamon peplos, seated at a round hearth, flame steady, household keys in her lap. No jewellery-flex, fully clothed, warm interior.",
+    "blurb": "The fire you do not let go out. She gave up a throne so the house would have a centre.",
+    "text": "Hestia is easy to skip in a war story and fatal to skip in a campaign about a town. She is the hearth. Cities keep a public fire in her name. If it dies, the city has forgotten what it is.\n\nHer clerics do not adventure unless the hearth is threatened. Tiny hut and sanctuary are their art. A party that loots a home altar will find their own campfire sulking.",
+    "worship": "Feed the fire before you feed yourself. Keep one flame that has never been used to burn a person.",
+    "hooks": [
+      "The civic hearth is out. No law passed since then has stuck.",
+      "A landlord evicted a family and threw their hearth-stone in the street. The street is now warmer than his house, and angry."
+    ]
+  },
+  {
+    "id": "ilmater",
+    "name": "Ilmater",
+    "aka": "The Crying God, the Broken God, Our Martyred Father",
+    "kind": "baldur",
+    "pantheon": "baldur",
+    "align": "lawful good",
+    "domains": "Life, War",
+    "symbol": "A pair of white hands bound with red cord, or a rack that has been made into a stretcher",
+    "rank": "greater",
+    "look": "A gentle, worn man in simple white robes, wrists wrapped in clean red cord, sitting among the injured with a bowl of water. No torture display. Compassion, not spectacle.",
+    "blurb": "Suffering taken on purpose so someone else does not have to.",
+    "text": "Ilmater is the god the Sword Coast calls when the pain is already here. His priests run infirmaries, orphanages, and the kind of quiet that makes tyrants nervous. In Baldur's Gate they are in the Lower City because that is where the bones break.\n\nAn Ilmatari cleric will take a wound for a stranger. They will also stand up after. The faith is not suicide. It is the decision that the party does not get to leave a child on the road.\n\nAt the table he is the reason a paladin of pain is not a joke. He is also the reason a villain who tortures for fun has made a very specific enemy.",
+    "worship": "Bind a wound. Take one more than your share. Do not make a theatre of it.",
+    "hooks": [
+      "An Ilmatari hospice in the Lower City is being taxed by a gang 'for protection.' The priests will not fight. They will ask the party to.",
+      "A bound-hands symbol appeared on a Flaming Fist shield overnight. The wearer has started taking hits for civilians without being asked."
+    ]
+  },
+  {
+    "id": "imhotep",
+    "name": "Imhotep",
+    "aka": "The mortal who became a god of plans and medicine",
+    "kind": "egyptian",
+    "pantheon": "egyptian",
+    "align": "lawful good",
+    "domains": "Knowledge, Life",
+    "symbol": "A papyrus scroll and a builder's cubit, or a step pyramid",
+    "rank": "lesser",
+    "look": "A clean-shaven man in a simple white kilt and scribe's kit, holding a cubit rod and a scroll, a stepped pyramid rising behind him in clean desert light. Human, clothed, brilliant.",
+    "blurb": "Architecture and medicine as the same piety: measure twice, save once.",
+    "text": "Imhotep was a man. Then people would not stop praying to the man who designed the stone that did not fall and the treatment that did not kill. He is the patron of competent work.\n\nClerics of Imhotep are architects and physicians. They hate sloppy magic the way he hated sloppy stone. A collapsing dungeon is a theological problem.",
+    "worship": "A true measurement. A prescription that matches the disease. Do not sign a plan you did not read.",
+    "hooks": [
+      "A step-pyramid is walking, one course a night, toward a city. Imhotep wants the original plan found.",
+      "A plague is being treated with a fake Imhotep seal. The real work is in a sealed library."
+    ]
+  },
+  {
+    "id": "isis",
+    "name": "Isis",
+    "aka": "Of the throne, the knot, the word that puts a house back together",
+    "kind": "egyptian",
+    "pantheon": "egyptian",
+    "align": "neutral good",
+    "domains": "Life, Knowledge, Trickery",
+    "symbol": "A throne-hieroglyph, a tyet knot, or a kite-hawk",
+    "rank": "greater",
+    "look": "A woman in a throne-shaped crown and layered linen, tyet amulet, wings of a kite suggested in the cloak, reassembling a scattered household in gold light. Fully clothed, sovereign.",
+    "blurb": "Magic as motherhood and statecraft. She hid a child, learned a secret name, and put a broken king back into a story that could rule.",
+    "text": "Isis is the reason a dynasty survives a murder. She is cunning, not cruel. She collected a dismembered house and made it a kingdom again. That is the religion.\n\nHer clerics are restorers: of people, of names, of laws. Greater restoration is her handshake. A party that erases a name from a wall has picked a fight with her filing system.",
+    "worship": "A knot tied with intent. A true name spoken to heal, not to bind without cause.",
+    "hooks": [
+      "A king's name was chiselled off every monument. The land is forgetting how to have a king. Isis wants the chips.",
+      "A child in hiding is the last of a house. Two cults want them. She wants a third option: the party."
+    ]
+  },
+  {
+    "id": "jergal",
+    "name": "Jergal",
+    "aka": "Lord of the End of Everything, Scribe of the Doomed, the Pitiless One",
+    "kind": "baldur",
+    "pantheon": "baldur",
+    "align": "lawful neutral",
+    "domains": "Knowledge, Trickery",
+    "symbol": "A jawless skull and a writing quill, or a scroll sealed in bone-wax",
+    "rank": "lesser",
+    "look": "An impossibly old, dry figure in grey-green scribe's robes, skull-lean face, a ledger and a quill, no drama. A quiet crypt-office. Clothed, dust-scented, precise.",
+    "blurb": "Death as paperwork. He did the job before the Dead Three, and he still keeps the books.",
+    "text": "Jergal was the end of all things and then he was bored. He gave Bane, Bhaal, and Myrkul their portfolios the way a clerk hands over keys. He stayed on as the scribe.\n\nIn Baldur's Gate his shrines are small and accurate. A name, a date, a cause. His clerics do not raise the dead to be kind. They record why the dead should stay so.\n\nAt the table he is a source. If you need to know who died and whether it counted, you ask Jergal. He will tell you. He will not comfort you.",
+    "worship": "Write the name correctly. Do not omit a title. Ink is the offering.",
+    "hooks": [
+      "A ledger in a tomb lists the party — one name ahead of today's date. The ink is still wet.",
+      "Jergal's priest will identify a body if the party fetches the true name of a man who has been using three."
+    ]
+  },
+  {
+    "id": "kelemvor",
+    "name": "Kelemvor",
+    "aka": "Lord of the Dead, Judge of the Damned, the Great Guide",
+    "kind": "baldur",
+    "pantheon": "baldur",
+    "align": "lawful neutral",
+    "domains": "Life, Knowledge",
+    "symbol": "An upright skeletal arm holding scales, or a balanced scale over a grave",
+    "rank": "greater",
+    "look": "A stern, living man in grey scale and a dark cloak, a judge's bearing, a simple crown of pale metal, scales at his hip. Not a skeleton. A man who has a job among the dead.",
+    "blurb": "Death as a fair gate. No torment for its own sake. No bargains that skip the line.",
+    "text": "Kelemvor took the dead from Myrkul's cruelty and made a court. The Sword Coast prefers him when they think about it, which they try not to. His clergy bury people properly and hate undeath the way a mason hates a crooked wall.\n\nA cleric of Kelemvor at the table will walk into a haunted house and start taking names. They are not grim for fashion. They are busy.\n\nIf the party wants a loved one back, Kelemvor's answer is almost always no. If the party wants a lich undone, the answer is yes, and here is the form.",
+    "worship": "Bury the named. Burn the nameless if you must. Do not pay a necromancer to skip the queue.",
+    "hooks": [
+      "A graveyard in Rivington has empty holes and no bodies. Kelemvor's scale at the gate is tilted. Someone is selling funerals twice.",
+      "A paladin of Kelemvor will join for one job: a talking skull in a wizard's study that refuses to be judged."
+    ]
+  },
+  {
+    "id": "lathander",
+    "name": "Lathander",
+    "aka": "The Morninglord, Commander of Creativity, Inspiration's Dawn",
+    "kind": "baldur",
+    "pantheon": "baldur",
+    "align": "neutral good",
+    "domains": "Light, Life",
+    "symbol": "A rosy-gold sun rising over a disk, or a phoenix in dawn colors",
+    "rank": "greater",
+    "look": "A youthful, rosy-gold man in cream and pink-gold vestments, open hands, a sun-disk at his breast, dawn over a harbor. Fully clothed, hopeful, not naive.",
+    "blurb": "Sunrise as a policy. Beginnings, and the stubbornness to begin again.",
+    "text": "Lathander is the most popular good god on the Sword Coast for a reason: he is the morning after. Temples of the Morninglord are pink stone, choirs, and people who genuinely believe the next day can be better than this one.\n\nIn Baldur's Gate his church is wealthy, political, and sometimes infuriating. A Lathanderite will try to redeem a villain the party wanted to end. They will also stand in a doorway at dawn and make a darkness-cult blink.\n\nAt the table he is light you can plan around. His miracles like new starts: a second wind, a city gate opening, a child born on the right side of a war.",
+    "worship": "Be there at dawn. Light something that was dark. Do not confuse optimism with blindness — but do not skip the optimism.",
+    "hooks": [
+      "The temple's dawn service was silent. The sun-disk would not catch the light. Something in the cellar is holding the morning.",
+      "A Lathanderite novice saw the party's future in a sunrise and will not stop following them. She is correct about one thing."
+    ]
+  },
+  {
+    "id": "loki",
+    "name": "Loki",
+    "aka": "The sly, the change-skin, the problem that is also a tool",
+    "kind": "norse",
+    "pantheon": "norse",
+    "align": "chaotic evil",
+    "domains": "Trickery",
+    "symbol": "A knot of flame, a fishing-net, or a two-faced smile",
+    "rank": "greater",
+    "look": "A lean, handsome troublemaker in a green-and-gold travel kit, firelight, a net and a grin, shapeshifting hinted in a fox-shadow. Clothed, charming, dangerous.",
+    "blurb": "The lie that gets the gods out of a hole and into a worse one. He is wit, spite, and the bill coming due.",
+    "text": "Loki is why the walls got built and why the builder almost took the sun. He is not 'random chaos.' He is a person who cannot stand being outdone or boxed. At a table he is an ally until he is the plot.\n\nClerics of Loki are spies and saboteurs. They must be more clever than cruel or the other cults will end them. Disguise self is a lifestyle.",
+    "worship": "A clever gift that is also a joke. Do not swear a straight oath in his hearing unless you mean the loophole.",
+    "hooks": [
+      "A wall was built in three nights by something that was not supposed to finish. Loki wants the loophole found before the sun is claimed.",
+      "Every lie a PC tells comes true for an hour. He thinks this is educational."
+    ]
+  },
+  {
+    "id": "lolth",
+    "name": "Lolth",
+    "aka": "Queen of Spiders, Demon Queen of the Abyss, Weaver of Destiny",
+    "kind": "baldur",
+    "pantheon": "baldur",
+    "align": "chaotic evil",
+    "domains": "Trickery, War",
+    "symbol": "A black widow, a female drow spider-face, or a webbed silver star",
+    "rank": "greater",
+    "look": "A beautiful drow woman in structured spider-silk armor and a high collar, a living spider as a brooch, cruel amusement, a suggestion of more legs in the shadow behind her. Fully clothed. No gore.",
+    "blurb": "Betrayal as doctrine. The web is the church, and the church eats its own.",
+    "text": "Lolth is the reason drow houses keep knives under the dinner plates. She was Corellon's until she was not. Baldur's Gate meets her as rumor from below: a shrine in the Undercellar, a merchant who never blinks together, a deal that was always a trap.\n\nHer clerics are almost always women of the faith as the Spider Queen prefers it. They test loyalty by breaking it. A Lolthite ally is a countdown.\n\nAt the table she is underground politics. If the party goes beneath the city, they are in her weather.",
+    "worship": "Offer a betrayal that is elegant. A clumsy murder offends her. The web should still look like a web after.",
+    "hooks": [
+      "A drow envoy in the Upper City claims to have left Lolth. She has not. She will pay the party to prove she has.",
+      "Webs in the sewers form letters. They spell a party member's name, then another, then a time."
+    ]
+  },
+  {
+    "id": "loviatar",
+    "name": "Loviatar",
+    "aka": "Maiden of Pain, the Willing Whip, patron of the hurt that is chosen",
+    "kind": "baldur",
+    "pantheon": "baldur",
+    "align": "lawful evil",
+    "domains": "War, Trickery",
+    "symbol": "A nine-stranded whip, or a dagger through a pale rose",
+    "rank": "lesser",
+    "look": "A severe, pale woman in a high-necked black gown with silver piping, a coiled ceremonial whip at her belt like a badge of office, composed, unsmiling. Fully clothed. A cold chapel, not a dungeon peep-show.",
+    "blurb": "Pain as a language. She is not chaos. She is a curriculum.",
+    "text": "Loviatar is the god of hurt that is meant. Her clergy keep rules. They are not Bhaal. They do not want you dead. They want you to remember.\n\nIn Baldur's Gate she has small, expensive shrines and a reputation the city uses as a joke until someone comes back quieter. A cleric of Loviatar at the table is a specialist: interrogation, endurance, the breaking of a siege of the will.\n\nKeep her cold and lawful. She is worse that way.",
+    "worship": "Do not scream unless it is part of the rite. A clean line is a prayer. Cruelty without craft is amateur.",
+    "hooks": [
+      "A merchant's 'debts' are being collected by a woman with a silver-handled whip who never raises her voice. The merchant wants her stopped. He will not say what he bought.",
+      "A paladin of Ilmater and a priestess of Loviatar have claimed the same wounded soldier. The soldier can still choose."
+    ]
+  },
+  {
+    "id": "lugh",
+    "name": "Lugh",
+    "aka": "Long-Arm, master of every art",
+    "kind": "celtic",
+    "pantheon": "celtic",
+    "align": "chaotic good",
+    "domains": "Knowledge, War, Light",
+    "symbol": "A spear of light, or a many-skilled hand",
+    "rank": "greater",
+    "look": "A young, bright warrior-king in a patterned cloak and gold torc, a slim spear that shines without fire, crafts laid at his feet: harp, anvil, sling.",
+    "blurb": "The god who is good at everything and expects you to pick one thing and be dangerous at it.",
+    "text": "Lugh arrived at a hall where every seat was filled by a specialist. He asked if they had anyone who was all of them. They made a seat. That is the whole religion.\n\nHis spear does not miss. His clerics are polymaths and show-offs. A party with a Lugh-priest has a plan for locks, lies, and lances — and an opinion about all three.",
+    "worship": "Offer the work of your best skill, not a purchased jewel. He notices borrowed glory.",
+    "hooks": [
+      "A contest of skills is being held under a false name. Lugh wants a champion who is not a cheat.",
+      "His spear is in a museum that thinks it is a poker's rod. It has started humming."
+    ]
+  },
+  {
+    "id": "manannan",
+    "name": "Manannan mac Lir",
+    "aka": "Son of the Sea, lord of the mist-gate",
+    "kind": "celtic",
+    "pantheon": "celtic",
+    "align": "lawful neutral",
+    "domains": "Nature, Tempest, Trickery",
+    "symbol": "A wave-crest over a cloak of mist, or a sea-horse",
+    "rank": "greater",
+    "look": "A sea-lord in a cloak the colour of deep water, gold-apple branch in one hand, a ship with no wake behind him. Mist, not storm-gore.",
+    "blurb": "The sea as a country. Mist as a door. He ferries, he hides, he bills you later.",
+    "text": "Manannan keeps the otherworld on the far side of weather. His cloak is fog. His horses are waves. He rents magic to heroes and collects when they pretend they invented it.\n\nClerics of Manannan are ferrymen, smugglers, and honest liars. Water walk is a courtesy. Control weather is a warning. If the party steals a boat in his waters, they have stolen from a landlord.",
+    "worship": "Pay the first fish back. Do not boast about a safe crossing until you are ashore.",
+    "hooks": [
+      "A mist-gate opened in a lake. Cattle walked in. Something else walked out.",
+      "He lent a hero a boat that could fold into a pocket. The hero died. The boat is in a taxman's desk."
+    ]
+  },
+  {
+    "id": "mask",
+    "name": "Mask",
+    "aka": "Lord of Shadows, Master of All Thieves, the Unseen",
+    "kind": "baldur",
+    "pantheon": "baldur",
+    "align": "chaotic neutral",
+    "domains": "Trickery, Knowledge",
+    "symbol": "A black velvet mask, or a coin half in shadow",
+    "rank": "lesser",
+    "look": "A slim figure in black with gold-thread edges, a half-mask of dark wood, one visible eye amused, a gloved hand empty on purpose. Fully clothed. A rooftop, a moon, a city that has not noticed.",
+    "blurb": "Theft as a sacrament. Shadows as a guildhall.",
+    "text": "Mask is the god every thief in Baldur's Gate thanks and none of them admit. He is the reason a purse is gone and the reason a secret is worth more than the purse. His clergy are rare in public and thick in the Guild.\n\nA cleric of Mask at the table is a specialist who will not steal from the party unless the party makes it interesting. He prefers a job that is also a story.\n\nHe has died and come back the way a rumor does. If you see his mask on a hook, do not put it on unless you mean to keep it.",
+    "worship": "Leave a coin in a shadow. Steal only what was guarded. A gift that was not missed is not a prayer.",
+    "hooks": [
+      "The Guild's tithe-box was stolen. Only Mask's people could have done it. Mask's people are angry, which means someone new is in town.",
+      "A mask of black wood fits the face of one party member and no one else. It whispers a job. The job is real."
+    ]
+  },
+  {
+    "id": "math",
+    "name": "Math Mathonwy",
+    "aka": "King of Gwynedd, wizard of the old law",
+    "kind": "celtic",
+    "pantheon": "celtic",
+    "align": "lawful neutral",
+    "domains": "Knowledge, Trickery",
+    "symbol": "A wand of rowan and a king's footstool",
+    "rank": "lesser",
+    "look": "An old king in a robe of dark wool and gold thread, seated so his feet never quite touch the earth, a living wand across his knees. Courtly, clothed.",
+    "blurb": "Magic as law. He cannot live unless his feet are in a virgin's lap — the old stories are strange, and the table can file that as a geas.",
+    "text": "Math is a wizard-king whose body is a contract. His feet cannot touch the ground. His court is a spell with manners. He turned people into animals for crimes that would be a fine in a kinder country.\n\nClerics and wizards who keep Math treat geasa as load-bearing. Break one and the hall notices. He is useful when the party needs a judge who cannot be bribed with gold, only with cleverness.",
+    "worship": "Never let his name touch the floor. Speak judgments standing.",
+    "hooks": [
+      "A geas has bound a whole village: no one may touch the earth at night. They are sleeping in the trees. It is going badly.",
+      "Math's nephew stole a name and a face. The king wants the name back, not the head."
+    ]
+  },
+  {
+    "id": "mielikki",
+    "name": "Mielikki",
+    "aka": "Our Lady of the Forest, the Forest Queen, daughter of Silvanus in all but blood",
+    "kind": "baldur",
+    "pantheon": "baldur",
+    "align": "neutral good",
+    "domains": "Nature, Life",
+    "symbol": "A unicorn's head, a white stag, or a walking-staff of living oak",
+    "rank": "lesser",
+    "look": "A tall huntress in green and brown leathers, cloak of leaves, a longbow unstrung, a pale unicorn at her shoulder in the trees. Fully clothed. A sun-dapple, not a trophy-wall.",
+    "blurb": "The forest as a home, not a resource. Rangers' first name.",
+    "text": "Mielikki keeps the woods that still remember being woods. On the Sword Coast that is a shrinking parish: the Cloakwood, the edges of the Wood of Sharp Teeth, any park the Upper City has not paved.\n\nHer clerics and rangers overlap. They will guide a party. They will not guide a logging camp. A unicorn is not a mount. If you see one, you are being evaluated.\n\nAt the table she is the wild that can still be kind. If the party camps clean, the night is easier. If they chop a standing stone for firewood, the night has opinions.",
+    "worship": "Leave the camp as you found it. Water a tree that is dying. Do not put a bit in a unicorn's mouth, even in a story.",
+    "hooks": [
+      "The Cloakwood is walking toward the city by a few yards a night. Mielikki's ranger says it is looking for someone the party already met.",
+      "A white stag in the Lower City at dawn. It should not be here. It will lead the party once. Then it will not."
+    ]
+  },
+  {
+    "id": "moradin",
+    "name": "Moradin",
+    "aka": "The Soul Forger, Dwarffather, the All-Father of the dwarves",
+    "kind": "baldur",
+    "pantheon": "baldur",
+    "align": "lawful good",
+    "domains": "Knowledge, War",
+    "symbol": "A hammer and anvil, or a soul being drawn from stone",
+    "rank": "greater",
+    "look": "A broad dwarf in work-scarred royal armor, white beard forked and bound in gold, hammer across an anvil that glows from within. A forge-hall, not a battlefield. Clothed, concentrated, kind around the eyes.",
+    "blurb": "Making a people the way you make a good axe: heat, patience, and no lies about the metal.",
+    "text": "Moradin forged the dwarves and still checks the work. His temples are foundries. Baldur's Gate has a dwarven quarter that smells of coal and oaths.\n\nA cleric of Moradin will bless a tool, a marriage, a gate-bar. They dislike unfinished business and unfinished blades equally.\n\nAt the table he is craft and clan. If the party keeps their word to a dwarf, they have a god on the side of the contract. If they cheapen the metal, they have a problem that will not rust away.",
+    "worship": "Work the bellows. Name the thing you are making. Do not swear an oath you will not stamp.",
+    "hooks": [
+      "A clan-hammer was sold to a collector in the Upper City. Moradin's priest will not buy it back. He wants it taken, then re-forged.",
+      "A new vein under the city sings when struck. The dwarves say it is a door. The Gondians say it is ore. Both are a little right."
+    ]
+  },
+  {
+    "id": "myrkul",
+    "name": "Myrkul",
+    "aka": "Lord of Bones, Old Lord Skull, the Reaper",
+    "kind": "baldur",
+    "pantheon": "baldur",
+    "align": "neutral evil",
+    "domains": "Trickery, Knowledge",
+    "symbol": "A white skull on a black field, or a scythe of bone",
+    "rank": "greater",
+    "look": "A crowned skeletal figure in intact royal robes of black and bone-white, not naked bone, a scythe grounded like a sceptre. A dry mausoleum. Regal, not dripping.",
+    "blurb": "Death as a kingdom. He wants the dead afraid of him, and the living late.",
+    "text": "Myrkul is the Dead Three's crown. Where Kelemvor made a court, Myrkul made a fear. He is the old way of dying: bribes, bones, and a god who liked you scared.\n\nHis cult in Baldur's Gate hides in crypts that were supposed to be empty. A Myrkulite cleric raises what Kelemvor would put down. They speak softly. The dead lean in.\n\nAt the table he is undeath with manners. A skull that talks. A tax on graves. A promise that dying will not be the end of your problems.",
+    "worship": "A bone, named. A fear, admitted. Do not bury anyone important without his cut — or do, and see what stands up.",
+    "hooks": [
+      "A charnel house is paying better than the temple of Kelemvor for the same bodies. The difference is what happens after sunset.",
+      "Old Lord Skull has a new priest who is still alive and would prefer to stay that way. He will sell the cult for a true burial."
+    ]
+  },
+  {
+    "id": "mystra",
+    "name": "Mystra",
+    "aka": "The Lady of Mysteries, Mother of All Magic, the Weave",
+    "kind": "baldur",
+    "pantheon": "baldur",
+    "align": "lawful neutral",
+    "domains": "Knowledge, Light",
+    "symbol": "A circle of seven stars, or a single star over a misty road",
+    "rank": "greater",
+    "look": "A composed woman in layered blue-white robes that look woven from faint light, a circlet of seven small stars, hands open as if holding an invisible thread. Fully clothed. A night library, not a battlefield.",
+    "blurb": "Magic as a law of nature she happens to be. Break the law, and she feels it.",
+    "text": "Mystra is the Weave. Spellcasters on the Sword Coast work in her weather whether they pray or not. Baldur's Gate has always had too many wizards for one city's good; her church tries to keep them from burning the docks.\n\nA cleric of Mystra is a mage with a conscience, or a conscience with a spellbook. They dislike wild magic the way a sailor dislikes a hole in the hull.\n\nAt the table she is the reason magic has rules. If the party rips a hole in the Weave, her people will arrive with questions and a net.",
+    "worship": "Cast cleanly. Teach what you can. Do not hoard a spell that would save a street. Do not give a spell to a fool.",
+    "hooks": [
+      "A dead-magic alley has opened in the Lower City. Mystra's star-circle at the temple is missing one point.",
+      "A young sorcerer is bleeding Weave. Both Mystra's church and a Banite cell have offers. The sorcerer wants to live through the night."
+    ]
+  },
+  {
+    "id": "nephthys",
+    "name": "Nephthys",
+    "aka": "Of the edge of the house, the kite at the funeral",
+    "kind": "egyptian",
+    "pantheon": "egyptian",
+    "align": "chaotic good",
+    "domains": "Death, Trickery, Knowledge",
+    "symbol": "A house-and-basket hieroglyph, or a kite on a tomb",
+    "rank": "lesser",
+    "look": "A woman in a close-fitting dark linen dress and a headdress of house-and-basket, standing at the foot of a tomb as a protector, a kite overhead. Clothed, night-blue, not morbid-gore.",
+    "blurb": "The sister at the funeral. She is the night-watch of the dead and the helper of hidden children.",
+    "text": "Nephthys stands where the house ends and the desert starts. She helped Isis, she mourns well, and she keeps secrets that would smash a court if said at noon.\n\nHer clerics are the ones who sit with the body until morning. They are also excellent at smuggling people out of palaces. Pass without trace is a kindness.",
+    "worship": "A night-watch kept without sleeping on duty. Water poured at the desert edge of a grave.",
+    "hooks": [
+      "A funeral was left unwatched. Something wore the linen out of the tomb. Nephthys wants a vigil finished.",
+      "A hidden heir is in a kite-priest's house. Three factions know the street, not the door."
+    ]
+  },
+  {
+    "id": "nike",
+    "name": "Nike",
+    "aka": "Of the winning, the wreath, the last inch",
+    "kind": "greek",
+    "pantheon": "greek",
+    "align": "lawful neutral",
+    "domains": "War, Trickery",
+    "symbol": "A winged wreath, or a palm",
+    "rank": "lesser",
+    "look": "A winged young woman in a wind-blown peplos, alighting to offer an olive wreath, battlefield banners behind her but no bodies. Clothed, classical Victory.",
+    "blurb": "Victory as a person who arrives late and still gets her name on the stone.",
+    "text": "Nike does not start wars. She lands on the one who is about to win and makes it look inevitable. Athletes, generals, and desperate duelists all shout for her in the last second.\n\nClerics of Nike bless contests that have rules. They hate a fixed fight. Bless and haste are her liturgy.",
+    "worship": "The wreath goes on the altar after the win, not before. She notices a rented victory.",
+    "hooks": [
+      "A champion has won every bout this year. Nike wants you to find the lead in his gloves.",
+      "A city has a statue of Nike with her wings clipped. The army has not won since."
+    ]
+  },
+  {
+    "id": "njord",
+    "name": "Njord",
+    "aka": "Of the wind that brings ships, the wealth that smells of tar",
+    "kind": "norse",
+    "pantheon": "norse",
+    "align": "neutral good",
+    "domains": "Nature, Tempest",
+    "symbol": "A ship's prow, a gold coin with a fish, or a seagull",
+    "rank": "greater",
+    "look": "A weathered, generous sea-father in a salt-stained rich cloak, a harbour full of masts behind him, gold in a net, good wind. Clothed, prosperous.",
+    "blurb": "Fair winds, fishing, and money that came over water. He is the calm that sailors actually want.",
+    "text": "Njord is the sea when it is a living. He married into the mountains and was miserable, which is a useful story about people who pray for wealth and get a different country.\n\nClerics of Njord bless launches and ledgers. Gust of wind, water breathing. A wrecker-cult in his harbour is a personal insult.",
+    "worship": "The first coin of a voyage into the water. Do not cheat a crew of their share.",
+    "hooks": [
+      "The wind in a harbour blows only toward the rocks. Njord wants a drowned ledger raised.",
+      "A marriage-treaty between a sea-town and a mountain-hold is failing in the same way his did. He would like it not to."
+    ]
+  },
+  {
+    "id": "nuada",
+    "name": "Nuada",
+    "aka": "Silver-Hand, first king of the Tuatha",
+    "kind": "celtic",
+    "pantheon": "celtic",
+    "align": "lawful good",
+    "domains": "War, Knowledge",
+    "symbol": "A silver right hand, or a sword that permits no lie",
+    "rank": "greater",
+    "look": "A kingly warrior in a bronze-and-gold torc, one hand living silver, a straight sword point-down. Scarred, clothed, composed.",
+    "blurb": "Kingship that can be lost and earned back. A silver hand is not a weakness. It is a story you have to live with.",
+    "text": "Nuada lost an arm and, by the old law, the kingship. The physicians made him a silver hand. He took the chair again. That is the whole sermon: a leader who is incomplete can still be the right one, and the law can be argued with if you bring work.\n\nHis sword, when drawn, ends an argument. Clerics of Nuada are officers and mediators. They hate tyrants who were never wounded.",
+    "worship": "Swear with the right hand visible. If it is silver, so much the better.",
+    "hooks": [
+      "The silver hand has been stolen from a reliquary and fitted to a pretender.",
+      "A law-speaker says a maimed captain cannot lead. Nuada's priest is on the other side of the table."
+    ]
+  },
+  {
+    "id": "odin",
+    "name": "Odin",
+    "aka": "Allfather, one-eyed guest, lord of the hanged and the poem",
+    "kind": "norse",
+    "pantheon": "norse",
+    "align": "neutral",
+    "domains": "Knowledge, Trickery, War",
+    "symbol": "A one-eyed face, two ravens, or a spear",
+    "rank": "greater",
+    "look": "An old, one-eyed wanderer in a blue cloak and broad hat, spear in hand, two ravens on his shoulders, two wolves at his feet, winter road. Clothed, terrible and kind.",
+    "blurb": "Wisdom bought expensive. He is king, wizard, and the stranger who tests your hall.",
+    "text": "Odin gave an eye for a drink of knowing and still wants more. He walks as a guest to see if you keep the old laws. He takes the slain to a hall that is a training camp, not a rest.\n\nClerics of Odin are poets, spies, and captains. They hate a closed mind and a closed hall. Divination always costs. A party that refuses a wanderer bread has already met him.",
+    "worship": "Mead, a riddle, a seat for a stranger. Do not ask him to be only kind.",
+    "hooks": [
+      "A one-eyed guest was turned away in a storm. The next three guests have been wolves.",
+      "Two ravens will not leave a PC. Odin wants a word stolen from a well that bites."
+    ]
+  },
+  {
+    "id": "odur",
+    "name": "Odur",
+    "aka": "The wanderer-husband, summer on a long road",
+    "kind": "norse",
+    "pantheon": "norse",
+    "align": "chaotic good",
+    "domains": "Light, Trickery",
+    "symbol": "A sun-cloak on a staff, or an empty chair beside a queen",
+    "rank": "lesser",
+    "look": "A sun-browned wanderer in a faded gold cloak, staff, looking back at a hall he is leaving, summer road. Human, clothed, restless.",
+    "blurb": "The bright husband who cannot stay. He is travel, summer, and the ache in a house that waits.",
+    "text": "Odur is Freya's wandering other. Where he walks, summer follows for a while. Where he does not, she weeps gold. He is the patron of people who love a place and still leave it.\n\nClerics of Odur are travellers. They bless departures. Longstrider. A party that stays in an inn for a month in his name will find the inn moving.",
+    "worship": "A step taken at dawn. Do not promise to stay if you mean to go.",
+    "hooks": [
+      "Summer is following a cart. The cart is Odur's cloak, stolen. Fields behind it are going to autumn early.",
+      "A queen's tears are gold in the street. She will stop when someone finds her husband or a true reason he left."
+    ]
+  },
+  {
+    "id": "oghma",
+    "name": "Oghma",
+    "aka": "Sun-Face, binder of oaths, inventor of writing",
+    "kind": "celtic",
+    "pantheon": "celtic",
+    "align": "neutral good",
+    "domains": "Knowledge, Trickery",
+    "symbol": "An open book bound in ogham, or a smiling sun",
+    "rank": "greater",
+    "look": "A broad, golden-faced scholar-warrior in a poet's cloak, a tablet of ogham in one hand, a chain of oaths in the other. Warm light.",
+    "blurb": "Words as weapons and as glue. He invented letters so a promise could outlive a voice.",
+    "text": "Oghma is the reason a contract can be held up in a hall. He is also the reason a satire can raise blisters. His clerics are bards who went to law school.\n\nZone of truth is his handshake. A party that breaks a written oath in his country finds their own names misspelled on wanted posters — and the spelling still works.",
+    "worship": "Write the oath. Speak it. Keep both copies.",
+    "hooks": [
+      "A satire of Oghma's is eating a cruel lord alive, slowly, as rumour. The lord wants it unwritten.",
+      "The first ogham stone in the valley has been defaced. Until it is recarved, no contract holds."
+    ]
+  },
+  {
+    "id": "oghma-binder",
+    "name": "Oghma",
+    "aka": "Binder of What is Known, Lord of Knowledge, the Wise God",
+    "kind": "baldur",
+    "pantheon": "baldur",
+    "align": "neutral",
+    "domains": "Knowledge, Trickery",
+    "symbol": "A blank scroll, a silver collar of a bard, or an unopened book",
+    "rank": "greater",
+    "look": "A keen-eyed scholar in rich but practical robes, a blank book bound in pale leather, a half-smile of someone who already read the ending. Fully clothed. A library with too many candles.",
+    "blurb": "Knowledge as a living thing. He wants it bound, named, and not set on fire.",
+    "text": "This is the Oghma of Baldur's Gate: patron of bards, wizards, clerks, and anyone who thinks a fact should outlive a king. His temple in the city is a place you go when the rumor has too many versions.\n\nAn Oghmanyte cleric will copy a dying man's last words and then argue about the punctuation. They are the party's librarian and, if you are not careful, its leak.\n\nAt the table he is information with a price. The price is often that you must tell the truth in return.",
+    "worship": "Leave a true account. Do not burn a book to hide a crime — he will know the smoke. A song that teaches counts.",
+    "hooks": [
+      "A book in the temple has started writing the party's private conversations. Oghma's priest wants to know who bound a spy into the paper.",
+      "The Binder will trade a map of a vault for a story the party has been refusing to tell."
+    ]
+  },
+  {
+    "id": "osiris",
+    "name": "Osiris",
+    "aka": "Of the green, the throne below, the second life of grain",
+    "kind": "egyptian",
+    "pantheon": "egyptian",
+    "align": "lawful good",
+    "domains": "Life, Nature, Knowledge",
+    "symbol": "A crook and flail, or a djed pillar",
+    "rank": "greater",
+    "look": "A green-skinned king in white mummy-wrappings as royal dress (not a rotting corpse), white crown with plumes, crook and flail, seated in a calm underworld court. Dignified, no gore.",
+    "blurb": "Death that became agriculture. He is the judge of the dead and the reason seed comes back.",
+    "text": "Osiris was murdered and still became the reason the flood makes grain. He judges the dead because he has been one. His court is fair and slow.\n\nClerics of Osiris farm and bury. Revivify is a civic duty, not a party trick. A land that forgets the flood calendar has forgotten him.",
+    "worship": "Grain in a tomb and a true account of a life. Do not mock a mummy as a monster if it was a person.",
+    "hooks": [
+      "The flood did not come. A piece of Osiris — a story, a relic — is in a locked granary.",
+      "A judge of the dead is taking bribes in his name. The feather will not balance until that stops."
+    ]
+  },
+  {
+    "id": "pan",
+    "name": "Pan",
+    "aka": "Of the goat-foot panic, the pipes, the unmapped hill",
+    "kind": "greek",
+    "pantheon": "greek",
+    "align": "chaotic neutral",
+    "domains": "Nature, Trickery",
+    "symbol": "Syrinx pipes, or a pine crown",
+    "rank": "lesser",
+    "look": "A goat-legged rustic god in a pine crown, panpipes, a hairy chest under a cloak, woodland noon. Mythic satyr, not sexualized, no minors.",
+    "blurb": "Sudden fear in a quiet place. Music that makes cities feel like a bad idea.",
+    "text": "Pan is the reason a seasoned patrol runs from a noise that was only wind. He is also the reason a lonely hill feels like a temple. He is not a devil. He is the wild with a laugh.\n\nClerics of Pan are goatherds and saboteurs of straight roads. Fear and speak with animals. A party that drums through a grove at night has scheduled an encounter.",
+    "worship": "Play a true note at noon. Leave the first cheese of the flock on a stone.",
+    "hooks": [
+      "A legion built a straight road through his hill. At night the road is a spiral and the mile-stones lie.",
+      "Panic has a name in a village: it starts at dusk and only a pipe-tune stops it."
+    ]
+  },
+  {
+    "id": "poseidon",
+    "name": "Poseidon",
+    "aka": "Earth-shaker, horse-lord, of the wine-dark road",
+    "kind": "greek",
+    "pantheon": "greek",
+    "align": "chaotic evil",
+    "domains": "Tempest, Nature",
+    "symbol": "A trident, a horse, or a curling wave",
+    "rank": "greater",
+    "look": "A massive sea-king in a sea-green himation, white beard, trident grounded, horses of foam, a cliff-temple behind. Clothed, storm-lit, no drowning bodies.",
+    "blurb": "The sea and the earthquake are the same temper. He is a gift of horses and a bill written in flood.",
+    "text": "Poseidon wanted a city and lost it to Athena, so the sea around it is still personal. He makes harbours and he breaks them. Sailors who skip his due find the horizon wrong.\n\nClerics of Poseidon are harbour-masters and cavalry chaplains. Tidal wave is not a metaphor. A campaign on the water that ignores him is a campaign about swimming.",
+    "worship": "A horse, a bull, or the first catch, given to the water. Do not build on a last-year's wreck.",
+    "hooks": [
+      "The tide came in and stayed. Poseidon wants a stolen trident-head back from a lighthouse.",
+      "A horse born with webbed hooves will not take a rider until a sea-priest names it."
+    ]
+  },
+  {
+    "id": "ptah",
+    "name": "Ptah",
+    "aka": "Of the word that is a thing, the craftsman's first sentence",
+    "kind": "egyptian",
+    "pantheon": "egyptian",
+    "align": "lawful good",
+    "domains": "Knowledge, Life",
+    "symbol": "A sceptre combining was, ankh, and djed, or a craftsman's block",
+    "rank": "greater",
+    "look": "A shaven man in a tight white robe and a skullcap, holding a combined was-ankh-djed sceptre, a workshop of perfect tools behind him. Contained, clothed, creative.",
+    "blurb": "Creation by speaking the true name of a thing. He is the patron of people who make the world on purpose.",
+    "text": "Ptah does not swing a hammer as much as he says the hammer correctly. Memphis kept him as the mind of making. A poorly named magic item offends him more than a broken one.\n\nClerics of Ptah are crafters and linguists. Fabricate is theology. A party that uses a true name as a joke will find the joke has load-bearing walls.",
+    "worship": "Speak the work before you do it. A well-made tool on the altar beats a jewel.",
+    "hooks": [
+      "A statue of Ptah said a word in the night and a new street existed in the morning. The city map is now a liar.",
+      "Someone is selling 'true names' that almost work. Almost is how you get a cursed river."
+    ]
+  },
+  {
+    "id": "re-horakhty",
+    "name": "Re-Horakhty",
+    "aka": "The sun at the two horizons, falcon of the day-barque",
+    "kind": "egyptian",
+    "pantheon": "egyptian",
+    "align": "lawful good",
+    "domains": "Light, Life, Knowledge",
+    "symbol": "A sun disk on a falcon, or a barque of day",
+    "rank": "greater",
+    "look": "A falcon-headed king in white and gold linen, sun-disk crowned, standing in a solar barque on the sky-river, desert dawn. Majestic, clothed, no gore.",
+    "blurb": "The sun as a voyage that has to be made every night or the world does not open.",
+    "text": "Re-Horakhty is the sun that is also a hawk and a king. Each night his barque runs a gauntlet. Each morning is not guaranteed; it is a successful shift.\n\nClerics of Re keep watches. Daylight is a sacrament. They are terrible people to plan a coup with at noon and excellent people to have when the dark has a name.",
+    "worship": "Face the sunrise. Do not sleep through a dawn you promised to watch.",
+    "hooks": [
+      "The sun stalled at noon for a count of thirty. Something bit the barque. He wants a crew.",
+      "A false sun-disk is being worshipped in a quarry. The real dawn is arriving late there."
+    ]
+  },
+  {
+    "id": "selune",
+    "name": "Selûne",
+    "aka": "The Moonmaiden, She Who Guides, Our Lady of Silver",
+    "kind": "baldur",
+    "pantheon": "baldur",
+    "align": "chaotic good",
+    "domains": "Life, Knowledge, Light",
+    "symbol": "A pair of female eyes surrounded by seven silver stars, or a crescent moon",
+    "rank": "greater",
+    "look": "A woman of changing age in silver-white, moon-pale hair, a crescent at her brow, standing on a balcony over a night harbor. Fully clothed. Kind, not fragile. Stars, not glare.",
+    "blurb": "The moon as a lantern for people who have to walk at night.",
+    "text": "Selûne is Shar's sister and opposite. Where Shar wants the dark to be empty, Selûne wants it to be navigable. Sailors, lycanthropes who are trying, and anyone lost on the Coast Way keep her.\n\nIn Baldur's Gate her house is a lighthouse of a church. Her clerics heal, guide, and feud with Sharrans in ways the city pretends not to see.\n\nAt the table she is a night that helps. A moonlit path. A wolf that did not bite. A dream that is a map.",
+    "worship": "Walk by moonlight once without a torch. Help someone find the shore. Do not hide from your own night.",
+    "hooks": [
+      "The moon over the harbor went black for an hour and no one in the Upper City noticed. The Lower City did. Selûne's priestess is already packing.",
+      "A werewolf in a Selûne shrine wants to be cured before the next full moon. Shar's people have the same appointment."
+    ]
+  },
+  {
+    "id": "set",
+    "name": "Set",
+    "aka": "Of the red land, the storm, the necessary outsider",
+    "kind": "egyptian",
+    "pantheon": "egyptian",
+    "align": "chaotic evil",
+    "domains": "Tempest, Trickery, War",
+    "symbol": "The set-animal, or a was-sceptre on red sand",
+    "rank": "greater",
+    "look": "A powerful man with the mysterious set-animal head (long snout, squared ears), red-and-white desert armour-linen, was-sceptre, a sandstorm wall behind him. Alien, clothed, not gore.",
+    "blurb": "Desert, storm, and the violence that sometimes holds the barque together. He is a murderer in the old story and a defender in the next chapter.",
+    "text": "Set killed Osiris and also stands on the sun-barque to fight Apep. He is the god of foreigners, of necessary force, of the land that will not be farmed. Tables can play him as a villain or as the ugly ally.\n\nClerics of Set are desert guides, storm-callers, and political knives. They are not welcome at every feast. They are welcome at every sandstorm.",
+    "worship": "Red beer, a storm-prayer, an honest admission of envy. Do not pretend you are Osiris if you are Set.",
+    "hooks": [
+      "A sandstorm has a shape and a grudge. Set will call it off for a service against Apep's cult.",
+      "A foreign company has taken a quarry in his name without asking the desert. The stone is screaming when cut."
+    ]
+  },
+  {
+    "id": "shar",
+    "name": "Shar",
+    "aka": "Mistress of the Night, Lady of Loss, Nightsinger",
+    "kind": "baldur",
+    "pantheon": "baldur",
+    "align": "neutral evil",
+    "domains": "Trickery, Knowledge",
+    "symbol": "A black disk with a purple border, or a circle of darkness inside a circle",
+    "rank": "greater",
+    "look": "A pale, beautiful woman in structured black and deep purple, a void-disk at her throat, eyes that do not reflect the candles. Fully clothed. A windowless chapel, one black candle.",
+    "blurb": "Loss as a sacrament. Forgetfulness as mercy she will charge for.",
+    "text": "Shar is the night with the lanterns taken away. She is Selûne's twin and the older wound. Baldur's Gate has always had Sharrans: grief-cults, spy-rings, people who would rather not remember a name.\n\nA cleric of Shar at the table offers to take a memory. That is not a metaphor. The price is real and the hole it leaves is useful to her.\n\nShe is patient. Her plots are the ones that were already running when the party arrived. If a house has no mirrors, ask why.",
+    "worship": "A secret kept. A light put out on purpose. Do not pray in moonlight. She is the dark between the stars, not the stars.",
+    "hooks": [
+      "A whole street forgot the same man. His bills still arrive. Shar's disk was painted on his door from the inside.",
+      "A Sharran will fund the party's job if they retrieve a song that makes listeners forget the last hour. The song is already in a bard's head."
+    ]
+  },
+  {
+    "id": "sif",
+    "name": "Sif",
+    "aka": "Of the golden hair, the harvest that is a marriage",
+    "kind": "norse",
+    "pantheon": "norse",
+    "align": "chaotic good",
+    "domains": "Life, War",
+    "symbol": "A sheaf of gold hair, or a sword laid in grain",
+    "rank": "lesser",
+    "look": "A composed woman with impossibly gold hair, in a green gown, a field of ripe grain, a sword at rest. Fully clothed, northern, warm.",
+    "blurb": "The field and the household of thunder. She is plenty, and the reminder that a cruel joke can still be paid for in gold.",
+    "text": "Sif's hair was cut as a prank and replaced with gold that grows. She is the harvest you can see from the hall. She is also Thor's match, which means her clerics are not fragile.\n\nA blight on wheat in her country is a crime. Plant growth, hero's feast. A barber-joke in a temple will be expensive.",
+    "worship": "A braid of the first ripe grain. Do not cut what you cannot replace.",
+    "hooks": [
+      "A whole village woke shorn. Their grain is dying in the same pattern as the missing hair.",
+      "Gold hair in a river is tangling mill-wheels. Sif wants the prankster, not a funeral."
+    ]
+  },
+  {
+    "id": "silvanus-celt",
+    "name": "Silvanus",
+    "aka": "Of the treeline, horned watcher of the wild wood",
+    "kind": "celtic",
+    "pantheon": "celtic",
+    "align": "neutral",
+    "domains": "Nature",
+    "symbol": "A summer oak, or a wooden mallet",
+    "rank": "greater",
+    "look": "A bearded woodland god in a cloak of leaves and bark, antlers modest, a mallet of living wood. Deep forest, no gore, fully covered.",
+    "blurb": "The forest as a person who was there first. Roads are a guest. Farms are a negotiation.",
+    "text": "This Silvanus is the Celtic wood, not a city cult. He is the treeline that does not like being straightened. His mallet is for fence-posts you should not have driven.\n\nClerics of Silvanus speak for trees that cannot hire lawyers. A logging camp that skipped the offering loses tools in the night. A party that sleeps on roots without asking wakes with sap in their hair and a debt.",
+    "worship": "Leave the first cut of timber at the stump. Hunt what you eat. Do not map a grove for a mill.",
+    "hooks": [
+      "A Roman-style road is being driven through an oak that has a name. The surveyors are vanishing one peg at a time.",
+      "A dryad is not the problem. Silvanus is, and he wants the mill-wheel returned to being a tree."
+    ]
+  },
+  {
+    "id": "silvanus-oak",
+    "name": "Silvanus",
+    "aka": "Oak Father, the Forest Father, Treefather",
+    "kind": "baldur",
+    "pantheon": "baldur",
+    "align": "neutral",
+    "domains": "Nature, Tempest",
+    "symbol": "A green oak leaf, a summer oak, or a wooden staff in leaf",
+    "rank": "greater",
+    "look": "A huge, oak-bearded man in living bark and leaf-cloak, staff rooted to the earth, eyes like a canopy. The city is small behind him. Clothed in the forest itself.",
+    "blurb": "The wild that does not negotiate. Balance, including the kind that eats farms.",
+    "text": "This is the Silvanus of the Sword Coast woods, not the old Celtic name on another page. He is the oak that was here before Baldur's Gate and will be here after, if the Gate is not careful.\n\nHis druids dislike cities. They will still walk into one if a river is being killed. A cleric of Silvanus at the table is weather, beasts, and a refusal to pave.\n\nHe is not sweet. A wolf pack is his choir. A blighted field may be a correction.",
+    "worship": "Plant what you cut. Do not name a tree after a king. Blood in the soil is a last resort, not a fertilizer plan.",
+    "hooks": [
+      "The oak in the Wide is older than the city and has started shedding leaves in the wrong season. Silvanus wants a conversation under it at midnight.",
+      "A logging charter for the Cloakwood has a forged seal. The trees have already started the trial."
+    ]
+  },
+  {
+    "id": "skadi",
+    "name": "Skadi",
+    "aka": "Of the ski, the bow, the mountain that married the sea and went home",
+    "kind": "norse",
+    "pantheon": "norse",
+    "align": "neutral",
+    "domains": "Nature, War",
+    "symbol": "A ski and a bow, or a wolf on a peak",
+    "rank": "lesser",
+    "look": "A tall huntress on skis, fur-lined coat and trousers, bow, a high white mountain, a distant unhappy harbour far below. Fully clothed, winter, independent.",
+    "blurb": "Winter hunting and the right to leave a marriage that was the wrong country.",
+    "text": "Skadi came out of the mountains to demand weregild with her boots on. She married the sea and missed the wolves. She went home. That is a complete theology of knowing where you can live.\n\nClerics of Skadi are hunters and divorce-lawyers of the ice. Pass without trace in snow. A forced marriage in her hearing is a combat encounter.",
+    "worship": "A clean hunt in the high snow. Do not make someone live where they cannot breathe.",
+    "hooks": [
+      "A sea-lord is keeping a mountain bride in a harbour house. The wolves are in the street.",
+      "An avalanche opened a hall of skis and bows. Skadi wants them used, not sold."
+    ]
+  },
+  {
+    "id": "sobek",
+    "name": "Sobek",
+    "aka": "Of the crocodile, the river's appetite, the army at the water",
+    "kind": "egyptian",
+    "pantheon": "egyptian",
+    "align": "lawful evil",
+    "domains": "Nature, War, Tempest",
+    "symbol": "A crocodile, or a plumed crocodile-crown",
+    "rank": "lesser",
+    "look": "A crocodile-headed warrior in scale-linen and a tall plumed crown, standing in a lotus marsh, army banners on the far bank. Powerful, clothed, river-gold light.",
+    "blurb": "The river as a mouth that also waters the fields. He is strength, the army, and a very honest hunger.",
+    "text": "Sobek is not subtle. He is the crocodile that is also a king. Fayum kept him because the water that feeds you can also take you, and it is better if that has a priest.\n\nClerics of Sobek are marines and irrigation tyrants. Control water. A party that dumps poison in a river has declared war on a crocodile cult, which is a specific kind of mistake.",
+    "worship": "Meat in the water, given, not stolen from a trap. Do not boast you 'tamed' a crocodile.",
+    "hooks": [
+      "Crocodiles have left the water and are sitting on a courthouse. Sobek wants a drowned law rewritten.",
+      "A dam is starving his marsh. The army that built it is losing men at night, one at a time, to something patient."
+    ]
+  },
+  {
+    "id": "sune",
+    "name": "Sune",
+    "aka": "Firehair, Lady Firehair, goddess of love and beauty",
+    "kind": "baldur",
+    "pantheon": "baldur",
+    "align": "chaotic good",
+    "domains": "Life, Light",
+    "symbol": "A face of a red-haired woman, or a rose in flame-gold",
+    "rank": "greater",
+    "look": "A stunning red-gold-haired woman in elegant rose-red silk, a single perfect rose, a painter's warmth, laughing as if the room improved. Fully clothed, glamorous, not a pin-up.",
+    "blurb": "Beauty as a duty to the world. Love as a risk she still recommends.",
+    "text": "Sune is the reason Baldur's Gate has fountains that are nicer than they need to be. Her temples teach that making a place lovely is not vanity. It is resistance to despair.\n\nA cleric of Sune will heal a scar if you want it gone and leave it if it is a story you are proud of. They dislike ugliness that is cruel, not ugliness that is honest.\n\nAt the table she is charm with a spine. Her people will walk into a tyrant's hall looking like a festival and refuse to be seated last.",
+    "worship": "Make something beautiful today. Tell someone they are. Do not use beauty as a knife unless the other person brought a knife first.",
+    "hooks": [
+      "A Sune shrine's mirror shows a party member as they could be if they forgave one person. The shrine wants that person found.",
+      "Someone is throwing acid on public art. Sune's priestess will pay in healing and introductions."
+    ]
+  },
+  {
+    "id": "surtur",
+    "name": "Surtur",
+    "aka": "Of the fire that waits at the south end of the story",
+    "kind": "norse",
+    "pantheon": "norse",
+    "align": "lawful evil",
+    "domains": "War, Light",
+    "symbol": "A flaming sword taller than a man, or a black fire-crown",
+    "rank": "greater",
+    "look": "A gigantic fire-giant king in black-and-gold armour, a sword of fire, a gate of heat behind him, no burning people, apocalyptic forge-light. Clothed in armour, monumental.",
+    "blurb": "The fire at the end of the world, currently employed as a king of Muspelheim. He is patient. He is not kind.",
+    "text": "Surtur is the scheduled fire. Cults that hurry him are fools; cults that ignore him are also fools. He is a lawful end, not a riot.\n\nTrue clerics of Surtur are rare and alarming. Fireball is not a personality. A table that wants a slow apocalypse antagonist can give him a priest who thinks they are doing maintenance.",
+    "worship": "A flame that has never cooked a meal. Do not start a fire you cannot name the purpose of.",
+    "hooks": [
+      "A sword in a glacier is steaming. Surtur wants it left until the story says otherwise. Someone is digging.",
+      "A fire-cult is trying to skip to the last chapter. The giants are embarrassed, which is worse than angry."
+    ]
+  },
+  {
+    "id": "talona",
+    "name": "Talona",
+    "aka": "Lady of Poison, Mistress of Disease, She of the Deadly Kiss",
+    "kind": "baldur",
+    "pantheon": "baldur",
+    "align": "chaotic evil",
+    "domains": "Trickery, Tempest",
+    "symbol": "Three amber teardrops on a purple triangle, or a vial and a thorn",
+    "rank": "lesser",
+    "look": "A thin woman in layered green-black veils and gloves, a physician's satchel of sealed vials, a triangle-mark at her throat. Fully clothed. A clean, wrong infirmary. No rotting bodies.",
+    "blurb": "Plague as a sermon. Poison as a signature.",
+    "text": "Talona is the cough that becomes a street. Baldur's Gate has had her summers. Her cult travels with caravans and with doctors who smile too much.\n\nA cleric of Talona at the table is a biological problem. They may sell the antidote to the thing they started. That is the faith.\n\nKeep her clinical. She is scarier as a pharmacist than as a monster.",
+    "worship": "A drop in a well is a hymn. A measured dose is a better hymn. Random slaughter bores her.",
+    "hooks": [
+      "The Lower City has a new fever that only hits people who visited one tavern. Talona's triangle is under the bar. The barkeep is already dying and still serving.",
+      "A Talonite will halt an outbreak for a relic. The relic is a child's doll that has never been washed."
+    ]
+  },
+  {
+    "id": "talos",
+    "name": "Talos",
+    "aka": "The Destroyer, Stormlord, the Raging One",
+    "kind": "baldur",
+    "pantheon": "baldur",
+    "align": "chaotic evil",
+    "domains": "Tempest, War",
+    "symbol": "Three lightning bolts from one point, or a storm-gauntlet",
+    "rank": "greater",
+    "look": "A towering warrior in storm-dark armor, lightning caught in a raised fist, wreckage of a ship behind him on black water. Clothed in metal. Wrath, not gore.",
+    "blurb": "Destruction as weather. He is the storm that wants to be thanked.",
+    "text": "Talos is the Sword Coast's bad night. Lightning, wreck, riot, the roof coming off. His priests do not build. They wait for a storm and then take credit.\n\nIn Baldur's Gate he is a dockside god. Sailors bribe him. The rest of the city pretends the bribe is insurance.\n\nA cleric of Talos at the table is an artillery strike with a holy symbol. They are useful until they are not. Do not stand them next to a library of Gond.",
+    "worship": "Break something that was too proud. Do it in weather. A whisper in a calm is not his.",
+    "hooks": [
+      "Lightning hit the same warehouse three nights. Talos wants whatever is in the cellar brought outside and named.",
+      "A storm-priest is offering to wreck a rival's ship. He will. He will not stop at one ship."
+    ]
+  },
+  {
+    "id": "tempus",
+    "name": "Tempus",
+    "aka": "The Foehammer, Lord of Battles, the Lord of War",
+    "kind": "baldur",
+    "pantheon": "baldur",
+    "align": "chaotic neutral",
+    "domains": "War, Tempest",
+    "symbol": "A blazing silver sword on a blood-red field, or a battered war-helm",
+    "rank": "greater",
+    "look": "A huge, battle-worn warrior in notched plate, red cloak, a sword that has seen too many wars, standing on a field after the fight. Respect for the fallen. No torture. Clothed in war.",
+    "blurb": "War as a sacred craft. He loves the fight and hates the clerk who starts one from a desk.",
+    "text": "Tempus is the god of the battle, not the massacre. Cowards and butchers offend him. Brave enemies please him. Baldur's Gate keeps him in the barracks and in the heads of people who think a duel still means something.\n\nA cleric of Tempus will bless both sides of a fair war. They will walk away from an assassination and call it what it is.\n\nAt the table he is the honest fight. If the party wants a war-god who is not Bane, this is the one.",
+    "worship": "Fight facing the foe. Spare the beaten. Do not poison a well and call it strategy in his hearing.",
+    "hooks": [
+      "A Tempuran wants the party to referee a gang war so it stays a war and not a slaughter. Both gangs have already cheated.",
+      "A sword on an altar will not come free until it has been used in a fight the god considers real. A tavern brawl does not count."
+    ]
+  },
+  {
+    "id": "dagda",
+    "name": "The Dagda",
+    "aka": "The Good God, the All-Father of the Tuatha",
+    "kind": "celtic",
+    "pantheon": "celtic",
+    "align": "chaotic good",
+    "domains": "Nature, Life, Trickery",
+    "symbol": "A cauldron, or a club that both slays and restores",
+    "rank": "greater",
+    "look": "A huge, rustic chieftain in a short tunic and a cloak of raw wool, belly laughing, club on one shoulder, cauldron steaming at his feet.",
+    "blurb": "Plenty and ruin share the same table. He feeds armies from a cauldron and knocks down halls with a stick of oak.",
+    "text": "The Dagda is not a distant sky. He is the hall that never runs out of stew, and the club that ends a cattle-raid in one blow. Clerics who keep him do not preach. They cook, they fight, they make the next harvest happen.\n\nHis cauldron refuses a liar. His harp can order the seasons around a camp like a sergeant. A party that insults hospitality in his country finds the road longer and the rain meaner. A party that feeds strangers finds extra rations in the morning that no one packed.",
+    "worship": "Shrines are hearths. A cleric of the Dagda blesses a meal, not a statue. Domain work: create food, goodberry, plant growth, and the odd thunderous smash.",
+    "hooks": [
+      "The cauldron in a ruined dun still boils. It will feed the village if someone retrieves the ladle from a fomorian.",
+      "His harp was stolen. Until it is played, no one in the valley can sleep or wake on time."
+    ]
+  },
+  {
+    "id": "morrigan",
+    "name": "The Morrigan",
+    "aka": "Phantom Queen, of battle and prophecy",
+    "kind": "celtic",
+    "pantheon": "celtic",
+    "align": "chaotic neutral",
+    "domains": "War, Trickery, Knowledge",
+    "symbol": "A raven over a ford, or three women as one shadow",
+    "rank": "greater",
+    "look": "A dark-haired woman in a cloak of black feathers over a red gown, standing in a shallow ford, a raven on her wrist. Fully clothed, no corpses.",
+    "blurb": "She is the battle before it starts and the crow after. She offers victory. She does not offer comfort.",
+    "text": "The Morrigan is one and three: washer at the ford, queen of phantoms, crow on the shoulder of the dying. She will stand in the river and wash the armour of someone who has not died yet. That is not a riddle. That is a warning.\n\nHer clerics do not soothe. They tell you who will break. A paladin who wants a kind war-god should look elsewhere. A table that wants omens with teeth should keep her close.",
+    "worship": "Leave meat for crows at a crossing. Do not ask her who wins if you cannot hear the answer.",
+    "hooks": [
+      "She was seen washing a PC's cloak in a stream. She will trade the vision for a service at the next ford.",
+      "A king refused her and lost a battle he had already won on paper. His banner is still in the river."
+    ]
+  },
+  {
+    "id": "thor",
+    "name": "Thor",
+    "aka": "Of the hammer, the storm, the hall-friend of ordinary people",
+    "kind": "norse",
+    "pantheon": "norse",
+    "align": "chaotic good",
+    "domains": "Tempest, War",
+    "symbol": "Mjolnir, a goat, or a thunder-wheel",
+    "rank": "greater",
+    "look": "A red-bearded, broad warrior in a simple rich tunic and belt, hammer raised, goats in the storm-light, protecting a farmstead-sized world. Clothed, heroic, not a caricature.",
+    "blurb": "Thunder that is on your side if you are small and being kicked. He is the most popular god for a reason.",
+    "text": "Thor kills giants and drinks with farmers. He is not subtle and he is not cruel. His hammer comes back. His goats come back. The point is that ordinary life is allowed to continue.\n\nClerics of Thor are the reason a village militia holds. Thunderwave, call lightning. A party that preys on farmers in his country will hear wheels in the sky.",
+    "worship": "Ale, a goat if you can spare it, a boast you can back. Do not bully a hall.",
+    "hooks": [
+      "Giants are moving a millstone that is actually a hammer-head. Thor wants it thrown, not studied.",
+      "A taxman is taking goats 'for the jarl' and the storms have started answering doors."
+    ]
+  },
+  {
+    "id": "thoth",
+    "name": "Thoth",
+    "aka": "Of the ibis, the moon-count, the word that is a number",
+    "kind": "egyptian",
+    "pantheon": "egyptian",
+    "align": "neutral",
+    "domains": "Knowledge",
+    "symbol": "An ibis, a baboon, or a scribe's palette",
+    "rank": "greater",
+    "look": "An ibis-headed scribe in star-white linen, palette and reed pen, a moon-disk, scrolls in perfect stacks, night-blue temple. Intellectual, clothed, calm.",
+    "blurb": "Writing, the calendar, and the magic that is just extremely good filing.",
+    "text": "Thoth invented letters so the gods could not lie about what they said yesterday. He umpires cosmic disputes. He is why a contract, a spell, and a calendar are cousins.\n\nClerics of Thoth are scribes. Comprehend languages, identify, legend lore. A party that burns a library in his nome will find they can no longer count past seven until they copy a book by hand.",
+    "worship": "A true copy. Ink on the altar. Do not sign a blank page in his house.",
+    "hooks": [
+      "Every date in a city is wrong by three days. Thoth wants the stolen calendar-stone.",
+      "A spell is misspelled in every book except one. That one is in a crocodile pond. He is not sorry."
+    ]
+  },
+  {
+    "id": "thrym",
+    "name": "Thrym",
+    "aka": "King of the rime-giants, thief of hammers",
+    "kind": "norse",
+    "pantheon": "norse",
+    "align": "chaotic evil",
+    "domains": "War, Tempest",
+    "symbol": "A hoar-frost crown, or a stolen hammer-silhouette",
+    "rank": "lesser",
+    "look": "A massive frost-giant king in rime-crusted mail and furs, a empty hammer-stand beside his throne, aurora over a frozen hall. Clothed, cold, greedy.",
+    "blurb": "The ice that wants the thunder's tool. He is a bride-price joke that almost worked.",
+    "text": "Thrym stole Mjolnir and asked for Freya as the price. The gods sent Thor in a dress. The stories are allowed to be funny and still end in a pile of giants.\n\nClerics of Thrym are rare outside Jotun cults. They want winter to last and tools to change owners. A stolen magic weapon in a cold dungeon may be a tithe.",
+    "worship": "A stolen tool laid on ice. Do not pretend to be a bride if you cannot finish the joke.",
+    "hooks": [
+      "A frost-giant wedding is tomorrow. The bride is a problem. The dowry is a legendary weapon.",
+      "Every hammer in a town has frozen to the anvil. Thrym wants a conversation about a loan."
+    ]
+  },
+  {
+    "id": "tiamat",
+    "name": "Tiamat",
+    "aka": "The Chromatic Dragon, Queen of Evil Dragons, the Dark Queen, the Avaricious",
+    "kind": "baldur",
+    "pantheon": "baldur",
+    "align": "lawful evil",
+    "domains": "War, Trickery",
+    "symbol": "A five-headed dragon, or five colored gems in a claw",
+    "rank": "greater",
+    "look": "A draconic queen in jeweled chromatic scale-mail, a five-colored crown, one claw on a hoard, five ghost-heads of dragon-fire in the smoke above her. Clothed in treasure. Greedy, imperial, not a pin-up.",
+    "blurb": "Greed with five throats. She wants the hoard, the throne, and the map to the next hoard.",
+    "text": "Tiamat is Bahamut's opposite and the reason chromatic dragons have a foreign policy. Her cult in Baldur's Gate is money, dragon-blooded ambitious people, and a rumor of a hidden shrine that smells like a mint.\n\nA cleric of Tiamat at the table will help if the take is large enough. They will eat the take. The contract should be read twice.\n\nShe is a lawful evil: hierarchies, tribute, color-coded grudges. Red is not green. Do not mix the books.",
+    "worship": "Tribute in the correct color. A stolen hoard is a hymn. A shared hoard is a heresy.",
+    "hooks": [
+      "Five colored coins were left on the party's table. Spending them summons a collector. The collector is polite.",
+      "A Tiamat cult is funding both sides of a dock war. They want the warehouses empty so a dragon can nest. The dragon is not a metaphor."
+    ]
+  },
+  {
+    "id": "torm",
+    "name": "Torm",
+    "aka": "The True, the Loyal Fury, Hand of Righteousness",
+    "kind": "baldur",
+    "pantheon": "baldur",
+    "align": "lawful good",
+    "domains": "War, Life",
+    "symbol": "A gauntlet held upright, or a lion's head on a white field",
+    "rank": "greater",
+    "look": "A handsome, earnest warrior in bright plate, lion-cloak, a gauntlet raised in oath, standing before a city gate at morning. Fully clothed. Duty you can like.",
+    "blurb": "Loyalty as a superpower. Paladins' other favorite, after the one who cries.",
+    "text": "Torm is the god of keeping the promise you made when you were still brave. He is popular with the Flaming Fist's better officers and with people who think Baldur's Gate could be a just city if someone insisted.\n\nA cleric of Torm will not abandon the party. That can be inconvenient. They will also not ignore a crime because it is useful.\n\nAt the table he is the lawful good that still goes into the sewer. He is not naive. He is stubborn.",
+    "worship": "Swear with a gauntlet on a table. Then go. Do not leave a post. Do not leave a friend.",
+    "hooks": [
+      "A Tormite just resigned from the Fist for refusing an order. He will tell the party the order if they walk with him to the person it would have hurt.",
+      "An upright gauntlet appeared on a door in the Outer City. Behind the door is a child the city forgot. Torm has not."
+    ]
+  },
+  {
+    "id": "tyche",
+    "name": "Tyche",
+    "aka": "Of the city's luck, the wheel that does not apologise",
+    "kind": "greek",
+    "pantheon": "greek",
+    "align": "neutral",
+    "domains": "Trickery, Knowledge",
+    "symbol": "A rudder, a cornucopia, or a wheel",
+    "rank": "lesser",
+    "look": "A crowned woman in a mural crown (city walls as a diadem), rudder in one hand, cornucopia in the other, a city behind her. Clothed, civic, slightly smiling.",
+    "blurb": "Luck as civic infrastructure. She is why one town always catches the fair wind.",
+    "text": "Tyche is the fortune of a place, not a dice charm. When she leaves a city, the dice still work and nothing good happens with them. When she stays, even a bad mayor gets a good harvest.\n\nClerics of Tyche keep a public shrine at the market gate. Bane and bless are both hers. A party that wants 'luck' from her will be asked what they did for the town this week.",
+    "worship": "A coin in the civic fountain, heads-up. Do not pray for another city's ruin in her hearing.",
+    "hooks": [
+      "The town's luck left in a box on a cart. The cart is three days ahead on the road.",
+      "A rival city stole her mural crown from a statue. Birds will not land in either place until it is returned."
+    ]
+  },
+  {
+    "id": "tymora",
+    "name": "Tymora",
+    "aka": "Lady Luck, Our Smiling Lady, the Lady Who Smiles",
+    "kind": "baldur",
+    "pantheon": "baldur",
+    "align": "chaotic good",
+    "domains": "Trickery, Light",
+    "symbol": "A silver coin with her face, or a shining featureless disk",
+    "rank": "greater",
+    "look": "A laughing woman in traveling blue and silver, a coin walking across her knuckles, wink ready, a tavern behind her that is having a good night. Fully clothed. Warm, not drunk.",
+    "blurb": "Good fortune for people willing to roll. She likes a brave bet more than a safe prayer.",
+    "text": "Tymora is Beshaba's sister and the reason adventurers toast before a job. Baldur's Gate loves her: gambling houses, sailors, anyone whose plan has a fifty-fifty.\n\nA cleric of Tymora will bless a leap. They will not bless a ledger. If the party never takes a risk, she gets bored and her sister does not.\n\nAt the table she is the god of the second chance that still requires you to jump.",
+    "worship": "Flip a coin and abide. Leave a silver in a fountain. Do not count cards in her house and then ask for a miracle.",
+    "hooks": [
+      "A coin landed on its edge in the Elfsong and has not fallen. Tymora wants a question asked out loud. The answer will be expensive and correct.",
+      "Lady Luck's priest will stake the party for a vault job if they let her roll the last die."
+    ]
+  },
+  {
+    "id": "tyr",
+    "name": "Tyr",
+    "aka": "One-handed keeper of the oath, who paid in advance",
+    "kind": "norse",
+    "pantheon": "norse",
+    "align": "lawful good",
+    "domains": "War, Knowledge",
+    "symbol": "A sword, a missing right hand, or a bound wolf's shadow",
+    "rank": "greater",
+    "look": "A grave, one-handed war-god in simple mail, right wrist ending cleanly, sword in the left, a great wolf bound in the distance, hall-law light. Clothed, honourable, no gore.",
+    "blurb": "The oath that costs a hand. He is courage, law, and the bill you knew you would pay.",
+    "text": "Tyr put his hand in the wolf's mouth so the binding would hold. He is the god of people who sign knowing the price. Cowards do not keep him long.\n\nClerics of Tyr are officers and judges. They hate a clever oath that was always a lie. Zone of truth, crusader's mantle. A party that breaks parole in his name will find their own right hands unreliable.",
+    "worship": "A vow with a witness. Do not swear what you will not pay.",
+    "hooks": [
+      "A bound monster is chewing through a contract. Tyr wants a new witness, living.",
+      "A captain lost a hand in a false truce. He wants the truce-maker, and Tyr is already walking with him."
+    ]
+  },
+  {
+    "id": "tyr-evenhanded",
+    "name": "Tyr",
+    "aka": "The Even-Handed, Grimjaws, God of Justice",
+    "kind": "baldur",
+    "pantheon": "baldur",
+    "align": "lawful good",
+    "domains": "War, Knowledge",
+    "symbol": "A balanced scale resting on a warhammer, or a wounded-but-upright sword",
+    "rank": "greater",
+    "look": "A missing-right-hand noble warrior, eye-patch, warhammer in the remaining fist, scales on a chain at his belt, a court-hall that is also a barracks. Clothed, grim, fair.",
+    "blurb": "Justice that paid in advance. He already gave the hand and the eye. You can give the truth.",
+    "text": "This is the Tyr of Baldur's Gate, cousin in spirit to the northern one-hand on another page. He is the court that does not sell. His clergy keep law when the city would rather keep convenience.\n\nA cleric of Tyr at the table will insist on a trial even when a knife would be faster. They are exhausting. They are how a party stays the good side.\n\nHe is missing a hand because an oath cost it. Mention that if you want a paladin to sit up straight.",
+    "worship": "Tell the truth in a hall. Return what was stolen to the person it was stolen from, not to a fence. A maimed oath is still an oath.",
+    "hooks": [
+      "A magistrate of Tyr was found with his scales stuffed with coin. He says he did not do it. The scales still balance. That is the problem.",
+      "Tyr's hammer on an altar will not lift for anyone who is lying about why they came. The party has to pick a spokesperson."
+    ]
+  },
+  {
+    "id": "uller",
+    "name": "Uller",
+    "aka": "Of the yew-bow, the bone-skate, the duel in the snow",
+    "kind": "norse",
+    "pantheon": "norse",
+    "align": "chaotic neutral",
+    "domains": "Nature, War",
+    "symbol": "A longbow of yew, or a bone skate",
+    "rank": "lesser",
+    "look": "A lone hunter on bone skates, yew bow, fur hood, a frozen lake and pine edge, winter dusk. Fully clothed, spare, sharp.",
+    "blurb": "Archery, duels, and the winter road that is a weapon.",
+    "text": "Uller keeps the winter when even Thor is elsewhere. He is the bow, the skate, the single combat on a lake. Oaths sworn on his ring are mean and binding.\n\nClerics of Uller are archers and duel-seconds. Hail of thorns, hunter's mark. A party that refuses a fair duel in the snow may still have to skate it.",
+    "worship": "A ring-oath in winter. The first arrow of a hunt left in a tree.",
+    "hooks": [
+      "A frozen lake is a courtroom. Uller wants a champion to skate a lie down.",
+      "Every bowstring in a fort has gone slack except one yew. It will only serve a just shot."
+    ]
+  },
+  {
+    "id": "umberlee",
+    "name": "Umberlee",
+    "aka": "The Bitch Queen, Queen of the Depths, the Wavemother",
+    "kind": "baldur",
+    "pantheon": "baldur",
+    "align": "chaotic evil",
+    "domains": "Tempest, Trickery",
+    "symbol": "A forked blue-green wave, or a drowning hand and a shark",
+    "rank": "greater",
+    "look": "A wrathful sea-queen in kelp-dark silk and foam-white, crown of coral, the harbor storming behind her. Fully clothed in the sea. Beautiful the way a reef is beautiful: you do not grab it.",
+    "blurb": "The sea as a god who wants to be paid. Drowning is the invoice.",
+    "text": "Umberlee has a Water Queen's House on the Baldur's Gate docks because the city is not stupid. Ships leave a cut. Storms still happen. The cut is not a guarantee. It is a maybe.\n\nA cleric of Umberlee at the table is a maritime problem. They can calm a bay. They can also take a person who skipped the tithe.\n\nShe is not a metaphor for 'nature.' She is a queen with a temper and a lot of water.",
+    "worship": "Gold into the harbor. A true fear of the deep. Do not whistle a storm down unless you can put it back.",
+    "hooks": [
+      "A ship refused the Water Queen's cut and arrived anyway. Umberlee wants to know who blessed it. The blessing smells like Selûne.",
+      "Bodies have been coming in with the tide, all missing the same offering-coin. Someone is skimming the goddess."
+    ]
+  },
+  {
+    "id": "waukeen",
+    "name": "Waukeen",
+    "aka": "Merchant's Friend, Liberty's Maiden, the Golden Lady",
+    "kind": "baldur",
+    "pantheon": "baldur",
+    "align": "neutral",
+    "domains": "Knowledge, Trickery",
+    "symbol": "A gold coin with her face, or a pair of scales over a trade-road",
+    "rank": "lesser",
+    "look": "A prosperous woman in travel-cut gold and green, a ledger and a sample-pouch, a smile that has done this deal before. Fully clothed. A market at peak hour, honest weights in the foreground.",
+    "blurb": "Trade as a holy road. She wants the caravan through, the contract clear, the coin moving.",
+    "text": "Waukeen is why Baldur's Gate has a philosophy of money that is not only greed. Her people bless markets, loans, and the idea that a city is a machine for moving goods.\n\nShe has been missing and returned, which the church treats the way a company treats a founder who came back from the dead: carefully.\n\nA cleric of Waukeen at the table will fund a job that increases trade and walk away from one that only burns a rival. They are the party's accountant with a holy symbol.",
+    "worship": "A fair weight. A paid debt. A coin given to open a road, not to close one.",
+    "hooks": [
+      "A Waukeenar will underwrite the party's expedition if they reopen a trade spur the Zhentarim 'closed.' The spur is a person.",
+      "Gold coins in the counting-house have her face on both sides tonight. Spending them is fine. Hoarding them is not."
+    ]
+  },
+  {
+    "id": "zeus",
+    "name": "Zeus",
+    "aka": "King of Olympus, cloud-gatherer",
+    "kind": "greek",
+    "pantheon": "greek",
+    "align": "chaotic good",
+    "domains": "Tempest, War",
+    "symbol": "A fistful of lightning, or an eagle",
+    "rank": "greater",
+    "look": "A mature, bearded king in a white himation with a gold border, standing in cloud, a bolt resting in his hand like a sceptre, an eagle at his shoulder. Fully clothed.",
+    "blurb": "Sky, law, and the right to throw the furniture. He is hospitality and the storm that punishes those who break it.",
+    "text": "Zeus keeps the guest-right and the weather. He has a long list of children and a longer list of people who thought a closed door would hide them. At a table he is the reason a host who poisons a guest finds the roof open to rain.\n\nHis clerics are judges with a weather problem. They take xenia seriously: bread, salt, a bed, and no knives. Call lightning is not a metaphor.",
+    "worship": "Offer the first cup of wine to the sky. Protect a guest even if they are inconvenient.",
+    "hooks": [
+      "A guest was murdered under a peace-banner. The next storm will not stop until someone is named.",
+      "An eagle will not leave a PC's pack. Zeus wants a message carried to a king who has stopped building guest-houses."
+    ]
+  }
+]

@@ -1,0 +1,41 @@
+# Local table uploads (host-shared audio/maps). Keep the folder.
+uploads/*
+!uploads/.gitkeep
+uploads/manifest.json
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+.Python
+*.egg-info/
+.venv/
+venv/
+
+# Go toolchain and Windows rebuild cache
+tools/_go/
+tools/__pycache__/
+*.tar.gz
+
+# Source dumps used to generate bundled audio (not needed to run)
+tools/_raw/
+tools/_wav/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+Desktop.ini
+*~
+*.swp
+*.swo
+.vscode/
+.idea/
+*.code-workspace
+
+# Local session / agent
+.grok/
+feedback_drafts.json
+*.log
+.env
+.env.*

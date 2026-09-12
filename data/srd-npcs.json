@@ -1,0 +1,983 @@
+[
+  {
+    "id": "acolyte",
+    "name": "Acolyte",
+    "aka": "Temple attendant",
+    "role": "Temple attendant",
+    "kind": "faith",
+    "cr": "1/4",
+    "size": "Medium",
+    "align": "any alignment",
+    "ac": 10,
+    "hp": 9,
+    "speed": "30 ft.",
+    "str": 10,
+    "dex": 10,
+    "con": 10,
+    "int": 10,
+    "wis": 14,
+    "cha": 11,
+    "saves": "",
+    "skills": "Medicine +4, Religion +2",
+    "senses": "passive Perception 12",
+    "lang": "any one language (usually Common)",
+    "xp": 50,
+    "weapons": [
+      {
+        "n": "Club",
+        "d": "Melee Weapon Attack: +2 to hit, reach 5 ft., one target. Hit: 2 (1d4) bludgeoning damage."
+      }
+    ],
+    "traits": [
+      {
+        "n": "Spellcasting",
+        "d": "The acolyte is a 1st-level spellcaster. Its spellcasting ability is Wisdom (spell save DC 12, +4 to hit with spell attacks). The acolyte has following cleric spells prepared:\n\n- Cantrips (at will): light, sacred flame, thaumaturgy\n- 1st level (3 slots): bless, cure wounds, sanctuary"
+      }
+    ],
+    "blurb": "A junior of a shrine: candles, alms, and a mace they barely know. They know who comes at dawn and who never comes.",
+    "text": "Use them as the first friendly face in a holy house, or the first body when the cult downstairs is found out.\n\nThey will fetch the priest. They will also hide a letter in a hymnal if you are kind. A fight with an acolyte should feel like a mistake, not a boss.",
+    "hooks": [
+      "The acolyte saw the villain in the vestry last night.",
+      "They will trade a healing kit for a secret kept from the high priest."
+    ],
+    "look": "Temple attendant"
+  },
+  {
+    "id": "archmage",
+    "name": "Archmage",
+    "aka": "Tower-lord",
+    "role": "Tower-lord",
+    "kind": "magic",
+    "cr": "12",
+    "size": "Medium",
+    "align": "any alignment",
+    "ac": 12,
+    "hp": 99,
+    "speed": "30 ft.",
+    "str": 10,
+    "dex": 14,
+    "con": 12,
+    "int": 20,
+    "wis": 15,
+    "cha": 16,
+    "saves": "INT +9, WIS +6",
+    "skills": "Arcana +13, History +13",
+    "senses": "passive Perception 12",
+    "lang": "any six languages",
+    "xp": 8400,
+    "weapons": [
+      {
+        "n": "Dagger",
+        "d": "Melee or Ranged Weapon Attack: +6 to hit, reach 5 ft. or range 20/60 ft., one target. Hit: 4 (1d4 + 2) piercing damage."
+      }
+    ],
+    "traits": [
+      {
+        "n": "Magic Resistance",
+        "d": "The archmage has advantage on saving throws against spells and other magical effects."
+      },
+      {
+        "n": "Spellcasting",
+        "d": "The archmage is an 18th-level spellcaster. Its spellcasting ability is Intelligence (spell save DC 17, +9 to hit with spell attacks). The archmage can cast disguise self and invisibility at will and has the following wizard spells prepared:\n\n- Cantrips (at will): fire bolt, light, mage hand, prestidigitation, shocking grasp\n- 1st level (4 slots): detect magic, identify, mage armor*, magic missile\n- 2nd level (3 slots): detect thoughts, mirror image, misty step\n- 3rd level (3 slots): counterspell, fly, lightning bolt\n- 4th level (3 slots): banishment, fire shield, stoneskin*\n- 5th level (3 slots): cone of cold, scrying, wall of force\n- 6th level (1 slot): globe of invulnerability\n- 7th level (1 slot): teleport\n- 8th level (1 slot): mind blank*\n- 9th level (1 slot): time stop\n* The archmage casts these spells on itself before combat."
+      }
+    ],
+    "blurb": "A spellcaster who has outlived three apprentices and two towers. The third tower has better locks.",
+    "text": "Drop an archmage when the table needs a problem money cannot buy. They do not adventure. They send people.\n\nTheir tower is a dungeon with a guest book. If the party wins, it is because the archmage wanted a conversation, not a corpse.",
+    "hooks": [
+      "They hire the party to steal a book they already own, to see who else wants it.",
+      "A ward failed. They need someone who can bleed without ruining the carpet."
+    ],
+    "look": "Tower-lord"
+  },
+  {
+    "id": "assassin",
+    "name": "Assassin",
+    "aka": "Contract killer",
+    "role": "Contract killer",
+    "kind": "criminal",
+    "cr": "8",
+    "size": "Medium",
+    "align": "any non-good alignment",
+    "ac": 15,
+    "hp": 78,
+    "speed": "30 ft.",
+    "str": 11,
+    "dex": 16,
+    "con": 14,
+    "int": 13,
+    "wis": 11,
+    "cha": 10,
+    "saves": "DEX +6, INT +4",
+    "skills": "Acrobatics +6, Deception +3, Perception +3, Stealth +9",
+    "senses": "passive Perception 13",
+    "lang": "Thieves' cant plus any two languages",
+    "xp": 3900,
+    "weapons": [
+      {
+        "n": "Multiattack",
+        "d": "The assassin makes two shortsword attacks."
+      },
+      {
+        "n": "Shortsword",
+        "d": "Melee Weapon Attack: +6 to hit, reach 5 ft., one target. Hit: 6 (1d6 + 3) piercing damage, and the target must make a DC 15 Constitution saving throw, taking 24 (7d6) poison damage on a failed save, or half as much damage on a successful one."
+      },
+      {
+        "n": "Light Crossbow",
+        "d": "Ranged Weapon Attack: +6 to hit, range 80/320 ft., one target. Hit: 7 (1d8 + 3) piercing damage, and the target must make a DC 15 Constitution saving throw, taking 24 (7d6) poison damage on a failed save, or half as much damage on a successful one."
+      }
+    ],
+    "traits": [
+      {
+        "n": "Assassinate",
+        "d": "During its first turn, the assassin has advantage on attack rolls against any creature that hasn't taken a turn. Any hit the assassin scores against a surprised creature is a critical hit."
+      },
+      {
+        "n": "Evasion",
+        "d": "If the assassin is subjected to an effect that allows it to make a Dexterity saving throw to take only half damage, the assassin instead takes no damage if it succeeds on the saving throw, and only half damage if it fails."
+      },
+      {
+        "n": "Sneak Attack (1/Turn)",
+        "d": "The assassin deals an extra 13 (4d6) damage when it hits a target with a weapon attack and has advantage on the attack roll, or when the target is within 5 ft. of an ally of the assassin that isn't incapacitated and the assassin doesn't have disadvantage on the attack roll."
+      }
+    ],
+    "blurb": "Polite until the poison lands. They study doors, drinks, and the way a mark laughs.",
+    "text": "An assassin is a clock. Once they have a name, the table has a deadline.\n\nThey are not a random alley fight. Put them in a feast, a bathhouse, or a confession booth. If they miss, they send a letter explaining why that was professional courtesy.",
+    "hooks": [
+      "The contract is on an NPC the party likes.",
+      "The assassin offers to cancel if the party does a worse job for them."
+    ],
+    "look": "Contract killer"
+  },
+  {
+    "id": "bandit",
+    "name": "Bandit",
+    "aka": "Road thief",
+    "role": "Road thief",
+    "kind": "criminal",
+    "cr": "1/8",
+    "size": "Medium",
+    "align": "any non-lawful alignment",
+    "ac": 12,
+    "hp": 11,
+    "speed": "30 ft.",
+    "str": 11,
+    "dex": 12,
+    "con": 12,
+    "int": 10,
+    "wis": 10,
+    "cha": 10,
+    "saves": "",
+    "skills": "",
+    "senses": "passive Perception 10",
+    "lang": "any one language (usually Common)",
+    "xp": 25,
+    "weapons": [
+      {
+        "n": "Scimitar",
+        "d": "Melee Weapon Attack: +3 to hit, reach 5 ft., one target. Hit: 4 (1d6 + 1) slashing damage."
+      },
+      {
+        "n": "Light Crossbow",
+        "d": "Ranged Weapon Attack: +3 to hit, range 80/320 ft., one target. Hit: 5 (1d8 + 1) piercing damage."
+      }
+    ],
+    "traits": [],
+    "blurb": "Hungry, armed, and not yet famous. They work in packs because one bandit is a story; six is a toll.",
+    "text": "Use bandits for the first blood of a road. They want purses, not martyrdom.\n\nA smart bandit runs. A stupid one dies on the wagon. Let the party talk: food, a lie, or a better job will peel them off a cruel captain.",
+    "hooks": [
+      "They work for someone in the next town.",
+      "One of them used to be a guard and still has the key."
+    ],
+    "look": "Road thief"
+  },
+  {
+    "id": "bandit-captain",
+    "name": "Bandit Captain",
+    "aka": "Crew boss",
+    "role": "Crew boss",
+    "kind": "criminal",
+    "cr": "2",
+    "size": "Medium",
+    "align": "any non-lawful alignment",
+    "ac": 15,
+    "hp": 65,
+    "speed": "30 ft.",
+    "str": 15,
+    "dex": 16,
+    "con": 14,
+    "int": 14,
+    "wis": 11,
+    "cha": 14,
+    "saves": "STR +4, DEX +5, WIS +2",
+    "skills": "Athletics +4, Deception +4",
+    "senses": "passive Perception 10",
+    "lang": "any two languages",
+    "xp": 450,
+    "weapons": [
+      {
+        "n": "Multiattack",
+        "d": "The captain makes three melee attacks: two with its scimitar and one with its dagger. Or the captain makes two ranged attacks with its daggers."
+      },
+      {
+        "n": "Scimitar",
+        "d": "Melee Weapon Attack: +5 to hit, reach 5 ft., one target. Hit: 6 (1d6 + 3) slashing damage."
+      },
+      {
+        "n": "Dagger",
+        "d": "Melee or Ranged Weapon Attack: +5 to hit, reach 5 ft. or range 20/60 ft., one target. Hit: 5 (1d4 + 3) piercing damage."
+      }
+    ],
+    "traits": [],
+    "blurb": "The one who counts the take and decides who eats. Charming until the math goes wrong.",
+    "text": "A captain turns bandits into a faction. Give them a camp, a code, and a rival.\n\nThey will parley. They will also cut a throat at the table if the party names the wrong person. Treat them as a short-term warlord, not a mook with extra HP.",
+    "hooks": [
+      "They want a letter of marque, or a fake one.",
+      "Their lieutenant is selling them out to the knight in the next hex."
+    ],
+    "look": "Crew boss"
+  },
+  {
+    "id": "berserker",
+    "name": "Berserker",
+    "aka": "Rage fighter",
+    "role": "Rage fighter",
+    "kind": "martial",
+    "cr": "2",
+    "size": "Medium",
+    "align": "any chaotic alignment",
+    "ac": 13,
+    "hp": 67,
+    "speed": "30 ft.",
+    "str": 16,
+    "dex": 12,
+    "con": 17,
+    "int": 9,
+    "wis": 11,
+    "cha": 9,
+    "saves": "",
+    "skills": "",
+    "senses": "passive Perception 10",
+    "lang": "any one language (usually Common)",
+    "xp": 450,
+    "weapons": [
+      {
+        "n": "Greataxe",
+        "d": "Melee Weapon Attack: +5 to hit, reach 5 ft., one target. Hit: 9 (1d12 + 3) slashing damage."
+      }
+    ],
+    "traits": [
+      {
+        "n": "Reckless",
+        "d": "At the start of its turn, the berserker can gain advantage on all melee weapon attack rolls during that turn, but attack rolls against it have advantage until the start of its next turn."
+      }
+    ],
+    "blurb": "A warrior who has decided armor is a conversation they are tired of having.",
+    "text": "Berserkers make noise. Put them at the front of a raid, a funeral, or a pit.\n\nThey are loyal to a cause or a person, not a paycheck. If the party can name that cause, the fight can stop. If they cannot, the fight does not.",
+    "hooks": [
+      "They were hired as muscle and were not told about the children.",
+      "Their rage is a geas. Breaking it is a quest."
+    ],
+    "look": "Rage fighter"
+  },
+  {
+    "id": "commoner",
+    "name": "Commoner",
+    "aka": "Ordinary person",
+    "role": "Ordinary person",
+    "kind": "town",
+    "cr": "0",
+    "size": "Medium",
+    "align": "any alignment",
+    "ac": 10,
+    "hp": 4,
+    "speed": "30 ft.",
+    "str": 10,
+    "dex": 10,
+    "con": 10,
+    "int": 10,
+    "wis": 10,
+    "cha": 10,
+    "saves": "",
+    "skills": "",
+    "senses": "passive Perception 10",
+    "lang": "any one language (usually Common)",
+    "xp": 10,
+    "weapons": [
+      {
+        "n": "Club",
+        "d": "Melee Weapon Attack: +2 to hit, reach 5 ft., one target. Hit: 2 (1d4) bludgeoning damage."
+      }
+    ],
+    "traits": [],
+    "blurb": "No CR that matters. They bake, haul, gossip, and die if you treat the town as scenery.",
+    "text": "Commoners are the scoreboard. If the dragon wins, count them.\n\nGive each one a name and a job. The innkeep, the miller's kid, the clerk who saw the noble's coach. A commoner with a secret is worth more than a second ogre.",
+    "hooks": [
+      "They watched the villain bury something behind the tannery.",
+      "They will hide the party if the party hides their cousin first."
+    ],
+    "look": "Ordinary person"
+  },
+  {
+    "id": "cult-fanatic",
+    "name": "Cult Fanatic",
+    "aka": "Priest of the wrong god",
+    "role": "Priest of the wrong god",
+    "kind": "faith",
+    "cr": "2",
+    "size": "Medium",
+    "align": "any non-good alignment",
+    "ac": 13,
+    "hp": 22,
+    "speed": "30 ft.",
+    "str": 11,
+    "dex": 14,
+    "con": 12,
+    "int": 10,
+    "wis": 13,
+    "cha": 14,
+    "saves": "",
+    "skills": "Deception +4, Persuasion +4, Religion +2",
+    "senses": "passive Perception 11",
+    "lang": "any one language (usually Common)",
+    "xp": 450,
+    "weapons": [
+      {
+        "n": "Multiattack",
+        "d": "The fanatic makes two melee attacks."
+      },
+      {
+        "n": "Dagger",
+        "d": "Melee or Ranged Weapon Attack: +4 to hit, reach 5 ft. or range 20/60 ft., one creature. Hit: 4 (1d4 + 2) piercing damage."
+      }
+    ],
+    "traits": [
+      {
+        "n": "Dark Devotion",
+        "d": "The fanatic has advantage on saving throws against being charmed or frightened."
+      },
+      {
+        "n": "Spellcasting",
+        "d": "The fanatic is a 4th-level spellcaster. Its spell casting ability is Wisdom (spell save DC 11, +3 to hit with spell attacks). The fanatic has the following cleric spells prepared:\n\nCantrips (at will): light, sacred flame, thaumaturgy\n- 1st level (4 slots): command, inflict wounds, shield of faith\n- 2nd level (3 slots): hold person, spiritual weapon"
+      }
+    ],
+    "blurb": "The one who writes the sermons and picks who goes into the pit.",
+    "text": "A fanatic is a lieutenant with spells. They keep the cultists facing the right altar.\n\nThey will talk theology until a blade comes out. If the party debates, they might delay the summoning. If the party charges, they finish it early.",
+    "hooks": [
+      "The fanatic's holy symbol is a stolen family crest.",
+      "They want a specific PC as the last offering and will say why."
+    ],
+    "look": "Priest of the wrong god"
+  },
+  {
+    "id": "cultist",
+    "name": "Cultist",
+    "aka": "Rank-and-file believer",
+    "role": "Rank-and-file believer",
+    "kind": "faith",
+    "cr": "1/8",
+    "size": "Medium",
+    "align": "any non-good alignment",
+    "ac": 12,
+    "hp": 9,
+    "speed": "30 ft.",
+    "str": 11,
+    "dex": 12,
+    "con": 10,
+    "int": 10,
+    "wis": 11,
+    "cha": 10,
+    "saves": "",
+    "skills": "Deception +2, Religion +2",
+    "senses": "passive Perception 10",
+    "lang": "any one language (usually Common)",
+    "xp": 25,
+    "weapons": [
+      {
+        "n": "Scimitar",
+        "d": "Melee Weapon Attack: +3 to hit, reach 5 ft., one creature. Hit: 4 (1d6 + 1) slashing damage."
+      }
+    ],
+    "traits": [
+      {
+        "n": "Dark Devotion",
+        "d": "The cultist has advantage on saving throws against being charmed or frightened."
+      }
+    ],
+    "blurb": "Robes, a knife, and a hymn they only half understand. Dangerous in a crowd.",
+    "text": "Cultists are the church's bad night. Alone they fold. Together they finish a ritual.\n\nUse them as a timer: every room cleared is one less voice in the chant. Let one surrender and you have a map of the basement.",
+    "hooks": [
+      "They think the party are prophesied guests.",
+      "Their brand matches a noble house in town."
+    ],
+    "look": "Rank-and-file believer"
+  },
+  {
+    "id": "druid",
+    "name": "Druid",
+    "aka": "Circle walker",
+    "role": "Circle walker",
+    "kind": "wild",
+    "cr": "2",
+    "size": "Medium",
+    "align": "any alignment",
+    "ac": 11,
+    "hp": 27,
+    "speed": "30 ft.",
+    "str": 10,
+    "dex": 12,
+    "con": 13,
+    "int": 12,
+    "wis": 15,
+    "cha": 11,
+    "saves": "",
+    "skills": "Medicine +4, Nature +3, Perception +4",
+    "senses": "passive Perception 14",
+    "lang": "Druidic plus any two languages",
+    "xp": 450,
+    "weapons": [
+      {
+        "n": "Quarterstaff",
+        "d": " Melee Weapon Attack: +2 to hit (+4 to hit with shillelagh), reach 5 ft., one target. Hit: 3 (1d6) bludgeoning damage, 4 (1d8) bludgeoning damage if wielded with two hands, or 6 (1d8 + 2) bludgeoning damage with shillelagh."
+      }
+    ],
+    "traits": [
+      {
+        "n": "Spellcasting",
+        "d": "The druid is a 4th-level spellcaster. Its spellcasting ability is Wisdom (spell save DC 12, +4 to hit with spell attacks). It has the following druid spells prepared:\n\n- Cantrips (at will): druidcraft, produce flame, shillelagh\n- 1st level (4 slots): entangle, longstrider, speak with animals, thunderwave\n- 2nd level (3 slots): animal messenger, barkskin"
+      }
+    ],
+    "blurb": "A spellcaster who answers to weather before kings. The grove is their court.",
+    "text": "A druid is a territorial problem. Roads, mills, and logging camps are their villains.\n\nThey can be an ally who will not enter cities, or an enemy who will not leave the wood. Wild shape makes them a scout, a spy, and a second encounter in one body.",
+    "hooks": [
+      "A blight in the wood is coming from the temple, not the trees.",
+      "They will guide the party if the party leaves the axes."
+    ],
+    "look": "Circle walker"
+  },
+  {
+    "id": "gladiator",
+    "name": "Gladiator",
+    "aka": "Arena champion",
+    "role": "Arena champion",
+    "kind": "martial",
+    "cr": "5",
+    "size": "Medium",
+    "align": "any alignment",
+    "ac": 16,
+    "hp": 112,
+    "speed": "30 ft.",
+    "str": 18,
+    "dex": 15,
+    "con": 16,
+    "int": 10,
+    "wis": 12,
+    "cha": 15,
+    "saves": "STR +7, DEX +5, CON +6",
+    "skills": "Athletics +10, Intimidation +5",
+    "senses": "passive Perception 11",
+    "lang": "any one language (usually Common)",
+    "xp": 1800,
+    "weapons": [
+      {
+        "n": "Multiattack",
+        "d": "The gladiator makes three melee attacks or two ranged attacks."
+      },
+      {
+        "n": "Spear",
+        "d": "Melee or Ranged Weapon Attack: +7 to hit, reach 5 ft. or range 20/60 ft., one target. Hit: 11 (2d6 + 4) piercing damage, or 13 (2d8 + 4) piercing damage if used with two hands to make a melee attack."
+      },
+      {
+        "n": "Shield Bash",
+        "d": "Melee Weapon Attack: +7 to hit, reach 5 ft., one creature. Hit: 9 (2d4 + 4) bludgeoning damage. If the target is a Medium or smaller creature, it must succeed on a DC 15 Strength saving throw or be knocked prone."
+      }
+    ],
+    "traits": [
+      {
+        "n": "Brave",
+        "d": "The gladiator has advantage on saving throws against being frightened."
+      },
+      {
+        "n": "Brute",
+        "d": "A melee weapon deals one extra die of its damage when the gladiator hits with it (included in the attack)."
+      }
+    ],
+    "blurb": "A fighter who has learned to make a crowd love a killing. The smile is part of the armor.",
+    "text": "Put a gladiator in a pit, a parade, or a noble's party as hired muscle who hates the job.\n\nThey fight fair when people are watching and dirty when they are not. Freedom, a name, or a better contract will move them. Gold alone buys one bout.",
+    "hooks": [
+      "They know a secret exit under the arena.",
+      "Their next match is rigged against an NPC the party must keep alive."
+    ],
+    "look": "Arena champion"
+  },
+  {
+    "id": "guard",
+    "name": "Guard",
+    "aka": "Watch soldier",
+    "role": "Watch soldier",
+    "kind": "martial",
+    "cr": "1/8",
+    "size": "Medium",
+    "align": "any alignment",
+    "ac": 16,
+    "hp": 11,
+    "speed": "30 ft.",
+    "str": 13,
+    "dex": 12,
+    "con": 12,
+    "int": 10,
+    "wis": 11,
+    "cha": 10,
+    "saves": "",
+    "skills": "Perception +2",
+    "senses": "passive Perception 12",
+    "lang": "any one language (usually Common)",
+    "xp": 25,
+    "weapons": [
+      {
+        "n": "Spear",
+        "d": "Melee or Ranged Weapon Attack: +3 to hit, reach 5 ft. or range 20/60 ft., one target. Hit: 4 (1d6 + 1) piercing damage or 5 (1d8 + 1) piercing damage if used with two hands to make a melee attack."
+      }
+    ],
+    "traits": [],
+    "blurb": "A spear, a shift, and orders from someone they may not like. The town's immune system.",
+    "text": "Guards are the law the party meets first. They can be honest, bought, or tired.\n\nA fight with guards should cost reputation, not just HP. Talking, badges, and the right name open doors. Killing them closes the city.",
+    "hooks": [
+      "The night sergeant is missing. The day sergeant is lying.",
+      "They will look the other way for proof their captain is dirty."
+    ],
+    "look": "Watch soldier"
+  },
+  {
+    "id": "knight",
+    "name": "Knight",
+    "aka": "Sworn rider",
+    "role": "Sworn rider",
+    "kind": "martial",
+    "cr": "3",
+    "size": "Medium",
+    "align": "any alignment",
+    "ac": 18,
+    "hp": 52,
+    "speed": "30 ft.",
+    "str": 16,
+    "dex": 11,
+    "con": 14,
+    "int": 11,
+    "wis": 11,
+    "cha": 15,
+    "saves": "CON +4, WIS +2",
+    "skills": "",
+    "senses": "passive Perception 10",
+    "lang": "any one language (usually Common)",
+    "xp": 700,
+    "weapons": [
+      {
+        "n": "Multiattack",
+        "d": "The knight makes two melee attacks."
+      },
+      {
+        "n": "Greatsword",
+        "d": "Melee Weapon Attack: +5 to hit, reach 5 ft., one target. Hit: 10 (2d6 + 3) slashing damage."
+      },
+      {
+        "n": "Heavy Crossbow",
+        "d": "Ranged Weapon Attack: +2 to hit, range 100/400 ft., one target. Hit: 5 (1d10) piercing damage."
+      },
+      {
+        "n": "Leadership",
+        "d": "For 1 minute, the knight can utter a special command or warning whenever a nonhostile creature that it can see within 30 ft. of it makes an attack roll or a saving throw. The creature can add a d4 to its roll provided it can hear and understand the knight. A creature can benefit from only one Leadership die at a time. This effect ends if the knight is incapacitated."
+      }
+    ],
+    "traits": [
+      {
+        "n": "Brave",
+        "d": "The knight has advantage on saving throws against being frightened."
+      }
+    ],
+    "blurb": "Plate, a code, and a lord. The code and the lord do not always agree.",
+    "text": "A knight is a walking faction. They arrive with horses, banners, and consequences.\n\nUse them as a rival adventurer with better funding, or as the law when guards are not enough. If the party shames them in public, the next meeting is a duel. If the party saves their honor, they become a road.",
+    "hooks": [
+      "Their oath requires a deed the party is about to prevent.",
+      "They are hunting the same villain and will not share the kill."
+    ],
+    "look": "Sworn rider"
+  },
+  {
+    "id": "mage",
+    "name": "Mage",
+    "aka": "Working wizard",
+    "role": "Working wizard",
+    "kind": "magic",
+    "cr": "6",
+    "size": "Medium",
+    "align": "any alignment",
+    "ac": 12,
+    "hp": 40,
+    "speed": "30 ft.",
+    "str": 9,
+    "dex": 14,
+    "con": 11,
+    "int": 17,
+    "wis": 12,
+    "cha": 11,
+    "saves": "INT +6, WIS +4",
+    "skills": "Arcana +6, History +6",
+    "senses": "passive Perception 11",
+    "lang": "any four languages",
+    "xp": 2300,
+    "weapons": [
+      {
+        "n": "Dagger",
+        "d": "Melee or Ranged Weapon Attack: +5 to hit, reach 5 ft. or range 20/60 ft., one target. Hit: 4 (1d4 + 2) piercing damage."
+      }
+    ],
+    "traits": [
+      {
+        "n": "Spellcasting",
+        "d": "The mage is a 9th-level spellcaster. Its spellcasting ability is Intelligence (spell save DC 14, +6 to hit with spell attacks). The mage has the following wizard spells prepared:\n\n- Cantrips (at will): fire bolt, light, mage hand, prestidigitation\n- 1st level (4 slots): detect magic, mage armor, magic missile, shield\n- 2nd level (3 slots): misty step, suggestion\n- 3rd level (3 slots): counterspell, fireball, fly\n- 4th level (3 slots): greater invisibility, ice storm\n- 5th level (1 slot): cone of cold"
+      }
+    ],
+    "blurb": "Not a legend yet. Enough fireball to ruin a tavern and enough sense to run afterward.",
+    "text": "A mage is a specialist for hire: ward, translation, or a hole in a wall.\n\nThey panic like people. Give them a patron, a debt, and a spellbook they will die for. If the party steals the book, they have a recurring enemy. If they pay, they have a scared ally.",
+    "hooks": [
+      "Their apprentice sold a scroll that should not exist.",
+      "They need a bodyguard for a summoning they already started."
+    ],
+    "look": "Working wizard"
+  },
+  {
+    "id": "noble",
+    "name": "Noble",
+    "aka": "Landed name",
+    "role": "Landed name",
+    "kind": "town",
+    "cr": "1/8",
+    "size": "Medium",
+    "align": "any alignment",
+    "ac": 15,
+    "hp": 9,
+    "speed": "30 ft.",
+    "str": 11,
+    "dex": 12,
+    "con": 11,
+    "int": 12,
+    "wis": 14,
+    "cha": 16,
+    "saves": "",
+    "skills": "Deception +5, Insight +4, Persuasion +5",
+    "senses": "passive Perception 12",
+    "lang": "any two languages",
+    "xp": 25,
+    "weapons": [
+      {
+        "n": "Rapier",
+        "d": "Melee Weapon Attack: +3 to hit, reach 5 ft., one target. Hit: 5 (1d8 + 1) piercing damage."
+      }
+    ],
+    "traits": [],
+    "blurb": "Silk, a title, and a rapier they were taught for portraits. The real weapon is the room.",
+    "text": "Nobles move plots without swinging. Invitations, marriages, and taxes are their spells.\n\nA noble in combat is a failure state for someone. Use them at dinners, courts, and balconies. Their retainer is the actual fight. Their rumor is the actual treasure.",
+    "hooks": [
+      "They will fund the party if the party ruins a rival's feast.",
+      "The missing heir is in the party's wagon and does not know it."
+    ],
+    "look": "Landed name"
+  },
+  {
+    "id": "priest",
+    "name": "Priest",
+    "aka": "Temple voice",
+    "role": "Temple voice",
+    "kind": "faith",
+    "cr": "2",
+    "size": "Medium",
+    "align": "any alignment",
+    "ac": 13,
+    "hp": 27,
+    "speed": "25 ft.",
+    "str": 10,
+    "dex": 10,
+    "con": 12,
+    "int": 13,
+    "wis": 16,
+    "cha": 13,
+    "saves": "",
+    "skills": "Medicine +7, Persuasion +3, Religion +4",
+    "senses": "passive Perception 13",
+    "lang": "any two languages",
+    "xp": 450,
+    "weapons": [
+      {
+        "n": "Mace",
+        "d": "Melee Weapon Attack: +2 to hit, reach 5 ft., one target. Hit: 3 (1d6) bludgeoning damage."
+      }
+    ],
+    "traits": [
+      {
+        "n": "Divine Eminence",
+        "d": "As a bonus action, the priest can expend a spell slot to cause its melee weapon attacks to magically deal an extra 10 (3d6) radiant damage to a target on a hit. This benefit lasts until the end of the turn. If the priest expends a spell slot of 2nd level or higher, the extra damage increases by 1d6 for each level above 1st."
+      },
+      {
+        "n": "Spellcasting",
+        "d": "The priest is a 5th-level spellcaster. Its spellcasting ability is Wisdom (spell save DC 13, +5 to hit with spell attacks). The priest has the following cleric spells prepared:\n\n- Cantrips (at will): light, sacred flame, thaumaturgy\n- 1st level (4 slots): cure wounds, guiding bolt, sanctuary\n- 2nd level (3 slots): lesser restoration, spiritual weapon\n- 3rd level (2 slots): dispel magic, spirit guardians"
+      }
+    ],
+    "blurb": "The one who marries, buries, and decides which miracles are official.",
+    "text": "A priest is infrastructure. Towns without one feel the gap in the first plague.\n\nThey can heal, hide, or hunt the party depending on the god and the last rumor. Let them be busy: a funeral at noon, a confession at dusk, a thing in the crypt after dark.",
+    "hooks": [
+      "A burial they performed got up again.",
+      "They will bless a weapon if the party returns a relic."
+    ],
+    "look": "Temple voice"
+  },
+  {
+    "id": "scout",
+    "name": "Scout",
+    "aka": "Trail watcher",
+    "role": "Trail watcher",
+    "kind": "wild",
+    "cr": "1/2",
+    "size": "Medium",
+    "align": "any alignment",
+    "ac": 13,
+    "hp": 16,
+    "speed": "30 ft.",
+    "str": 11,
+    "dex": 14,
+    "con": 12,
+    "int": 11,
+    "wis": 13,
+    "cha": 11,
+    "saves": "",
+    "skills": "Nature +4, Perception +5, Stealth +6, Survival +5",
+    "senses": "passive Perception 15",
+    "lang": "any one language (usually Common)",
+    "xp": 100,
+    "weapons": [
+      {
+        "n": "Multiattack",
+        "d": "The scout makes two melee attacks or two ranged attacks."
+      },
+      {
+        "n": "Shortsword",
+        "d": "Melee Weapon Attack: +4 to hit, reach 5 ft., one target. Hit: 5 (1d6 + 2) piercing damage."
+      },
+      {
+        "n": "Longbow",
+        "d": "Ranged Weapon Attack: +4 to hit, range 150/600 ft., one target. Hit: 6 (1d8 + 2) piercing damage."
+      }
+    ],
+    "traits": [
+      {
+        "n": "Keen Hearing and Sight",
+        "d": "The scout has advantage on Wisdom (Perception) checks that rely on hearing or sight."
+      }
+    ],
+    "blurb": "A hunter who works for an army, a village, or themselves. They see you before you see the camp.",
+    "text": "Scouts are information with a bow. They do not stand in doorways.\n\nUse them as the encounter before the encounter: tracks, a whistle, a missing horse. If the party is loud, the scout is why the next room is ready.",
+    "hooks": [
+      "They will sell the party's route to both sides.",
+      "They found a ruin and want backup, not a boss."
+    ],
+    "look": "Trail watcher"
+  },
+  {
+    "id": "spy",
+    "name": "Spy",
+    "aka": "Face in the crowd",
+    "role": "Face in the crowd",
+    "kind": "criminal",
+    "cr": "1",
+    "size": "Medium",
+    "align": "any alignment",
+    "ac": 12,
+    "hp": 27,
+    "speed": "30 ft.",
+    "str": 10,
+    "dex": 15,
+    "con": 10,
+    "int": 12,
+    "wis": 14,
+    "cha": 16,
+    "saves": "",
+    "skills": "Deception +5, Insight +4, Investigation +5, Perception +6, Persuasion +5, Stealth +4",
+    "senses": "passive Perception 16",
+    "lang": "any two languages",
+    "xp": 200,
+    "weapons": [
+      {
+        "n": "Multiattack",
+        "d": "The spy makes two melee attacks."
+      },
+      {
+        "n": "Shortsword",
+        "d": "Melee Weapon Attack: +4 to hit, reach 5 ft., one target. Hit: 5 (1d6 + 2) piercing damage."
+      },
+      {
+        "n": "Hand Crossbow",
+        "d": "Ranged Weapon Attack: +4 to hit, range 30/120 ft., one target. Hit: 5 (1d6 + 2) piercing damage."
+      }
+    ],
+    "traits": [
+      {
+        "n": "Cunning Action",
+        "d": "On each of its turns, the spy can use a bonus action to take the Dash, Disengage, or Hide action."
+      },
+      {
+        "n": "Sneak Attack (1/Turn)",
+        "d": "The spy deals an extra 7 (2d6) damage when it hits a target with a weapon attack and has advantage on the attack roll, or when the target is within 5 ft. of an ally of the spy that isn't incapacitated and the spy doesn't have disadvantage on the attack roll."
+      }
+    ],
+    "blurb": "A shortsword under a cloak and a story that fits the room. They leave before the bodies cool.",
+    "text": "A spy is a plot that walks. They should already be in the party's inn.\n\nWhen revealed, they run, they lie, or they switch sides. Combat is the backup plan. The real fight is which letter they posted this morning.",
+    "hooks": [
+      "They have been the party's hireling for two sessions.",
+      "They offer a name in exchange for a way out of the city tonight."
+    ],
+    "look": "Face in the crowd"
+  },
+  {
+    "id": "thug",
+    "name": "Thug",
+    "aka": "Street muscle",
+    "role": "Street muscle",
+    "kind": "criminal",
+    "cr": "1/2",
+    "size": "Medium",
+    "align": "any non-good alignment",
+    "ac": 11,
+    "hp": 32,
+    "speed": "30 ft.",
+    "str": 15,
+    "dex": 11,
+    "con": 14,
+    "int": 10,
+    "wis": 10,
+    "cha": 11,
+    "saves": "",
+    "skills": "Intimidation +2",
+    "senses": "passive Perception 10",
+    "lang": "any one language (usually Common)",
+    "xp": 100,
+    "weapons": [
+      {
+        "n": "Multiattack",
+        "d": "The thug makes two melee attacks."
+      },
+      {
+        "n": "Mace",
+        "d": "Melee Weapon Attack: +4 to hit, reach 5 ft., one creature. Hit: 5 (1d6 + 2) bludgeoning damage."
+      },
+      {
+        "n": "Heavy Crossbow",
+        "d": "Ranged Weapon Attack: +2 to hit, range 100/400 ft., one target. Hit: 5 (1d10) piercing damage."
+      }
+    ],
+    "traits": [
+      {
+        "n": "Pack Tactics",
+        "d": "The thug has advantage on an attack roll against a creature if at least one of the thug's allies is within 5 ft. of the creature and the ally isn't incapacitated."
+      }
+    ],
+    "blurb": "A heavy, a club, and orders from a name they will not say until they are losing.",
+    "text": "Thugs are urban bandits. Alleys, docks, and tavern back rooms.\n\nThey pack a punch and pack a pack. Break the leader's nerve and the rest want a drink instead of a grave. If the party kills all of them, the name behind them sends professionals next.",
+    "hooks": [
+      "Their boss is a noble's spare child.",
+      "They were paid to scare, not to kill, and went too far."
+    ],
+    "look": "Street muscle"
+  },
+  {
+    "id": "tribal-warrior",
+    "name": "Tribal Warrior",
+    "aka": "Clan fighter",
+    "role": "Clan fighter",
+    "kind": "wild",
+    "cr": "1/8",
+    "size": "Medium",
+    "align": "any alignment",
+    "ac": 12,
+    "hp": 11,
+    "speed": "30 ft.",
+    "str": 13,
+    "dex": 11,
+    "con": 12,
+    "int": 8,
+    "wis": 11,
+    "cha": 8,
+    "saves": "",
+    "skills": "",
+    "senses": "passive Perception 10",
+    "lang": "any one language",
+    "xp": 25,
+    "weapons": [
+      {
+        "n": "Spear",
+        "d": "Melee or Ranged Weapon Attack: +3 to hit, reach 5 ft. or range 20/60 ft., one target. Hit: 4 (1d6 + 1) piercing damage, or 5 (1d8 + 1) piercing damage if used with two hands to make a melee attack."
+      }
+    ],
+    "traits": [
+      {
+        "n": "Pack Tactics",
+        "d": "The warrior has advantage on an attack roll against a creature if at least one of the warrior's allies is within 5 ft. of the creature and the ally isn't incapacitated."
+      }
+    ],
+    "blurb": "A spear, a shield, and a people. The map calls them barbarians. They call the map late.",
+    "text": "Warriors like this defend a camp, a herd, or a standing stone.\n\nThey are not bandits. Treat the clan as a culture: guest-right, insult, and blood price. A fight can be a raid or a misunderstanding. A gift can be a treaty.",
+    "hooks": [
+      "A settler road cuts their hunting ground.",
+      "They will guide the party through a cursed pass for a stolen totem."
+    ],
+    "look": "Clan fighter"
+  },
+  {
+    "id": "veteran",
+    "name": "Veteran",
+    "aka": "Old soldier",
+    "role": "Old soldier",
+    "kind": "martial",
+    "cr": "3",
+    "size": "Medium",
+    "align": "any alignment",
+    "ac": 17,
+    "hp": 58,
+    "speed": "30 ft.",
+    "str": 16,
+    "dex": 13,
+    "con": 14,
+    "int": 10,
+    "wis": 11,
+    "cha": 10,
+    "saves": "",
+    "skills": "Athletics +5, Perception +2",
+    "senses": "passive Perception 12",
+    "lang": "any one language (usually Common)",
+    "xp": 700,
+    "weapons": [
+      {
+        "n": "Multiattack",
+        "d": "The veteran makes two longsword attacks. If it has a shortsword drawn, it can also make a shortsword attack."
+      },
+      {
+        "n": "Longsword",
+        "d": "Melee Weapon Attack: +5 to hit, reach 5 ft., one target. Hit: 7 (1d8 + 3) slashing damage, or 8 (1d10 + 3) slashing damage if used with two hands."
+      },
+      {
+        "n": "Shortsword",
+        "d": "Melee Weapon Attack: +5 to hit, reach 5 ft., one target. Hit: 6 (1d6 + 3) piercing damage."
+      },
+      {
+        "n": "Heavy Crossbow",
+        "d": "Ranged Weapon Attack: +3 to hit, range 100/400 ft., one target. Hit: 6 (1d10 + 1) piercing damage."
+      }
+    ],
+    "traits": [],
+    "blurb": "Someone who survived a war the town would like to forget. The armor still fits. The patience does not.",
+    "text": "A veteran is a guard captain, a mercenary sergeant, or the drunk at the end of the bar who is neither.\n\nThey have seen better fighters than the party and worse causes. Hire them, fear them, or bury them with honors. A veteran who likes the party is a fortress. One who does not is a campaign.",
+    "hooks": [
+      "They know the dungeon because they built it as a fort.",
+      "Their old company is the villain's army and they still have the password."
+    ],
+    "look": "Old soldier"
+  }
+]

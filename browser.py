@@ -1,0 +1,1 @@
+from blightnet_window import open_window

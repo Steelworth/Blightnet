@@ -1,0 +1,1015 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Blightnet — table mixer</title>
+    <meta name="description" content="Blightnet: a local Night City NET for mixing table ambience, maps, and characters." />
+    <link rel="icon" href="assets/icon.png" />
+    <link rel="apple-touch-icon" href="assets/icon.png" />
+    <link rel="stylesheet" href="css/app.css" />
+    <link rel="stylesheet" href="css/blight.css" />
+    <script>
+      (function () {
+        var t = "hearthsong";
+        try { t = localStorage.getItem("hearthsong.theme") || t; } catch (e) {}
+        if (t !== "blight") t = "hearthsong";
+        document.documentElement.setAttribute("data-theme", t);
+      })();
+    </script>
+  </head>
+  <body data-time="day" data-place="outside" data-setting="castle">
+    <div class="fps-chip" id="fps-chip" aria-hidden="true"></div>
+    <script>
+      (function () {
+        var chip = document.getElementById("fps-chip");
+        var frames = 0;
+        var stamp = performance.now();
+        var reports = 0;
+        function tick(now) {
+          requestAnimationFrame(tick);
+          frames += 1;
+          if (now - stamp >= 400) {
+            var fps = Math.round((frames * 1000) / (now - stamp));
+            if (chip) chip.textContent = fps + " fps";
+            frames = 0;
+            stamp = now;
+            if (reports < 8) {
+              reports += 1;
+              try { fetch("/api/info?fps=" + fps, { cache: "no-store" }).catch(function () {}); } catch (e) {}
+            }
+          }
+        }
+        requestAnimationFrame(tick);
+      })();
+    </script>
+    <div class="boot" id="boot" data-phase="dark" aria-hidden="false">
+      <div class="boot-void" aria-hidden="true"></div>
+      <div class="boot-crt" aria-hidden="true"></div>
+      <div class="boot-tunnel" aria-hidden="true">
+        <div class="boot-tunnel-world" id="boot-tunnel"></div>
+      </div>
+      <div class="boot-grid" aria-hidden="true"></div>
+      <div class="boot-stream" id="boot-stream" aria-hidden="true"></div>
+      <div class="boot-gate" id="boot-gate" aria-hidden="true"></div>
+      <div class="boot-vignette"></div>
+      <div class="boot-hud" id="boot-hud" aria-hidden="true">
+        <div class="boot-hud-tl"><span>DECK</span><b id="boot-hud-deck">OFF-GRID</b></div>
+        <div class="boot-hud-tr"><span>TRACE</span><b id="boot-hud-trace">0.00</b></div>
+        <div class="boot-hud-bl"><span>LINK</span><b id="boot-hud-link">COLD</b></div>
+        <div class="boot-hud-br"><span>ICE</span><b id="boot-hud-ice">DARK</b></div>
+      </div>
+      <div class="boot-ice" id="boot-ice">
+        <div class="boot-ice-core" id="boot-ice-core">COLD BOOT</div>
+        <div class="boot-ice-trace" id="boot-ice-trace">UNAUTHORIZED DECK · LOCALHOST</div>
+      </div>
+      <div class="boot-wordmark" id="boot-wordmark">
+        <span class="boot-wm-kicker">GHOST PROTOCOL · ROOT</span>
+        <span class="boot-wm-title">BLIGHTNET</span>
+        <span class="boot-wm-sub">OFF-GRID // RUNNER SHELL</span>
+      </div>
+      <div class="boot-frame" id="boot-frame">
+        <div class="boot-kicker">BLIGHTNET // BLACK-MARKET BIOS</div>
+        <div class="boot-title">SHELL INIT</div>
+        <pre class="boot-log" id="boot-log"></pre>
+      </div>
+      <div class="boot-skip">CLICK OR PRESS ANY KEY TO SKIP</div>
+    </div>
+
+
+    <div class="launcher hidden" id="launcher" aria-hidden="true">
+      <div class="launcher-scan"></div>
+      <div class="bn-window">
+        <div class="bn-titlebar">
+          <span class="bn-netmark">NET</span>
+          <span class="bn-mark">BLIGHTNET</span>
+          <span class="bn-title-copy">KEYSTONE // LOCAL NODE</span>
+          <div class="bn-winbtns">
+            <button type="button" class="bn-win min" tabindex="-1" aria-hidden="true"></button>
+            <button type="button" class="bn-win max" tabindex="-1" aria-hidden="true"></button>
+            <button type="button" class="bn-win close" id="bn-close" title="Back to Index"></button>
+          </div>
+        </div>
+        <div class="bn-tabstrip">
+          <button type="button" class="bn-tab on" id="bn-tab-start" data-bn-page="start">
+            <span class="bn-tab-hash" aria-hidden="true"></span>INDEX
+          </button>
+          <button type="button" class="bn-tab" id="bn-tab-hearthsong" data-bn-page="hearthsong">
+            <span class="bn-tab-hash" aria-hidden="true"></span>TABLE
+          </button>
+          <span class="bn-tab-add" aria-hidden="true">+</span>
+          <span class="bn-tab-meta" aria-hidden="true">2 SESSIONS</span>
+        </div>
+        <div class="bn-navbar">
+          <button type="button" class="bn-nav" id="bn-back" title="Back to Index" disabled>◀</button>
+          <button type="button" class="bn-nav" id="bn-fwd" title="Forward" disabled>▶</button>
+          <button type="button" class="bn-nav" id="bn-reload" title="Reload">↻</button>
+          <button type="button" class="bn-nav" id="bn-home" title="Index">⌂</button>
+          <label class="bn-omnibox">
+            <span class="bn-proto">NET</span>
+            <span class="bn-lock" aria-hidden="true">⬡</span>
+            <input id="bn-omnibox" type="text" spellcheck="false" autocomplete="off" value="blightnet://start" />
+          </label>
+          <label class="bn-who">
+            <button type="button" class="bn-face" id="profile-pic-btn" title="Your contact picture. Click to set or change.">
+              <img id="profile-pic" alt="" hidden />
+              <span id="profile-pic-ph">+</span>
+            </button>
+            <input id="profile-pic-file" type="file" accept="image/*" hidden />
+            <span>Handle</span>
+            <input id="profile-name" type="text" maxlength="24" placeholder="Your name" autocomplete="nickname" spellcheck="false" />
+          </label>
+          <div class="bn-table" role="group" aria-label="Table">
+            <button type="button" class="bn-btn" id="table-host" title="Open a table on this machine. Others join with your address.">Host</button>
+            <button type="button" class="bn-btn" id="table-join" title="Join a table on this network or over the internet.">Join</button>
+            <button type="button" class="bn-btn" id="table-leave" hidden>Leave</button>
+            <button type="button" class="bn-btn" id="table-copy" hidden title="Copy the address friends use to join from anywhere">Copy address</button>
+          </div>
+          <div class="table-status" id="table-status">Offline</div>
+          <button type="button" class="bn-btn" id="chat-toggle" title="Chat with online instances">Chat</button>
+          <button type="button" class="bn-btn" id="contacts-toggle" title="People you saved from tables">Contacts</button>
+          <button type="button" class="bn-btn" id="voice-toggle" title="Talk to everyone at this table. Private calls are under Contacts.">Voice</button>
+          <div class="voice-banner" id="voice-banner" hidden>
+            <span id="voice-banner-text">Voice</span>
+            <button type="button" class="bn-btn" id="voice-accept">Accept</button>
+            <button type="button" class="bn-btn" id="voice-decline">Decline</button>
+            <button type="button" class="bn-btn" id="voice-hangup" hidden>Hang up</button>
+          </div>
+        </div>
+        <div id="voice-sinks" hidden></div>
+        <div class="bn-body">
+          <div class="bn-main">
+            <div class="bn-home" id="bn-start">
+              <div class="net-index">
+                <header class="net-index-head">
+                  <div>
+                    <div class="net-index-kicker">NETDIR://LOCAL · BLIGHTNET INDEX</div>
+                    <h1>INDEX</h1>
+                  </div>
+                  <div class="net-index-meta" aria-hidden="true">
+                    <span>NODE <b>8765</b></span>
+                    <span>ICE <b>CLEAR</b></span>
+                    <span>SHARD <b>TABLE</b></span>
+                  </div>
+                </header>
+                <div class="net-index-split">
+                  <div class="net-index-dir">
+                    <p class="net-index-lede">This is the Night City NET. Pick a screen, then open a node. Host or join a table from the yellow bar above.</p>
+                    <div class="launch-screen">
+                      <div class="launch-screen-label">DISPLAY</div>
+                      <div class="launch-screen-list" id="display-list"></div>
+                    </div>
+                    <div class="net-dir-label">AVAILABLE NODES</div>
+                    <button type="button" class="launch-app" id="launch-hearthsong">
+                      <span class="launch-id">01</span>
+                      <span class="launch-copy">
+                        <b>TABLE</b>
+                        <small>AMBIENCE // MIXER</small>
+                      </span>
+                      <span class="launch-go">OPEN</span>
+                    </button>
+                    <button type="button" class="launch-app launch-guide" id="launch-guide">
+                      <span class="launch-id">02</span>
+                      <span class="launch-copy">
+                        <b>TUTORIAL</b>
+                        <small>CLICK-THIS FIELD MANUAL</small>
+                      </span>
+                      <span class="launch-go">READ</span>
+                    </button>
+                    <button type="button" class="launch-app launch-quit" id="launch-quit">
+                      <span class="launch-id">00</span>
+                      <span class="launch-copy">
+                        <b>DISCONNECT</b>
+                        <small>SHUT DOWN BLIGHTNET</small>
+                      </span>
+                      <span class="launch-go">KILL</span>
+                    </button>
+                  </div>
+                  <aside class="net-index-side">
+                    <div class="net-side-kicker">RUN PROTOCOL</div>
+                    <ol class="net-side-steps">
+                      <li>Type your name in <b>Handle</b>. Click the circle for a face picture.</li>
+                      <li>Pick a screen under <b>DISPLAY</b>.</li>
+                      <li><b>Host</b> if friends join. Skip if you play alone.</li>
+                      <li>Open <b>01 TABLE</b>.</li>
+                      <li>Press <b>Light the hearth</b>.</li>
+                    </ol>
+                    <p class="net-side-hint">Stuck? Open <b>02 TUTORIAL</b>. Every button in this window is named there.</p>
+                  </aside>
+                </div>
+              </div>
+            </div>
+            <div class="bn-viewport" id="bn-viewport" hidden>
+    <div class="app">
+      <header class="top">
+        <div class="brand">
+          <img src="assets/icon.png" alt="" />
+          <div>
+            <h1>Blightnet</h1>
+            <p>Table mixer</p>
+          </div>
+        </div>
+        <div class="controls">
+          <div class="setting-menu" id="setting-menu">
+            <button type="button" class="place-btn setting-btn on" id="setting-btn" aria-haspopup="listbox" aria-expanded="false" title="Choose which place the painting shows">
+              Place
+            </button>
+            <div class="setting-list" id="setting-list" hidden role="listbox" aria-label="Place"></div>
+          </div>
+          <div class="place" role="group" aria-label="Hear from inside or outside">
+            <button type="button" class="place-btn on" id="place-out" aria-pressed="true" title="Weather, woods, and streets in the open. Rooms sound muffled, as if through a door.">Outside</button>
+            <button type="button" class="place-btn" id="place-in" aria-pressed="false" title="Halls, hearths, and music in the room. Rain and animals through the walls.">Inside</button>
+          </div>
+          <div class="place hours" role="group" aria-label="Time of day">
+            <button type="button" class="place-btn" id="time-morning" aria-pressed="false" title="Dawn light. Soft air, birds waking.">Morning</button>
+            <button type="button" class="place-btn on" id="time-day" aria-pressed="true" title="High sun. Streets and noon music come forward.">Day</button>
+            <button type="button" class="place-btn" id="time-evening" aria-pressed="false" title="Ember sky. The day recedes.">Evening</button>
+            <button type="button" class="place-btn night" id="time-night" aria-pressed="false" title="Moonlight. Owls, crickets, and hush.">Night</button>
+          </div>
+          <div class="master" style="--p: 85%">
+            <label for="master">Master</label>
+            <input id="master" type="range" min="0" max="100" value="85" title="Your volume only. Does not change anyone else’s table." />
+          </div>
+          <button class="ghost" id="fade-out" title="Slowly fade the table to silence, or bring the last mix back">Fade out</button>
+          <button class="ghost danger" id="stop-all">Silence</button>
+          <button class="ghost" id="update-btn" title="Reload uploaded sounds and maps from this table">Update</button>
+          <div class="place" role="group" aria-label="Theme">
+            <button type="button" class="place-btn" id="theme-hearthsong" data-theme-pick="hearthsong" title="Warm tavern theme">Hearthsong</button>
+            <button type="button" class="place-btn" id="theme-blight" data-theme-pick="blight" title="Night City HUD theme">Blight</button>
+          </div>
+        </div>
+      </header>
+      <div class="table-bar">
+        <button type="button" class="ghost" id="chars-toggle" title="Open character sheets for this instance">Characters</button>
+        <button type="button" class="ghost" id="bestiary-toggle" title="Open the 5e bestiary">Bestiary</button>
+        <button type="button" class="ghost" id="srdnpc-toggle" title="Open 5e SRD nonplayer characters">NPCs</button>
+        <button type="button" class="ghost" id="god-toggle" title="Open the pantheons, including Baldur's Gate">Gods</button>
+        <button type="button" class="ghost" id="datashard-toggle" title="Open Night City character files">Datashard</button>
+        <button type="button" class="ghost" id="corp-toggle" title="Open Night City megacorp dossiers">Corps</button>
+        <button type="button" class="ghost" id="npc-toggle" title="Open named Night City NPCs">Faces</button>
+        <button type="button" class="ghost" id="lore-toggle" title="Open Night City 2045 street lore">Lore</button>
+        <button type="button" class="ghost" id="kit-toggle" title="Open weapons, armor, gear, and magic. Drag onto a character.">Armory</button>
+        <button type="button" class="ghost" id="upload-btn" title="Add a sound or piece of music to this table">Add sound</button>
+        <button type="button" class="ghost" id="map-toggle" title="Open the play map">Maps</button>
+        <input id="sound-file" type="file" accept="audio/*" hidden />
+        <input id="map-file" type="file" accept="image/*" hidden />
+      </div>
+
+      <div class="bestiary-board" id="bestiary-board" hidden>
+        <div class="beast-toolbar">
+          <label class="beast-search">
+            <span class="search-ico" aria-hidden="true"></span>
+            <input id="beast-search" type="search" placeholder="Find a creature…" autocomplete="off" spellcheck="false" aria-label="Find a creature" />
+          </label>
+          <label class="beast-pick">
+            <span>Type</span>
+            <select id="beast-type" aria-label="Creature type">
+              <option value="all">All types</option>
+              <option value="aberration">Aberration</option>
+              <option value="beast">Beast</option>
+              <option value="celestial">Celestial</option>
+              <option value="construct">Construct</option>
+              <option value="dragon">Dragon</option>
+              <option value="elemental">Elemental</option>
+              <option value="fey">Fey</option>
+              <option value="fiend">Fiend</option>
+              <option value="giant">Giant</option>
+              <option value="humanoid">Humanoid</option>
+              <option value="monstrosity">Monstrosity</option>
+              <option value="ooze">Ooze</option>
+              <option value="plant">Plant</option>
+              <option value="undead">Undead</option>
+              <option value="swarm">Swarm</option>
+            </select>
+          </label>
+          <label class="beast-pick">
+            <span>CR</span>
+            <select id="beast-cr" aria-label="Challenge rating">
+              <option value="all">Any CR</option>
+              <option value="0">0</option>
+              <option value="frac">1/8–1/2</option>
+              <option value="1-4">1–4</option>
+              <option value="5-10">5–10</option>
+              <option value="11-16">11–16</option>
+              <option value="17+">17+</option>
+            </select>
+          </label>
+          <div class="beast-count" id="beast-count"></div>
+          <span class="beast-src">5e SRD</span>
+          <button type="button" class="ghost" id="beast-close" title="Close the bestiary">Close</button>
+        </div>
+        <div class="beast-body">
+          <div class="beast-list" id="beast-list"></div>
+          <div class="beast-page" id="beast-page"></div>
+        </div>
+      </div>
+
+      <div class="bestiary-board" id="srdnpc-board" hidden>
+        <div class="beast-toolbar">
+          <label class="beast-search">
+            <span class="search-ico srdnpc-search-ico" aria-hidden="true"></span>
+            <input id="srdnpc-search" type="search" placeholder="Find a person…" autocomplete="off" spellcheck="false" aria-label="Find a person" />
+          </label>
+          <label class="beast-pick">
+            <span>Kind</span>
+            <select id="srdnpc-kind" aria-label="Kind">
+              <option value="all">All kinds</option>
+              <option value="town">Town</option>
+              <option value="martial">Martial</option>
+              <option value="magic">Magic</option>
+              <option value="faith">Faith</option>
+              <option value="criminal">Criminal</option>
+              <option value="wild">Wild</option>
+            </select>
+          </label>
+          <div class="beast-count" id="srdnpc-count"></div>
+          <span class="beast-src">5e SRD · APPENDIX B</span>
+          <button type="button" class="ghost" id="srdnpc-close" title="Close the NPCs">Close</button>
+        </div>
+        <div class="beast-body">
+          <div class="beast-list" id="srdnpc-list"></div>
+          <div class="beast-page" id="srdnpc-page"></div>
+        </div>
+      </div>
+
+      <div class="bestiary-board" id="god-board" hidden>
+        <div class="beast-toolbar">
+          <label class="beast-search">
+            <span class="search-ico god-search-ico" aria-hidden="true"></span>
+            <input id="god-search" type="search" placeholder="Find a god…" autocomplete="off" spellcheck="false" aria-label="Find a god" />
+          </label>
+          <label class="beast-pick">
+            <span>Pantheon</span>
+            <select id="god-kind" aria-label="Pantheon">
+              <option value="all">All pantheons</option>
+              <option value="celtic">Celtic</option>
+              <option value="greek">Greek</option>
+              <option value="egyptian">Egyptian</option>
+              <option value="norse">Norse</option>
+              <option value="baldur">Baldur's Gate</option>
+            </select>
+          </label>
+          <div class="beast-count" id="god-count"></div>
+          <span class="beast-src">PANTHEONS</span>
+          <button type="button" class="ghost" id="god-close" title="Close the gods">Close</button>
+        </div>
+        <div class="beast-body">
+          <div class="beast-list" id="god-list"></div>
+          <div class="beast-page" id="god-page"></div>
+        </div>
+      </div>
+
+      <div class="bestiary-board datashard-board" id="datashard-board" hidden>
+        <div class="beast-toolbar">
+          <label class="beast-search">
+            <span class="search-ico shard-search-ico" aria-hidden="true"></span>
+            <input id="shard-search" type="search" placeholder="Find a file…" autocomplete="off" spellcheck="false" aria-label="Find a file" />
+          </label>
+          <label class="beast-pick">
+            <span>Kind</span>
+            <select id="shard-kind" aria-label="Kind">
+              <option value="all">All kinds</option>
+              <option value="edgerunner">Edgerunner</option>
+              <option value="street">Street</option>
+              <option value="law">Law</option>
+              <option value="corpo">Corpo</option>
+              <option value="net">Net</option>
+              <option value="nomad">Nomad</option>
+              <option value="trauma">Trauma</option>
+              <option value="civilian">Civilian</option>
+              <option value="chrome">Chrome</option>
+            </select>
+          </label>
+          <label class="beast-pick">
+            <span>Role</span>
+            <select id="shard-role" aria-label="Role">
+              <option value="all">Any role</option>
+              <option value="Rockerboy">Rockerboy</option>
+              <option value="Solo">Solo</option>
+              <option value="Netrunner">Netrunner</option>
+              <option value="Tech">Tech</option>
+              <option value="Medtech">Medtech</option>
+              <option value="Media">Media</option>
+              <option value="Exec">Exec</option>
+              <option value="Lawman">Lawman</option>
+              <option value="Fixer">Fixer</option>
+              <option value="Nomad">Nomad</option>
+            </select>
+          </label>
+          <div class="beast-count" id="shard-count"></div>
+          <span class="beast-src">CYBERPUNK RED</span>
+          <button type="button" class="ghost" id="shard-close" title="Close the datashard">Close</button>
+        </div>
+        <div class="beast-body">
+          <div class="beast-list" id="shard-list"></div>
+          <div class="beast-page" id="shard-page"></div>
+        </div>
+      </div>
+
+      <div class="bestiary-board corp-board" id="corp-board" hidden>
+        <div class="beast-toolbar">
+          <label class="beast-search">
+            <span class="search-ico corp-search-ico" aria-hidden="true"></span>
+            <input id="corp-search" type="search" placeholder="Find a corp…" autocomplete="off" spellcheck="false" aria-label="Find a corp" />
+          </label>
+          <div class="beast-count" id="corp-count"></div>
+          <span class="beast-src">NIGHT CITY EXCHANGE</span>
+          <button type="button" class="ghost" id="corp-close" title="Close the dossiers">Close</button>
+        </div>
+        <div class="beast-body">
+          <div class="beast-list" id="corp-list"></div>
+          <div class="beast-page" id="corp-page"></div>
+        </div>
+      </div>
+
+      <div class="bestiary-board npc-board" id="npc-board" hidden>
+        <div class="beast-toolbar">
+          <label class="beast-search">
+            <span class="search-ico npc-search-ico" aria-hidden="true"></span>
+            <input id="npc-search" type="search" placeholder="Find a face…" autocomplete="off" spellcheck="false" aria-label="Find a face" />
+          </label>
+          <label class="beast-pick">
+            <span>Kind</span>
+            <select id="npc-kind" aria-label="Kind">
+              <option value="all">All kinds</option>
+              <option value="legend">Legend</option>
+              <option value="corpo">Corpo</option>
+              <option value="hope">Forlorn Hope</option>
+              <option value="street">Street</option>
+              <option value="gang">Gang</option>
+              <option value="nomad">Nomad</option>
+              <option value="law">Law</option>
+              <option value="net">Net</option>
+              <option value="media">Media</option>
+            </select>
+          </label>
+          <div class="beast-count" id="npc-count"></div>
+          <span class="beast-src">NIGHT CITY 2045</span>
+          <button type="button" class="ghost" id="npc-close" title="Close the faces">Close</button>
+        </div>
+        <div class="beast-body">
+          <div class="beast-list" id="npc-list"></div>
+          <div class="beast-page" id="npc-page"></div>
+        </div>
+      </div>
+
+      <div class="bestiary-board lore-board" id="lore-board" hidden>
+        <div class="beast-toolbar">
+          <label class="beast-search">
+            <span class="search-ico lore-search-ico" aria-hidden="true"></span>
+            <input id="lore-search" type="search" placeholder="Find a street file…" autocomplete="off" spellcheck="false" aria-label="Find a street file" />
+          </label>
+          <label class="beast-pick">
+            <span>Kind</span>
+            <select id="lore-kind" aria-label="Kind">
+              <option value="all">All files</option>
+              <option value="sky">Sky</option>
+              <option value="food">Food</option>
+              <option value="fuel">Fuel</option>
+              <option value="water">Water</option>
+              <option value="air">Air</option>
+              <option value="street">Street</option>
+              <option value="net">NET</option>
+              <option value="chrome">Chrome</option>
+              <option value="war">War</option>
+              <option value="road">Road</option>
+              <option value="weather">Weather</option>
+              <option value="sleep">Sleep</option>
+              <option value="death">Death</option>
+            </select>
+          </label>
+          <div class="beast-count" id="lore-count"></div>
+          <span class="beast-src">NIGHT CITY 2045</span>
+          <button type="button" class="ghost" id="lore-close" title="Close the street files">Close</button>
+        </div>
+        <div class="beast-body">
+          <div class="beast-list" id="lore-list"></div>
+          <div class="beast-page" id="lore-page"></div>
+        </div>
+      </div>
+
+      <div class="bestiary-board kit-board" id="kit-board" hidden>
+        <div class="beast-toolbar">
+          <label class="beast-search">
+            <span class="search-ico kit-search-ico" aria-hidden="true"></span>
+            <input id="kit-search" type="search" placeholder="Find gear…" autocomplete="off" spellcheck="false" aria-label="Find gear" />
+          </label>
+          <label class="beast-pick">
+            <span>Kind</span>
+            <select id="kit-kind" aria-label="Kind">
+              <option value="all">All</option>
+            </select>
+          </label>
+          <div class="beast-count" id="kit-count"></div>
+          <span class="beast-src" id="kit-src">5e SRD</span>
+          <button type="button" class="ghost" id="kit-close" title="Close the locker">Close</button>
+        </div>
+        <div class="beast-body">
+          <div class="beast-list" id="kit-list"></div>
+          <div class="beast-page" id="kit-page"></div>
+        </div>
+      </div>
+
+      <div class="map-board" id="map-board" hidden>
+        <div class="map-toolbar">
+          <button type="button" class="ghost" id="map-import" title="Import a picture or battle map">Import</button>
+          <label class="map-pick">
+            <span>Map</span>
+            <select id="map-select" aria-label="Choose a map"></select>
+          </label>
+          <button type="button" class="ghost" id="map-grid" title="Toggle grid">Grid</button>
+          <button type="button" class="ghost" id="map-fit" title="Fit the map to the table">Fit</button>
+          <div class="map-tools" role="group" aria-label="Map tools">
+            <button type="button" class="ghost on" data-map-tool="pan" title="Pan the map and move tokens">Pan</button>
+            <button type="button" class="ghost" data-map-tool="draw" title="Draw freehand">Draw</button>
+            <button type="button" class="ghost" data-map-tool="circle" title="Draw a circle">Circle</button>
+            <button type="button" class="ghost" data-map-tool="rect" title="Draw a rectangle">Box</button>
+            <button type="button" class="ghost" data-map-tool="erase" title="Delete a token or a mark">Erase</button>
+            <button type="button" class="ghost danger" id="map-clear" title="Remove every token and drawing">Clear marks</button>
+          </div>
+          <div class="map-hint" id="map-hint">Drag to pan. Scroll to zoom. Drop pictures to place them.</div>
+          <button type="button" class="ghost" id="map-close" title="Hide the map">Close</button>
+        </div>
+        <div class="map-stage" id="map-stage" data-tool="pan">
+          <div class="map-world" id="map-world">
+            <img id="map-image" alt="" draggable="false" />
+            <canvas id="map-grid-canvas" aria-hidden="true"></canvas>
+            <canvas id="map-draw-canvas" aria-hidden="true"></canvas>
+            <div id="map-tokens"></div>
+          </div>
+          <div class="map-empty" id="map-empty">Import a picture or battle map to put it on the table. Then drag characters, creatures, or shard files onto it.</div>
+        </div>
+      </div>
+
+      <div class="sky-board" data-kind="clear" data-hour="day">
+        <img id="weather-art" class="sky-still on" src="assets/places/castle-day.jpg" alt="" data-hour="day" data-kind="clear" data-sky="assets/places/castle-day.jpg" decoding="async" />
+        <img id="weather-art-b" class="sky-still" alt="" decoding="async" />
+        <div class="wx" aria-hidden="true">
+          <div class="wx-stars"></div>
+          <div class="wx-rain"></div>
+          <div class="wx-snow"></div>
+          <div class="wx-fog"></div>
+          <div class="wx-wind"></div>
+          <div class="wx-bubbles"></div>
+          <div class="wx-scan"></div>
+        </div>
+        <canvas id="viz-sky" width="720" height="120" aria-hidden="true"></canvas>
+        <div class="sky-shade"></div>
+        <div class="sky-label" id="weather-label">Highlands</div>
+        <div class="net-hud" id="net-hud" hidden>
+          <div class="radio-chip" id="radio-chip" title="Next station"><span>OFF AIR</span><small>Tune a station</small></div>
+          <div class="station-bar" id="station-bar" hidden>
+            <button type="button" class="ghost station-step" id="station-prev" title="Previous station">‹</button>
+            <select id="station-pick" aria-label="Radio station"></select>
+            <button type="button" class="ghost station-step" id="station-next" title="Next station">›</button>
+          </div>
+          <button type="button" class="ghost live-radio-btn" id="live-radio-toggle" title="Switch between the table's station library and live free internet radio">Library</button>
+          <div class="stock-tape" id="stock-tape"></div>
+          <div class="news-wire" id="news-wire">WIRE · Stand by for Night City traffic.</div>
+        </div>
+        <div class="pills" id="pills">
+          <span class="empty">Choose a scene, or press any sound.</span>
+        </div>
+      </div>
+
+      <main class="stage">
+        <aside class="panel scenes">
+          <div class="panel-head">
+            <h2>Scenes</h2>
+            <label class="scene-search">
+              <input id="scene-search" type="search" placeholder="Find a scene…" autocomplete="off" spellcheck="false" aria-label="Find a scene" />
+            </label>
+          </div>
+          <div class="scene-list" id="scene-list"></div>
+          <div class="panel-foot">
+            <button class="ghost" id="save-mix" style="flex: 1; justify-content: center">Save this mix</button>
+            <button class="ghost" id="credits-btn" title="Credits">i</button>
+          </div>
+        </aside>
+        <section class="panel mixer">
+          <div class="mixer-head">
+            <div>
+              <h2>The mix</h2>
+              <div id="mix-count">Nothing playing</div>
+            </div>
+            <div class="mix-tools">
+              <div class="mix-search-row">
+                <label class="mix-search">
+                  <span class="search-ico" aria-hidden="true"></span>
+                  <input id="mix-search" type="search" placeholder="Find a sound…" autocomplete="off" spellcheck="false" aria-label="Find a sound" />
+                </label>
+                <button type="button" class="ghost shuffle" id="shuffle" title="Play another piece of the same mood">Shuffle</button>
+              </div>
+              <div class="tabs" id="tabs"></div>
+            </div>
+          </div>
+          <div class="layers" id="layers">
+            <div class="hint">Press a scene. Then tune any layer you like.</div>
+          </div>
+        </section>
+      </main>
+      <aside class="panel chars-panel" id="chars-panel" hidden>
+        <div class="chars-head">
+          <h2>Characters</h2>
+          <div class="chars-actions">
+            <button type="button" class="ghost" id="char-advance-btn" hidden title="Level up this character">Level up</button>
+            <button type="button" class="ghost" id="char-new" title="Create a character on this machine">New</button>
+            <button type="button" class="ghost danger" id="char-del" hidden title="Remove the open character">Delete</button>
+          </div>
+        </div>
+        <div class="char-roster" id="char-roster"></div>
+        <div class="char-tabs" id="char-tabs" hidden></div>
+        <div class="char-body" id="char-body"></div>
+        <div class="char-advance" id="char-advance" hidden></div>
+        <div class="char-log-wrap">
+          <div class="char-log-head">
+            <span>Combat log</span>
+            <div class="luck-toggle" role="group" aria-label="Advantage">
+              <button type="button" class="ghost luck-btn on" data-luck="norm" title="Normal: one 0–100 roll">Norm</button>
+              <button type="button" class="ghost luck-btn" data-luck="adv" title="Advantage: roll twice, keep the higher. Shift+Roll also does this.">Adv</button>
+              <button type="button" class="ghost luck-btn" data-luck="dis" title="Disadvantage: roll twice, keep the lower. Alt+Roll also does this. Ctrl is not used (on a Mac that is a right-click).">Dis</button>
+            </div>
+            <button type="button" class="ghost" id="dice-help-btn" title="How the dice work">?</button>
+            <button type="button" class="ghost" id="char-log-clear" title="Clear the log">Clear</button>
+          </div>
+          <div class="char-log" id="char-log"><p>Click a name to show it to the table. Click Roll for a 0–100 check. Adv / Dis above roll twice (higher / lower). Shift+Roll is advantage, Alt+Roll is disadvantage. Attacks and heals ask for a token on the map. Click ? if you want the dice explained.</p></div>
+        </div>
+        <div class="dice-stage" id="dice-stage" hidden><div class="dice-pip" id="dice-pip">—</div></div>
+        <div class="aim-stage" id="aim-stage" hidden>
+          <div class="aim-card">
+            <p class="aim-kicker">Pick a target</p>
+            <p class="aim-hint">Click a character token on the map, or a name below.</p>
+            <div class="aim-list" id="aim-list"></div>
+            <button type="button" class="ghost" id="aim-cancel">Cancel</button>
+          </div>
+        </div>
+        <div class="dice-help" id="dice-help" hidden>
+          <div class="dice-help-card">
+            <p class="aim-kicker">How the dice work</p>
+            <ul>
+              <li>Every <b>Roll</b> is <b>0–100</b>. Not a d20.</li>
+              <li><b>Advantage</b> and <b>Disadvantage</b> (combat log: Adv / Dis, or Shift+Roll / Alt+Roll) both roll twice. Advantage keeps the higher. Disadvantage keeps the lower. The log prints both numbers.</li>
+              <li><b>100</b> critical success · <b>70–99</b> success · <b>40–69</b> mixed · <b>1–39</b> failure · <b>0</b> critical failure.</li>
+              <li>Skills and saves only print that grade.</li>
+              <li>Every sheet has Punch, Kick, Headbutt, and Bite on Combat. No weapon. They scale with Strength (Hearthsong) or BODY (Blight) and with level / role rank. Weapons, spells, heals, and quickhacks do the same: extra dice from level, plus the ability used for that action.</li>
+              <li>Attacks, damaging spells, heals, and quickhacks: pick a token on the map (including other players). Escape cancels.</li>
+              <li>A <b>hit</b> subtracts the printed damage from the target’s current HP. A <b>heal</b> adds it, up to max HP.</li>
+              <li>At <b>0 HP</b> the sheet is <b>Downed</b>. Roll a death save on Combat (no target). Three successes: stand with 1 HP. Three failures: <b>Dead</b>. A critical success stands them at 1 HP now. A critical failure counts as two fails. A heal on a downed character stands them with that many HP. Hits on a downed character add failures. Dead sheets need Revivify (or similar), not a normal heal.</li>
+              <li>Success damage = roll the formula, then take that percent of it (minimum 1). Critical success = roll, then ×2.</li>
+              <li>Critical failure on an attack hurts <b>you</b>, not the target. Mixed and failure never invent damage.</li>
+              <li>A successful quickhack flashes BREACH for you. The player you hacked sees YOU ARE BEING HACKED.</li>
+            </ul>
+            <button type="button" class="ghost" id="dice-help-close">Got it</button>
+          </div>
+        </div>
+        <div class="hack-stage" id="hack-stage" hidden>
+          <div class="hack-frame">
+            <div class="hack-scan"></div>
+            <p class="hack-kicker">NET ATTACK</p>
+            <p class="hack-name" id="hack-name">Quickhack</p>
+            <p class="hack-ok">BREACH</p>
+          </div>
+        </div>
+        <input id="char-portrait-file" type="file" accept="image/*" hidden />
+        <input id="char-fullbody-file" type="file" accept="image/*" hidden />
+      </aside>
+      <div class="hack-stage" id="breach-stage" hidden>
+        <div class="hack-frame">
+          <div class="hack-scan"></div>
+          <p class="hack-kicker">NET ATTACK</p>
+          <p class="hack-name">Quickhack</p>
+          <p class="hack-ok">BREACH</p>
+        </div>
+      </div>
+    </div>
+          <div class="gate" id="gate">
+            <div class="gate-card">
+              <img src="assets/icon.png" alt="" />
+              <h1>Blightnet</h1>
+              <p>One press for a tavern. Mix rain, wolves, a hymn, and the rest of the wild. Hear it from the road or the hall, at noon or after dark.</p>
+              <button class="primary" id="light">Light the hearth</button>
+              <div id="gate-progress" hidden>
+                <p id="gate-status" style="margin: 18px 0 8px">Gathering the winds…</p>
+                <div class="progress"><i id="gate-bar"></i></div>
+              </div>
+            </div>
+          </div>
+
+
+            </div>
+          </div>
+          <aside class="bn-chat" id="chat-panel" hidden>
+            <div class="chat-head">
+              <h2>Chat</h2>
+              <div class="chat-peers" id="chat-peers">No one else is online.</div>
+            </div>
+            <div class="chat-log" id="chat-log"></div>
+            <form class="chat-form" id="chat-form">
+              <input id="chat-input" type="text" maxlength="400" placeholder="Say something…  /w Name for a whisper" autocomplete="off" />
+              <input id="chat-media-file" type="file" accept="image/*,video/*" hidden />
+              <button type="button" class="ghost" id="chat-media-btn" title="Send a picture or video over the peer link">Pic</button>
+              <button type="submit" class="primary">Send</button>
+            </form>
+          </aside>
+          <aside class="bn-chat" id="contacts-panel" hidden>
+            <div class="chat-head">
+              <h2>Contacts</h2>
+              <div class="chat-peers">Saved people stay here on INDEX and TABLE. They light up when they sit at this table.</div>
+            </div>
+            <div class="contact-scroll">
+              <div class="contact-label">At this table</div>
+              <div class="contact-list" id="contact-live"></div>
+              <div class="contact-label">Saved</div>
+              <div class="contact-list" id="contact-saved"></div>
+            </div>
+          </aside>
+        </div>
+        <div class="bn-statusbar">
+          <span>LINK <b id="bn-status-link">LOCAL</b></span>
+          <span>PAGE <b id="bn-status-page">INDEX</b></span>
+          <span>PROTO <b>BLIGHTNET</b></span>
+          <span>PORT <b>8765</b></span>
+          <span>ICE <b>CLEAR</b></span>
+          <span class="bn-status-fill">SELECT A NODE · OR READ THE TUTORIAL</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal hidden" id="credits-modal">
+      <div class="modal-card credits">
+        <h1>Credits</h1>
+        <p>Music by Kevin MacLeod (incompetech.com), licensed CC BY 4.0. Blight playlists use his electronic and rock pieces.</p>
+        <p>Weather, fire, rooms, and many creatures from Mixkit. Dungeon and cavern beds from OpenGameArt (CC0).</p>
+        <p>Ravens, owls, and gulls from Wikimedia Commons wildlife recordings.</p>
+        <div class="modal-actions">
+          <button class="primary" id="credits-close">Close</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="guide hidden" id="guide" aria-hidden="true">
+      <div class="guide-panel">
+        <div class="guide-head">
+          <div>
+            <div class="guide-kicker">NETDIR://LOCAL/MANUAL · SHARD 02</div>
+            <h1>Field manual</h1>
+          </div>
+          <button type="button" class="bn-btn" id="guide-close">Close</button>
+        </div>
+        <div class="guide-body">
+          <section class="guide-start">
+            <h2>Read this first</h2>
+            <p>You are not on the internet. This window is <b>Blightnet</b>, a fake Night City NET browser that lives on this machine. The yellow chrome at the top is the browser. The page in the middle is either the <b>INDEX</b> (this menu) or <b>TABLE</b> (the mixer). Click things in this order the first time:</p>
+            <ol>
+              <li>If the jack-in animation is still playing, click anywhere or press any key to skip it.</li>
+              <li>Type your name in the yellow bar where it says <b>Handle</b>. Click the circle beside it to set a contact picture.</li>
+              <li>Under <b>DISPLAY</b>, click the screen you want. The window jumps there.</li>
+              <li>Playing with friends? Click <b>Host</b>. Playing alone? Skip this.</li>
+              <li>Click the big <b>01 TABLE</b> row, or the yellow <b>TABLE</b> tab.</li>
+              <li>Click <b>Light the hearth</b> once. That turns the sound on. Then you mix.</li>
+            </ol>
+            <p>The rest of this shard names every button. Close this panel with <b>Close</b>, the dark edge around it, or Escape.</p>
+          </section>
+
+          <section>
+            <h2>01 · The jack-in (boot)</h2>
+            <p>The first thing you see is a cold boot: a shady deck powering on, then a dive down a NET tunnel, through black ice, into BLIGHTNET. It is flavor. You do not need to wait. Click the screen or press any key. You land on INDEX. If your system asks to reduce motion, the boot is already skipped for you.</p>
+          </section>
+
+          <section>
+            <h2>02 · The yellow browser</h2>
+            <p>The frame around the page is a fake NET browser. It is not Chrome. Do not hunt for File / Edit menus. These are the only chrome controls that do anything:</p>
+            <ul>
+              <li><b>NET</b> stamp, top left — decoration.</li>
+              <li>Red square, top right — goes back to INDEX. It does not quit.</li>
+              <li><b>INDEX</b> tab — this menu. Click it any time to leave the mixer without shutting down.</li>
+              <li><b>TABLE</b> tab — opens the mixer. Same as the 01 row.</li>
+              <li>◀ ▶ ↻ ⌂ — back to INDEX, forward into the table, reload the whole window, home (INDEX).</li>
+              <li>Address box — shows <b>blightnet://start</b> or <b>blightnet://table</b>. Press Enter after typing <b>blightnet://table</b> to open the mixer, or paste a friend’s address to Join.</li>
+              <li><b>Handle</b> — your name in chat and at the table. Type it before you Host or Join. The circle beside it is your <b>contact picture</b>. Click it and pick a photo. Other players see that face in Contacts.</li>
+            </ul>
+          </section>
+
+          <section>
+            <h2>03 · DISPLAY</h2>
+            <p>On INDEX, under <b>DISPLAY</b>, every connected screen is a plate. Click one. The window leaves fullscreen, moves, then fullscreen again on that panel. The choice is remembered next launch.</p>
+            <ul>
+              <li><b>DP-2</b> — the 100 Hz panel (smoother).</li>
+              <li><b>HDMI-A-1</b> — the 75 Hz panel.</li>
+            </ul>
+            <p>If nothing happens, click the plate again. You should see the yellow INDEX jump to the other monitor.</p>
+          </section>
+
+          <section>
+            <h2>04 · Play alone</h2>
+            <p>You do not need Host. Type a Handle if you want a name on your sheet, and click the circle for a face if you want one. Open TABLE. Light the hearth. Mix. Quit when you are done.</p>
+          </section>
+
+          <section>
+            <h2>05 · Host a table (friends join you)</h2>
+            <ol>
+              <li>Type your name in <b>Handle</b>. Optional: click the circle for a contact picture.</li>
+              <li>Click <b>Host</b> in the yellow bar. Status should change from Offline to <b>Hosting · Gamemaster</b>. You are the GM for this table. Guests see <b>(GM)</b> on your name.</li>
+              <li>Click <b>Copy address</b>. That puts a join code on the clipboard (LAN or internet).</li>
+              <li>Send that address to friends. Same house: they Join with it, or open the http link. Across the internet: they need your WAN address, and port 8765 must be reachable.</li>
+              <li>You are the source of truth. Your mix and your map are what guests see. Guests can still draw and chat.</li>
+            </ol>
+          </section>
+
+          <section>
+            <h2>06 · Join a table</h2>
+            <ol>
+              <li>Type your name in <b>Handle</b>. Optional: click the circle for a contact picture.</li>
+              <li>Click <b>Join</b>.</li>
+              <li>Paste the host’s address. Examples: <b>192.168.1.20:8765</b> or <b>http://91.2.3.4:8765</b>.</li>
+              <li>Click <b>Join</b> in that box. Status should say you are a guest.</li>
+              <li>Open TABLE the same way the host did. Follow the host’s mix. Use <b>Chat</b> to talk.</li>
+            </ol>
+            <p><b>Leave</b> drops you off the table. You can Host or Join again after that.</p>
+          </section>
+
+          <section>
+            <h2>07 · Chat, contacts, voice, pictures</h2>
+            <p>These four live in the yellow bar. They work on INDEX and on TABLE. Host or Join first. Offline means they will not reach anyone.</p>
+            <ul>
+              <li><b>Chat</b> — panel on the right. Type at the bottom, Enter or <b>Send</b>. The panel often opens by itself when a friend connects.</li>
+              <li><b>Whisper</b> — <b>/w Ada the door is trapped</b>. Only you and Ada see it. Names with spaces: <b>/w "Night Queen" wait</b>. Click a name at the top of Chat to fill that in. The hub never broadcasts a whisper to the rest of the table.</li>
+              <li><b>Pic</b> — in Chat, send a picture or video over the peer link (not stored on the hub). Everyone at the table sees it. Type <b>/w Name</b> first, or use <b>Pic</b> on a contact, and only that person gets it. Pictures max 12 MB, videos 40 MB.</li>
+              <li><b>Contacts</b> — next to Chat. Add someone at the table. They stay on this machine. Their face is the picture they set next to Handle. When they sit at a table with you they light up. Whisper, Call, and Pic are on the row. Remove drops them from your list only.</li>
+              <li><b>Voice</b> — your microphone on the table. Everyone else at this table who also clicked Voice hears you. From Contacts, <b>Call</b> is a private line; the rest of the table does not hear it. Hang up to go back. Allow the microphone when the browser asks. Localhost is fine; a plain http LAN address may refuse the mic.</li>
+            </ul>
+          </section>
+
+          <section>
+            <h2>08 · Open the mixer</h2>
+            <p>Three equal ways: the <b>01 TABLE</b> row on INDEX, the <b>TABLE</b> tab, or type <b>blightnet://table</b> and press Enter. You should see a tavern (or Night City) painting, then a card that says <b>Light the hearth</b>.</p>
+            <p>Click <b>Light the hearth</b> once. Wait until the card goes away. That unlocks audio. If you skip it, you will see the mixer but hear nothing.</p>
+            <p>To leave the mixer without quitting, click the <b>INDEX</b> tab. Your mix keeps running.</p>
+          </section>
+
+          <section>
+            <h2>09 · Scenes and layers (the actual mixer)</h2>
+            <p>The table has two columns under the painting.</p>
+            <ul>
+              <li><b>Scenes</b> (left) — one click loads a whole mood: music, weather, animals, rooms. Search the list with “Find a scene…”. <b>Save this mix</b> stores what you hear now as a new scene on the left.</li>
+              <li><b>The mix</b> (right) — every sound as a row. Tabs along the top of this column pick a kind (music, weather, and so on). Click a row to start or stop it. Drag the slider on the row for volume. “Find a sound…” filters the list.</li>
+            </ul>
+            <p>Pills on the painting show what is playing. Click a pill if you want that layer in your face.</p>
+          </section>
+
+          <section>
+            <h2>10 · Shuffle, fade, silence, master</h2>
+            <ul>
+              <li><b>Shuffle</b> (next to the sound search) — another piece of the same mood. Use it when a track has looped too long.</li>
+              <li><b>Master</b> (top bar) — overall volume.</li>
+              <li><b>Fade out</b> — slowly go quiet. Click it again (it becomes Fade in) to bring the last mix back.</li>
+              <li><b>Silence</b> — hard stop. Everything off.</li>
+              <li><b>Escape</b> — same as Silence, unless you are typing in a search box. In Bestiary, NPCs, Datashard, Faces, Corps, or Armory search, Escape only clears the search.</li>
+              <li><b>Update</b> — reload sounds and maps the host shared. Guests press this if a new upload does not appear.</li>
+            </ul>
+          </section>
+
+          <section>
+            <h2>11 · Place, inside/outside, hour</h2>
+            <ul>
+              <li><b>Place</b> (top bar) — opens a list of locations. Hearthsong is taverns and wilds. Blight is Night City: the skyline plus every district (Watson, Westbrook, Heywood, Santo Domingo, Pacifica, City Center, Dogtown, the Badlands, and their streets), plus <b>The Moon</b> (Tycho, Copernicus, Earthrise) and a <b>Casino</b> floor. Pick one. The painting changes. The camera does not pan around when you pick a plate.</li>
+              <li><b>Outside</b> / <b>Inside</b> — where your ear sits. Outside: weather and streets are close, rooms are muffled. Inside: halls and hearths are close, rain is through the walls.</li>
+              <li><b>Morning</b> / <b>Day</b> / <b>Evening</b> / <b>Night</b> — the sky. The painting stays put; the hour crossfades. Night brings owls and hush, day brings noon music.</li>
+            </ul>
+          </section>
+
+          <section>
+            <h2>12 · Two skins: Hearthsong and Blight</h2>
+            <p>Far right of the top bar: <b>Hearthsong</b> and <b>Blight</b>. This is paint, plus which book you get. The mix does not reset.</p>
+            <ul>
+              <li><b>Hearthsong</b> — gold tavern. D&amp;D scenes. The <b>Bestiary</b> button is the 5e monster book (334 creatures). <b>NPCs</b> is the SRD appendix people (acolyte through veteran) with dossiers and portraits. Use this for a fantasy table.</li>
+              <li><b>Blight</b> — magenta/cyan Night City HUD. <b>Datashard</b> replaces Bestiary (Cyberpunk RED mooks and roles). <b>Faces</b> is named Night City people with dossiers and pictures. A radio chip appears on the painting. Click it to open stations. Changing a scene does <em>not</em> retune the radio. <b>Library</b> vs live free internet radio is a separate toggle on that chip.</li>
+            </ul>
+            <p>Bestiary and NPCs never appear on Blight. Datashard, Faces, and Corps never appear on Hearthsong. That is on purpose.</p>
+          </section>
+
+          <section>
+            <h2>13 · Characters and dice</h2>
+            <ol>
+              <li>Click <b>Characters</b> under the top bar. A sidebar opens.</li>
+              <li>Click <b>New</b>. On Hearthsong, pick a class from the list (all 13 5e classes, plus Gamemaster or Custom). On Blight, pick a role.</li>
+              <li>On Bio, click <b>Face</b> for a head shot and <b>Full body</b> for a standing picture.</li>
+              <li>Click a skill, save, or attack to roll. On the combat log, <b>Adv</b> rolls twice and keeps the higher; <b>Dis</b> keeps the lower. Shift+Roll is advantage, Alt+Roll is disadvantage. Every sheet has unarmed moves on Combat: <b>Punch</b>, <b>Kick</b>, <b>Headbutt</b>, and <b>Bite</b>. No weapon. Combat damage grows with the ability used for the action (Strength, Dexterity, spellcasting, BODY, REF, or INT) and with level (Hearthsong) or role rank (Blight). The Combat tab prints the on-hit formula under each weapon. Attacks, damaging spells, heals, and quickhacks ask you to pick a character token on the map — including other players. A hit subtracts that damage from the target’s current HP. A heal restores it. At 0 HP the sheet is Downed: roll death saves on Combat. Three successes stand them at 1 HP; three failures kill them; a heal stands them with the healed amount. The combat log at the bottom of the sidebar prints the result.</li>
+              <li><b>Level up</b> (Hearthsong) spends XP on the SRD table, rolls or averages HP, fills spell slots, writes class features, and asks for an ASI or feat when the class gets one. <b>Advance</b> (Blight) spends Improvement Points: role rank × 20, skill rank × 10, STAT × 25.</li>
+            </ol>
+            <p>When you <b>Host</b>, you are the Gamemaster. New sheets on this machine start as Gamemaster (you can change the class or role). Guests see <b>(GM)</b> on your name in Chat and Contacts. When you Host or Join, every player can open every other player’s sheet from the roster (dashed chips are someone else’s — view only). Click a skill, attack, spell, feature, or item name (or <b>Show</b> on an attack) to print its description in the combat log so the table can read it. <b>Roll</b> still does the percentage. Attacks, damaging spells, heals, and quickhacks ask you to pick a token on the map — yours, an NPC, or another player. A hit subtracts that damage from the target’s current HP for everyone. A heal puts HP back. Every player sees the same log. Dice are a percentage: 100 is a critical success, 0 is a critical failure, 70–99 success, 40–69 mixed, 1–39 failure. Attack damage prints on a success. A critical success rolls the damage normally, then doubles it. A critical failure prints the damage the roller takes (and subtracts it from that sheet). Mixed rolls never print fake damage. A successful quickhack plays a short breach animation for the runner, and the player who was hacked sees a “you are being hacked” sting. Close the sidebar by clicking <b>Characters</b> again.</p>
+            <h2>How the dice work</h2>
+            <p>If a player asks what the numbers mean, this is the whole system. There is also a <b>?</b> on the combat log in the character sidebar.</p>
+            <ul>
+              <li><b>Every Roll is a percentage, 0 through 100.</b> The table does not roll d20s. One number, one grade, printed in the combat log for everyone.</li>
+              <li><b>Advantage / Disadvantage.</b> Combat log: <b>Adv</b> or <b>Dis</b> (stays on until you click it again or Norm). Or hold <b>Shift</b> for advantage / <b>Alt</b> for disadvantage on one Roll. Both roll twice. Advantage keeps the higher. Disadvantage keeps the lower. The log shows both, like <b>adv 82 / 41</b>.</li>
+              <li><b>100</b> — critical success. <b>70–99</b> — success. <b>40–69</b> — mixed (the thing kinda happens; no damage is invented). <b>1–39</b> — failure. <b>0</b> — critical failure. That grade is taken from the kept number.</li>
+              <li><b>Skills and saves</b> just print that grade. No target. No HP change.</li>
+              <li><b>Attacks, damaging spells, heals, and quickhacks</b> ask you to pick a character whose token is on the map (yours, an NPC, or another player). Click the token or a name in the list. Escape cancels and does not roll.</li>
+              <li><b>Hit</b> (success or critical success) with damage: the log prints the damage, and that amount is subtracted from the target’s <b>current HP</b> (temporary HP first). Everyone sees the new number. The dice themselves grow with <b>level</b> (or role rank) and the <b>ability</b> for that action — a higher Strength punch or a higher-level longsword hits harder. A critical success rolls those dice normally, then doubles them. A normal success rolls the dice, then scales the result by the percentage (an 80 is 80% of the roll, at least 1).</li>
+              <li><b>Heal</b> (Cure Wounds, Healing Word, and similar names): same math, but the target <b>gains</b> that many HP, capped at their maximum. Mixed and failure heal nothing. If the target is <b>Downed</b> (0 HP), a successful heal stands them back up with exactly that many HP and clears death saves.</li>
+              <li><b>Death saves</b> (Hearthsong and Blight): at 0 HP, open Combat and click <b>Roll</b> next to Death saves. Same 0–100 grades. Success = one pip. Three successes = stand with 1 HP. Failure = one pip. Three failures = dead. 100 stands them at 1 HP immediately. 0 counts as two failures. A hit on a downed character adds a failure (a critical hit adds two). Dead is dead: only Revivify / raise dead / resurrection names can heal a corpse.</li>
+              <li><b>Critical failure on an attack</b> hurts the roller, not the target. The log says “dmg taken” and subtracts from the sheet that rolled.</li>
+              <li><b>Mixed and failure</b> never print fake damage and never change HP (except that critical failure on an attack, above).</li>
+              <li><b>Quickhacks</b> still use the same 0–100. On a success the runner sees BREACH. The player who owns the target sheet sees YOU ARE BEING HACKED.</li>
+              <li>If nobody is on the map, the roll still prints so you can test the dice. HP only changes when a target was picked (or when you critically fail an attack on yourself).</li>
+            </ul>
+            <p>On Blight, <b>Corps</b> is the Night City exchange: Arasaka, Militech, Kang Tao, and the rest. The stock tape uses their tickers. Click a ticker or open Corps to read the dossier and see the picture. <b>Faces</b> is the people book: Rogue, Blackhand, the Arasakas, Forlorn Hope staff, gang bosses. Click a name. Drag the portrait onto a map like Datashard. <b>Lore</b> is the street file on 2045: why the birds are gone, how meat and CHOOH2 are made, what the tap and the rain do, the old NET, chrome, Trauma Team, the Hole. Drag a painting onto a map if you want the table to see it.</p>
+          </section>
+
+          <section>
+            <h2>14 · Armory and Night Market</h2>
+            <p>Gear lives in a locker next to Characters. Hearthsong calls it <b>Armory</b> (5e weapons, armor, adventuring kit, magic items, and SRD spells). Blight calls it <b>Night Market</b> (Cyberpunk RED core kit plus <b>Black Chrome</b>: extra chrome, katanas, GunMart junk, linear frames, vehicles, apps, and the rest). Names match the book. The notes are table-side, not copied flavor.</p>
+            <ol>
+              <li>Click <b>Characters</b> and open or make a sheet.</li>
+              <li>Click <b>Armory</b> or <b>Night Market</b>.</li>
+              <li>Find a piece. Drag the row, or the page on the right, onto the character sheet. Drop on a face in the roster to hit that person. Drop on the sheet for whoever is open. Or click <b>Add to open sheet</b>, or double-click the list row.</li>
+              <li>Weapons land on Combat with a to-hit bonus and a Roll button. Armor sets AC or SP. Spells land on Magic with a Roll each (or Programs on Blight). Chrome lands on Chrome and costs humanity. Gear and magic also list under Gear.</li>
+            </ol>
+            <p>You can drop the same piece again to stack it. × on the Gear list removes it from the sheet. After a drop the sheet jumps to the tab that now has the piece, ready to roll.</p>
+          </section>
+
+          <section>
+            <h2>15 · Bestiary, NPCs, Datashard, and Faces</h2>
+            <p>They work the same way. Only the book changes.</p>
+            <ol>
+              <li>Click <b>Bestiary</b>, <b>NPCs</b>, or <b>Gods</b> (Hearthsong) or <b>Datashard</b> / <b>Faces</b> / <b>Lore</b> (Blight).</li>
+              <li>The <b>list on the left</b> is what scrolls. Type in the search box, or use the Type / Kind menus.</li>
+              <li>Click a name. The <b>page on the right</b> is the description. It stays put while you scroll the list, so you can read it.</li>
+              <li>Bestiary is monsters. <b>NPCs</b> is the 5e SRD appendix people. <b>Gods</b> is the historical pantheons (Celtic, Greek, Egyptian, Norse) plus the <b>Baldur's Gate</b> Sword Coast gods — Bhaal, Shar, Lathander, and the rest — each with a painting, domains, and a table dossier. Drag a god onto a character to set their deity. Datashard is Night City mooks. Faces is named people of 2045. <b>Lore</b> is how the city actually works: the empty sky, kibble and vat meat, CHOOH2 in the pumps, the tap, the rain, the Hole.</li>
+              <li>Close with the Close button on that board, or click the same top-bar button again.</li>
+            </ol>
+          </section>
+
+          <section>
+            <h2>16 · Maps (the battle map)</h2>
+            <ol>
+              <li>Click <b>Maps</b>.</li>
+              <li>Click <b>Import</b> and pick a picture, or choose one already in the Map list.</li>
+              <li>Drag the map to pan. Scroll the mouse wheel to zoom in and out (the view follows the cursor). <b>Fit</b> puts the whole picture on screen. <b>Grid</b> toggles squares. Alt+scroll on a token still resizes it; dragging the gold corner does too.</li>
+              <li>Open Characters, Bestiary, NPCs, Gods, Datashard, Faces, or Lore. Drag a portrait onto the loaded map. That drops a token. A beast, NPC, Face, or Datashard file also becomes a real character sheet in the sidebar — stats, attacks, and Roll buttons — so you can use it immediately. Drag the same picture again to clone it (and get another sheet). Drag a token to move it. Drag its gold corner to resize, or hold Alt and scroll on it. The mouse wheel always zooms the map toward the cursor. You can also drop a picture from your computer onto a loaded map to place it as a token, or onto an empty map to load that picture as the map.</li>
+              <li>Tools: <b>Pan</b> (move the map and tokens), <b>Draw</b> (freehand), <b>Circle</b>, <b>Box</b>, <b>Erase</b> (click a token or a mark to delete it). <b>Clear marks</b> wipes every token and drawing.</li>
+            </ol>
+            <p>Guests can draw and drop tokens. The host’s map is the official one. Placing a token, moving it, resizing it, or switching the map updates every player at the table. Empty click-drags do not leave marks.</p>
+          </section>
+
+          <section>
+            <h2>17 · Add your own sound</h2>
+            <p>Click <b>Add sound</b> under the top bar. Pick an audio file. It lands in the mix on this table. If you are hosting, guests get it too. If you are a guest, the file uploads to the host.</p>
+          </section>
+
+          <section>
+            <h2>18 · Quit, and how to come back</h2>
+            <p>Go to INDEX. Click <b>00 DISCONNECT</b> (the red row). That closes the window and the local server. It is supposed to. Do not hunt for a crashed app.</p>
+            <p>To come back: open a terminal in the Blightnet folder and run <b>./start.sh</b>. Do not double-launch. Do not open a normal Firefox or Brave window to “find” it — the table is the standalone Blightnet window.</p>
+          </section>
+
+          <section>
+            <h2>19 · If something feels broken</h2>
+            <ul>
+              <li><b>No sound</b> — did you press Light the hearth? Is Master up? Is Silence / Escape latched? Speakers unmuted?</li>
+              <li><b>Friends cannot join</b> — they need the address from Copy address. Same house uses the LAN IP. Across the internet needs the WAN IP and a working path to port 8765.</li>
+              <li><b>Wrong monitor</b> — INDEX → DISPLAY → click the other plate.</li>
+              <li><b>Lost the mixer</b> — you are on INDEX. Click the TABLE tab.</li>
+              <li><b>Cannot find Bestiary, NPCs, or Gods</b> — switch the top-bar skin to Hearthsong. Datashard, Faces, Corps, and Lore are Blight only.</li>
+              <li><b>No microphone</b> — click Voice (or Call) and allow the prompt. Guests on a plain http:// LAN address often cannot; they should use the Blightnet window on their machine.</li>
+              <li><b>Guest mix does not match</b> — guests follow the host’s scene and layers. Each player’s Master slider is local and does not change anyone else.</li>
+            </ul>
+          </section>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal hidden" id="join-modal">
+      <div class="modal-card">
+        <h1>Join a table</h1>
+        <p>Paste the host’s address. Same house or across the internet — both work. Example: 192.168.1.20:8765 or 91.2.3.4:8765</p>
+        <input id="join-addr" type="text" maxlength="200" placeholder="host address or http://ip:8765" />
+        <div class="modal-actions">
+          <button class="ghost" id="join-cancel">Cancel</button>
+          <button class="primary" id="join-confirm">Join</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal hidden" id="save-modal">
+      <div class="modal-card">
+        <h1>Name this mix</h1>
+        <p>It will appear with the scenes on the left.</p>
+        <input id="mix-name" type="text" maxlength="42" placeholder="Midnight at the inn" />
+        <div class="modal-actions">
+          <button class="ghost" id="save-cancel">Cancel</button>
+          <button class="primary" id="save-confirm">Save</button>
+        </div>
+      </div>
+    </div>
+
+    <noscript>
+      <p style="position:fixed;inset:auto 16px 16px;color:#e8dcc4;font-family:sans-serif;z-index:20">
+        Blightnet needs JavaScript. Run <code>./start.sh</code> and open the page it prints.
+      </p>
+    </noscript>
+    <script type="module" src="js/app.js"></script>
+  </body>
+</html>
+
