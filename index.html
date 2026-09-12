@@ -168,8 +168,16 @@
                       </span>
                       <span class="launch-go">OPEN</span>
                     </button>
-                    <button type="button" class="launch-app launch-guide" id="launch-guide">
+                    <button type="button" class="launch-app launch-update" id="launch-update">
                       <span class="launch-id">02</span>
+                      <span class="launch-copy">
+                        <b>UPDATE</b>
+                        <small>PULL FROM GITHUB</small>
+                      </span>
+                      <span class="launch-go" id="launch-update-go">SYNC</span>
+                    </button>
+                    <button type="button" class="launch-app launch-guide" id="launch-guide">
+                      <span class="launch-id">03</span>
                       <span class="launch-copy">
                         <b>TUTORIAL</b>
                         <small>CLICK-THIS FIELD MANUAL</small>
@@ -193,8 +201,9 @@
                       <li><b>Host</b> if friends join. Skip if you play alone.</li>
                       <li>Open <b>01 TABLE</b>.</li>
                       <li>Press <b>Light the hearth</b>.</li>
+                      <li>Run <b>02 UPDATE</b> if this copy might be old.</li>
                     </ol>
-                    <p class="net-side-hint">Stuck? Open <b>02 TUTORIAL</b>. Every button in this window is named there.</p>
+                    <p class="net-side-hint">Stuck? Open <b>03 TUTORIAL</b>. Every button in this window is named there.</p>
                   </aside>
                 </div>
               </div>
@@ -232,7 +241,6 @@
           </div>
           <button class="ghost" id="fade-out" title="Slowly fade the table to silence, or bring the last mix back">Fade out</button>
           <button class="ghost danger" id="stop-all">Silence</button>
-          <button class="ghost" id="update-btn" title="Reload uploaded sounds and maps from this table">Update</button>
           <div class="place" role="group" aria-label="Theme">
             <button type="button" class="place-btn" id="theme-hearthsong" data-theme-pick="hearthsong" title="Warm tavern theme">Hearthsong</button>
             <button type="button" class="place-btn" id="theme-blight" data-theme-pick="blight" title="Night City HUD theme">Blight</button>
@@ -733,6 +741,17 @@
           <span class="bn-status-fill">SELECT A NODE · OR READ THE TUTORIAL</span>
         </div>
       </div>
+      <div class="update-stage" id="update-stage" hidden>
+        <div class="update-rain" id="update-rain" aria-hidden="true"></div>
+        <div class="update-scan"></div>
+        <div class="update-frame">
+          <p class="update-kicker">NETDIR://GITHUB · STEELWORTH/BLIGHTNET</p>
+          <p class="update-title" id="update-title">JACKING IN</p>
+          <div class="update-bar"><i id="update-bar"></i></div>
+          <pre class="update-log" id="update-log"></pre>
+          <p class="update-status" id="update-status">OPENING A TRACE TO MAIN…</p>
+        </div>
+      </div>
     </div>
 
     <div class="modal hidden" id="credits-modal">
@@ -765,7 +784,7 @@
               <li>Type your name in the yellow bar where it says <b>Handle</b>. Click the circle beside it to set a contact picture.</li>
               <li>Under <b>DISPLAY</b>, click the screen you want. The window jumps there.</li>
               <li>Playing with friends? Click <b>Host</b>. Playing alone? Skip this.</li>
-              <li>Click the big <b>01 TABLE</b> row, or the yellow <b>TABLE</b> tab.</li>
+              <li>Click the big <b>01 TABLE</b> row, or the yellow <b>TABLE</b> tab. <b>02 UPDATE</b> pulls a newer copy from GitHub if this folder is old. <b>03 TUTORIAL</b> is this shard.</li>
               <li>Click <b>Light the hearth</b> once. That turns the sound on. Then you mix.</li>
             </ol>
             <p>The rest of this shard names every button. Close this panel with <b>Close</b>, the dark edge around it, or Escape.</p>
@@ -865,7 +884,7 @@
               <li><b>Fade out</b> — slowly go quiet. Click it again (it becomes Fade in) to bring the last mix back.</li>
               <li><b>Silence</b> — hard stop. Everything off.</li>
               <li><b>Escape</b> — same as Silence, unless you are typing in a search box. In Bestiary, NPCs, Datashard, Faces, Corps, or Armory search, Escape only clears the search.</li>
-              <li><b>Update</b> — reload sounds and maps the host shared. Guests press this if a new upload does not appear.</li>
+              <li><b>Update</b> lives on INDEX as <b>02 UPDATE</b>. It opens a NET trace, checks <b>github.com/Steelworth/Blightnet</b> for new or changed files, downloads them onto this machine, then reloads sounds and maps the host shared. If server files changed, close Blightnet and start it again.</li>
             </ul>
           </section>
 

@@ -39,3 +39,5 @@ feedback_drafts.json
 *.log
 .env
 .env.*
+.blightnet-sha
+*.blightnet-new

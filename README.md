@@ -2,47 +2,98 @@
 
 A **local** table for D&D and Cyberpunk RED: mix music and weather, drop maps, run character sheets, and host a LAN session. Nothing is sent to the cloud except the explicit “join this table” connection on your own network.
 
-You do **not** open `index.html` as a file. Start the local server, then use the Blightnet window (or **http://127.0.0.1:8765**).
+You do **not** open `index.html` as a file. Download the folder, start it, then use the Blightnet window (or **http://127.0.0.1:8765**).
 
-This repository is large (~1.2 GB) because the music, ambience, and art ship with the app so a clone is playable.
+The download is large (~1.2 GB) because the music, ambience, and art ship with the app.
 
----
-
-## Requirements
-
-| OS | What you need |
-| --- | --- |
-| **Linux / macOS** | Python 3 (stdlib only). No pip packages. |
-| **Windows** | `Blightnet.exe` in this folder. Python is optional. |
-
-A Chromium-based browser (or the bundled window) is used for the UI. Firefox/Brave are **not** launched unless you pass `--system-browser`.
+Repo: [github.com/Steelworth/Blightnet](https://github.com/Steelworth/Blightnet)
 
 ---
 
-## Quick start
+## Download for the first time
 
-### Linux or macOS
+Pick **one** method. Keep the whole folder together (`Blightnet.exe` or `start.sh`, plus `index.html`, `js`, `css`, `audio`, `assets`). Do not scatter those files.
+
+### 1. Download ZIP (no Git)
+
+1. Open **[github.com/Steelworth/Blightnet](https://github.com/Steelworth/Blightnet)**.
+2. Click the green **Code** button → **Download ZIP**.
+3. Unzip it. You should get a folder named **`Blightnet-main`**.
+4. Follow **Windows**, **Linux**, or **macOS** below.
+
+Later, open Blightnet and click **02 UPDATE** on INDEX. That pulls new or changed files from GitHub onto this machine.
+
+### 2. Git clone (best if you already use Git)
 
 ```bash
 git clone https://github.com/Steelworth/Blightnet.git
-cd blightnet
-./start.sh
+cd Blightnet
 ```
 
-Blightnet opens as its own window when it can. If not, the terminal prints the address (usually **http://127.0.0.1:8765**).
+Then follow **Windows**, **Linux**, or **macOS** below. **02 UPDATE** can fast-forward this clone.
 
-- `./start.sh --system-browser` — use Firefox/Chrome/Brave instead of the dedicated window
-- `./start.sh --no-open` — server only
-
-**If the page says to run start.sh first**, you opened the file from the folder. Close that tab. Run `./start.sh`.
+---
 
 ### Windows
 
-1. Copy the whole **blightnet** folder. Keep `Blightnet.exe`, `index.html`, `js`, `css`, `audio`, and `assets` together. You do **not** need `tools/` on Windows.
-2. Double-click **`Blightnet.exe`** (or **`start.bat`**).
-3. A console stays open (that is the server). The table tries to open in app mode. If that fails, go to **http://127.0.0.1:8765**.
+You do **not** need Python.
 
-Closing the console stops the table.
+1. Open the unzipped **`Blightnet-main`** folder (or the `Blightnet` folder from git).
+2. Double-click **`Blightnet.exe`**. If that is missing, double-click **`start.bat`**.
+3. A black console stays open — that is the server. Leave it open.
+4. Blightnet tries to open as its own window. If it does not, open a browser to **http://127.0.0.1:8765**.
+
+Closing the console stops the table. You do not need the `tools` folder on Windows.
+
+If Windows SmartScreen warns about an unknown app, choose **More info** → **Run anyway**. That is the local launcher, not a download from the Store.
+
+### Linux
+
+You need **Python 3** (already on most distros). No pip packages.
+
+```bash
+cd Blightnet-main    # or: cd Blightnet
+chmod +x start.sh
+./start.sh
+```
+
+A dedicated Blightnet window opens when it can. If not, the terminal prints **http://127.0.0.1:8765**. Open that address yourself.
+
+- `./start.sh --system-browser` — use Firefox/Chrome/Brave
+- `./start.sh --no-open` — server only
+
+**If the page says to run start.sh first**, you opened `index.html` from the folder. Close that tab. Run `./start.sh`.
+
+If `python3` is missing: Ubuntu/Debian `sudo apt install python3`, Fedora `sudo dnf install python3`, Arch `sudo pacman -S python`.
+
+### macOS
+
+You need **Python 3**.
+
+1. Open **Terminal**.
+2. Drag the unzipped **`Blightnet-main`** folder onto the Terminal window after `cd ` and press Enter (or `cd` into the git clone).
+3. Run:
+
+```bash
+chmod +x start.sh
+./start.sh
+```
+
+If macOS blocks it: System Settings → Privacy & Security → **Open Anyway**. If `python3` is missing, install it from [python.org](https://www.python.org/downloads/) or `xcode-select --install`.
+
+Same flags as Linux: `--system-browser`, `--no-open`. Use **http://127.0.0.1:8765** if no window appears.
+
+---
+
+## After it is running
+
+On INDEX (the yellow NET menu):
+
+- **01 TABLE** — the mixer
+- **02 UPDATE** — check GitHub and patch this copy (hacking-style trace while it downloads)
+- **03 TUTORIAL** — in-app field manual
+
+Type a **Handle**, pick a **DISPLAY**, then open TABLE and **Light the hearth**.
 
 ---
 
@@ -77,8 +128,9 @@ Each computer runs Blightnet and sets a **Handle** in the top bar.
 
 1. Wait for the wake sequence, or click / press a key to skip it.
 2. Set your **Handle**. **Host** or **Join**, and open **Chat**, from the top bar.
-3. Click **TABLE** when you want the mixer.
-4. The table unrolls in the Blightnet window. Back / INDEX return to the launch page without dropping the table.
+3. Optional: **02 UPDATE** on INDEX to pull the newest files from GitHub.
+4. Click **01 TABLE** when you want the mixer.
+5. The table unrolls in the Blightnet window. INDEX tab returns to the menu without dropping the table.
 
 Opening TABLE is also what lets the browser play sound.
 
@@ -117,7 +169,7 @@ Tabs: **All / Playing / Music / Weather / Animals / Ambience**. **Playing** show
 
 **Characters** — 5e or RED sheets on this machine, plus everyone else’s sheets at a joined table (read-only). Combat uses a 0–100 roll, not a d20. **Adv** / **Dis** on the combat log roll twice (higher / lower).
 
-**Update** reloads sounds and maps the host shared, if a new upload does not appear.
+**Update** checks GitHub (`Steelworth/Blightnet`) for new or changed files, downloads them onto this machine, then reloads sounds and maps the host shared. If `serve.py` or the Windows exe changed, close Blightnet and start it again.
 
 **Find a sound** — press `/` to jump there. Escape clears it (or silences the table if you are not typing).
 

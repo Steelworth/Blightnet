@@ -32,3 +32,5 @@ That writes `Blightnet.exe` next to `index.html`.
 ## Notes
 
 Keep table copy original. Do not paste copyrighted book flavor (D&D or Cyberpunk) into JSON or UI strings.
+
+INDEX **02 UPDATE** pulls from `https://github.com/Steelworth/Blightnet` (`main`). It prefers `git fetch` + fast-forward when this folder is a clone; otherwise it compares Git blob hashes to the GitHub tree and downloads only changed files. `uploads/` is never overwritten.

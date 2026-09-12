@@ -1613,3 +1613,149 @@ html[data-theme="blight"] .pills {
   height: 0 !important;
   display: none !important;
 }
+
+.launch-app.launch-update {
+  border-color: #00f0ff;
+  color: #00f0ff;
+}
+.launch-app.launch-update small { color: #5aa8b0; }
+.launch-app.launch-update:hover {
+  background: #00f0ff;
+  color: #111;
+}
+.launch-app.launch-update:hover small { color: #333; }
+.launch-app.launch-update:hover .launch-go {
+  background: #111;
+  color: #00f0ff;
+}
+.launch-app.launch-update.is-busy {
+  pointer-events: none;
+  opacity: 0.85;
+}
+.launch-app.launch-update.is-busy .launch-go {
+  background: #111;
+  color: #00f0ff;
+}
+
+.update-stage {
+  position: absolute;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background:
+    repeating-linear-gradient(0deg, rgba(0, 240, 255, 0.05) 0 1px, transparent 1px 3px),
+    #030308;
+  font-family: "Share Tech Mono", "Cascadia Mono", "Consolas", ui-monospace, monospace;
+  color: #00f0ff;
+}
+.update-stage[hidden] { display: none !important; }
+.update-scan {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(180deg, transparent 0%, rgba(252, 238, 10, 0.12) 48%, transparent 52%);
+  background-size: 100% 220%;
+  animation: update-scan 1.4s linear infinite;
+}
+.update-rain {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  opacity: 0.35;
+}
+.update-rain span {
+  position: absolute;
+  top: -120%;
+  width: 1.2em;
+  white-space: pre;
+  font-size: 0.72rem;
+  line-height: 1.15;
+  color: #00f0ff;
+  text-shadow: 0 0 8px #00f0ff;
+  animation: update-fall 5.4s linear infinite;
+}
+.update-rain span:nth-child(3n) { color: #fcee0a; text-shadow: 0 0 8px #fcee0a; }
+.update-rain span:nth-child(5n) { color: #ff2d6a; text-shadow: 0 0 8px #ff2d6a; }
+.update-frame {
+  position: relative;
+  z-index: 1;
+  width: min(640px, calc(100% - 32px));
+  padding: 22px 22px 18px;
+  border: 2px solid #00f0ff;
+  background:
+    repeating-linear-gradient(-45deg, rgba(0, 240, 255, 0.05) 0 8px, transparent 8px 16px),
+    rgba(4, 6, 12, 0.92);
+  clip-path: polygon(16px 0, 100% 0, 100% calc(100% - 16px), calc(100% - 16px) 100%, 0 100%, 0 16px);
+  box-shadow: 10px 10px 0 rgba(252, 238, 10, 0.28), 0 0 40px rgba(0, 240, 255, 0.25);
+}
+.update-kicker {
+  margin: 0 0 6px;
+  font-size: 0.62rem;
+  letter-spacing: 0.22em;
+  color: #fcee0a;
+}
+.update-title {
+  margin: 0 0 12px;
+  font-size: 1.7rem;
+  letter-spacing: 0.16em;
+  font-weight: 700;
+  color: #fcee0a;
+  text-shadow: 0 0 18px rgba(252, 238, 10, 0.45);
+}
+.update-stage.is-fail .update-title,
+.update-stage.is-fail .update-frame { border-color: #ff003c; color: #ff003c; }
+.update-stage.is-fail .update-title { color: #ff003c; }
+.update-stage.is-done .update-title { color: #00f0ff; }
+.update-bar {
+  height: 8px;
+  border: 1px solid #fcee0a;
+  background: #05060a;
+  margin-bottom: 12px;
+  overflow: hidden;
+}
+.update-bar i {
+  display: block;
+  height: 100%;
+  width: 12%;
+  background: linear-gradient(90deg, #00f0ff, #fcee0a);
+  animation: update-indeterminate 1.1s linear infinite;
+}
+.update-stage.has-progress .update-bar i { animation: none; }
+.update-log {
+  margin: 0 0 12px;
+  min-height: 11rem;
+  max-height: 11rem;
+  overflow: auto;
+  padding: 10px 12px;
+  border: 1px solid rgba(0, 240, 255, 0.35);
+  background: #020308;
+  color: #7af0ff;
+  font-size: 0.72rem;
+  line-height: 1.4;
+  white-space: pre-wrap;
+}
+.update-status {
+  margin: 0;
+  font-size: 0.72rem;
+  letter-spacing: 0.14em;
+  color: #cfc893;
+}
+@keyframes update-scan {
+  from { background-position: 0 -40%; }
+  to { background-position: 0 140%; }
+}
+@keyframes update-fall {
+  from { transform: translateY(0); }
+  to { transform: translateY(220%); }
+}
+@keyframes update-indeterminate {
+  0% { transform: translateX(-120%); width: 28%; }
+  100% { transform: translateX(420%); width: 28%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .update-scan, .update-rain span, .update-bar i { animation: none !important; }
+  .update-rain { display: none; }
+}

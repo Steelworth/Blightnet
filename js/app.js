@@ -2,7 +2,7 @@ import { CATEGORIES, LAYERS, SCENES, MUSIC_MOODS, layerById, sceneById, tracksFo
 import { Mixer } from "./engine.js";
 import { icon } from "./icons.js";
 import { createVisualizer } from "./viz.js";
-import { playBoot } from "./boot.js";
+import { playBoot, createBootSfx } from "./boot.js";
 import { weatherOf, HOURS } from "./weather.js";
 import { SETTINGS, settingById, SCENE_SETTING, settingSrc, settingsOf } from "./places.js";
 import { createTable, fetchInfo, postUpload, profileName, setProfileName, profilePic, setProfilePic } from "./net.js";
@@ -1385,6 +1385,169 @@ async function addMapFile(file) {
   maps.show(id);
   if (table.state.role === "host") {
     postUpload(location.origin, rec, bytes).catch(() => {});
+  }
+}
+
+const updateSfx = createBootSfx();
+
+function paintUpdateRain() {
+  const el = $("#update-rain");
+  if (!el || el.dataset.ready) return;
+  if (window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches) {
+    el.dataset.ready = "1";
+    return;
+  }
+  const glyphs = "01<>/\\|#$*ICEBLIGHTNETGITHUBSYNC";
+  let html = "";
+  for (let i = 0; i < 26; i++) {
+    let col = "";
+    for (let j = 0; j < 22; j++) col += glyphs[Math.floor(Math.random() * glyphs.length)] + "\n";
+    html += `<span style="left:${((i + 0.2) / 26) * 100}%;animation-duration:${(4.2 + (i % 5) * 0.55).toFixed(2)}s;animation-delay:${(-i * 0.37).toFixed(2)}s">${col}</span>`;
+  }
+  el.innerHTML = html;
+  el.dataset.ready = "1";
+}
+
+function updateLogLine(text) {
+  const log = $("#update-log");
+  if (!log) return;
+  const line = String(text || "").replace(/\s+/g, " ").trim().slice(0, 88);
+  if (!line) return;
+  const prev = log.textContent ? log.textContent.split("\n") : [];
+  const tagged = "> " + line;
+  if (prev[prev.length - 1] === tagged) return;
+  prev.push(tagged);
+  log.textContent = prev.slice(-16).join("\n");
+  log.scrollTop = log.scrollHeight;
+}
+
+function paintUpdateHud(st = {}) {
+  const stage = $("#update-stage");
+  const title = $("#update-title");
+  const status = $("#update-status");
+  const bar = $("#update-bar");
+  const go = $("#launch-update-go");
+  const phase = String(st.phase || "");
+  const msg = String(st.message || st.error || "");
+  let headline = "JACKING IN";
+  let goText = "WAIT";
+  if (phase === "checking") headline = "HASHING LOCAL SHARDS";
+  else if (phase === "downloading") headline = "PULLING REMOTE ICE";
+  else if (phase === "done") {
+    headline = (Number(st.changed) || 0) > 0 ? "ICE BREACHED" : "ICE CLEAR";
+    goText = "DONE";
+  } else if (phase === "error") {
+    headline = "ICE LOCK";
+    goText = "FAIL";
+  }
+  if (title) title.textContent = headline;
+  if (status) status.textContent = (msg || "OPENING A TRACE TO MAIN…").toUpperCase();
+  if (go) go.textContent = goText;
+  stage?.classList.toggle("is-fail", phase === "error");
+  stage?.classList.toggle("is-done", phase === "done");
+  const hit = msg.match(/(\d+)\s*\/\s*(\d+)/);
+  if (bar) {
+    if (hit) {
+      stage?.classList.add("has-progress");
+      bar.style.width = Math.max(4, Math.min(100, Math.round((Number(hit[1]) / Math.max(1, Number(hit[2]))) * 100))) + "%";
+    } else if (phase === "done") {
+      stage?.classList.add("has-progress");
+      bar.style.width = "100%";
+    } else if (phase === "error") {
+      stage?.classList.add("has-progress");
+      bar.style.width = "100%";
+    }
+  }
+  updateLogLine(msg);
+  if (Array.isArray(st.files)) {
+    const last = st.files[st.files.length - 1];
+    if (last) updateLogLine("PATCH " + last);
+  }
+}
+
+function closeUpdateStage() {
+  const stage = $("#update-stage");
+  if (stage) stage.hidden = true;
+  $("#launch-update")?.classList.remove("is-busy");
+  const go = $("#launch-update-go");
+  if (go) go.textContent = "SYNC";
+  updateSfx.stop();
+}
+
+async function runAppUpdate() {
+  const row = $("#launch-update");
+  if (row?.classList.contains("is-busy")) return;
+  showBnPage("start");
+  paintUpdateRain();
+  const stage = $("#update-stage");
+  const log = $("#update-log");
+  if (log) log.textContent = "> TRACE OPEN\n> AUTH: PUBLIC NODE\n> TARGET STEELWORTH/BLIGHTNET#MAIN";
+  if (stage) {
+    stage.hidden = false;
+    stage.classList.remove("is-fail", "is-done", "has-progress");
+  }
+  const bar = $("#update-bar");
+  if (bar) bar.style.width = "";
+  row?.classList.add("is-busy");
+  paintUpdateHud({ phase: "checking", message: "Jacking into GitHub…" });
+  try {
+    updateSfx.warmup();
+    updateSfx.play("modem", { volume: 0.38 });
+    updateSfx.play("ice", { volume: 0.42 });
+  } catch {
+    /* no audio yet */
+  }
+  try {
+    const start = await fetch("/api/update", { method: "POST", cache: "no-store" });
+    let st = await start.json().catch(() => ({}));
+    if (start.status === 404) {
+      await refreshTable();
+      paintUpdateHud({ phase: "done", message: "No updater on this build. Table uploads refreshed.", changed: 0 });
+      window.setTimeout(closeUpdateStage, 2200);
+      return;
+    }
+    if (!start.ok) throw new Error(st.error || st.message || "Could not start update");
+    let ticks = 0;
+    while (st.running) {
+      paintUpdateHud(st);
+      if (ticks % 2 === 0) updateSfx.tick();
+      ticks += 1;
+      await new Promise((r) => window.setTimeout(r, 420));
+      const res = await fetch("/api/update", { cache: "no-store" });
+      st = await res.json().catch(() => ({}));
+    }
+    if (st.error || st.phase === "error") throw new Error(st.error || st.message || "Update failed");
+    await refreshTable();
+    const n = Number(st.changed) || 0;
+    paintUpdateHud({ ...st, phase: "done", message: n ? (st.message || "Shards patched") : "Already current" });
+    try {
+      updateSfx.play("land", { volume: 0.5 });
+    } catch {
+      /* ignore */
+    }
+    if (n > 0 && st.restart) {
+      updateLogLine("SERVER FILES CHANGED — RESTART THE NODE");
+      window.setTimeout(() => {
+        closeUpdateStage();
+        window.alert("Server files updated. Close Blightnet and start it again.");
+      }, 1600);
+      return;
+    }
+    if (n > 0) {
+      updateLogLine("RELOADING SHELL");
+      window.setTimeout(() => location.reload(), 1100);
+      return;
+    }
+    window.setTimeout(closeUpdateStage, 2000);
+  } catch (err) {
+    const msg = String(err.message || err);
+    paintUpdateHud({ phase: "error", message: msg, error: msg });
+    try {
+      updateSfx.play("beep", { volume: 0.45 });
+    } catch {
+      /* ignore */
+    }
+    window.setTimeout(closeUpdateStage, 3200);
   }
 }
 
@@ -3079,8 +3242,8 @@ function bind() {
     e.target.value = "";
     if (file) addSoundFile(file);
   });
-  $("#update-btn")?.addEventListener("click", () => {
-    refreshTable();
+  $("#launch-update")?.addEventListener("click", () => {
+    runAppUpdate();
   });
   $("#table-host").innerHTML = icon("table") + "Host";
   $("#table-join").innerHTML = icon("table") + "Join";
@@ -3117,7 +3280,6 @@ function bind() {
   const shardIco = document.querySelector(".shard-search-ico");
   if (shardIco) shardIco.innerHTML = icon("search");
   $("#upload-btn").innerHTML = icon("upload") + "Add sound";
-  $("#update-btn").innerHTML = icon("update") + "Update";
   renderSettingMenu();
   syncPlace();
   syncTime();

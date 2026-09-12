@@ -19,7 +19,9 @@ import subprocess
 import sys
 import threading
 import time
+import urllib.error
 import urllib.parse
+import urllib.request
 import uuid
 import webbrowser
 
@@ -619,6 +621,309 @@ class Hub:
         return None
 
 
+GITHUB_REPO = "Steelworth/Blightnet"
+GITHUB_BRANCH = "main"
+GITHUB_API = "https://api.github.com"
+UPDATE_SHA_PATH = os.path.join(ROOT, ".blightnet-sha")
+UPDATE_UA = "Blightnet-Updater"
+UPDATE_SKIP_PREFIX = (
+    "uploads/",
+    ".git/",
+    "tools/_go/",
+    "tools/_raw/",
+    "tools/_wav/",
+    "__pycache__/",
+)
+UPDATE_SERVER_FILES = {
+    "serve.py",
+    "blightnet_window.py",
+    "browser.py",
+    "start.sh",
+    "start.bat",
+    "Blightnet.exe",
+    "Hearthsong.exe",
+}
+_update_lock = threading.Lock()
+_update_job: dict = {
+    "running": False,
+    "phase": "idle",
+    "message": "",
+    "checked": 0,
+    "changed": 0,
+    "files": [],
+    "sha": "",
+    "reload": False,
+    "restart": False,
+    "error": None,
+}
+
+
+def _update_snapshot() -> dict:
+    with _update_lock:
+        return dict(_update_job)
+
+
+def _update_set(**kwargs) -> None:
+    with _update_lock:
+        _update_job.update(kwargs)
+
+
+def git_blob_sha(data: bytes) -> str:
+    return hashlib.sha1(b"blob %d\0" % len(data) + data).hexdigest()
+
+
+def update_safe_rel(rel: str) -> str | None:
+    rel = str(rel or "").replace("\\", "/").lstrip("/")
+    if not rel or rel in (".", "..") or rel.startswith("../") or "/../" in rel or "\x00" in rel:
+        return None
+    lower = rel.lower()
+    for prefix in UPDATE_SKIP_PREFIX:
+        if lower == prefix.rstrip("/") or lower.startswith(prefix):
+            return None
+    parts = rel.split("/")
+    if any(p == "__pycache__" or p.endswith(".pyc") for p in parts):
+        return None
+    if parts[-1] in (".blightnet-sha",) or parts[-1].endswith(".blightnet-new"):
+        return None
+    return rel
+
+
+def _http_get(url: str, timeout: int = 45) -> bytes:
+    req = urllib.request.Request(
+        url,
+        headers={
+            "User-Agent": UPDATE_UA,
+            "Accept": "application/vnd.github+json, application/octet-stream, */*",
+        },
+    )
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        final = getattr(resp, "geturl", lambda: url)()
+        host = urllib.parse.urlparse(final).netloc.lower()
+        if host not in (
+            "api.github.com",
+            "raw.githubusercontent.com",
+            "codeload.github.com",
+            "github.com",
+            "objects.githubusercontent.com",
+        ):
+            raise OSError("unexpected host " + host)
+        return resp.read()
+
+
+def _http_json(url: str):
+    raw = _http_get(url)
+    return json.loads(raw.decode("utf-8"))
+
+
+def _read_saved_sha() -> str:
+    try:
+        return open(UPDATE_SHA_PATH, encoding="utf-8").read().strip()[:40]
+    except OSError:
+        return ""
+
+
+def _write_saved_sha(sha: str) -> None:
+    try:
+        with open(UPDATE_SHA_PATH, "w", encoding="utf-8") as f:
+            f.write(sha + "\n")
+    except OSError:
+        pass
+
+
+def _git_bin() -> str | None:
+    return shutil.which("git")
+
+
+def _git(args: list[str], timeout: int = 120) -> subprocess.CompletedProcess | None:
+    git = _git_bin()
+    if not git or not os.path.isdir(os.path.join(ROOT, ".git")):
+        return None
+    env = os.environ.copy()
+    env["GIT_TERMINAL_PROMPT"] = "0"
+    env["GIT_SSH_COMMAND"] = "ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new"
+    try:
+        return subprocess.run(
+            [git, *args],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            env=env,
+        )
+    except Exception:
+        return None
+
+
+def _github_head_sha() -> str:
+    data = _http_json(f"{GITHUB_API}/repos/{GITHUB_REPO}/commits/{GITHUB_BRANCH}")
+    sha = str(data.get("sha") or "")
+    if len(sha) < 7:
+        raise OSError("GitHub did not return a commit")
+    return sha
+
+
+def _write_rel(rel: str, data: bytes) -> None:
+    dest = os.path.join(ROOT, *rel.split("/"))
+    parent = os.path.dirname(dest)
+    if parent:
+        os.makedirs(parent, exist_ok=True)
+    tmp = dest + ".blightnet-new"
+    with open(tmp, "wb") as f:
+        f.write(data)
+    try:
+        os.replace(tmp, dest)
+    except OSError:
+        try:
+            os.remove(tmp)
+        except OSError:
+            pass
+        raise
+
+
+def _try_git_update() -> bool:
+    inside = _git(["rev-parse", "--is-inside-work-tree"])
+    if not inside or inside.returncode != 0:
+        return False
+    _update_set(phase="checking", message="Checking GitHub…")
+    old = _git(["rev-parse", "HEAD"])
+    old_sha = (old.stdout or "").strip() if old and old.returncode == 0 else ""
+    fetch = _git(["fetch", "--quiet", f"https://github.com/{GITHUB_REPO}.git", GITHUB_BRANCH], timeout=180)
+    if not fetch or fetch.returncode != 0:
+        fetch = _git(["fetch", "--quiet", "origin", GITHUB_BRANCH], timeout=180)
+    if not fetch or fetch.returncode != 0:
+        return False
+    new = _git(["rev-parse", "FETCH_HEAD"])
+    new_sha = (new.stdout or "").strip() if new and new.returncode == 0 else ""
+    if not new_sha:
+        return False
+    if old_sha and new_sha == old_sha:
+        _update_set(phase="done", message="Up to date", sha=new_sha, changed=0, files=[], reload=False, restart=False)
+        _write_saved_sha(new_sha)
+        return True
+    names = []
+    if old_sha:
+        diff = _git(["diff", "--name-only", old_sha, new_sha], timeout=60)
+        if diff and diff.returncode == 0:
+            names = [ln.strip() for ln in (diff.stdout or "").splitlines() if ln.strip()]
+    _update_set(message="Downloading updates…", phase="downloading")
+    merge = _git(["merge", "--ff-only", new_sha], timeout=180)
+    if not merge or merge.returncode != 0:
+        return False
+    safe = [n for n in names if update_safe_rel(n)]
+    restart = any(n in UPDATE_SERVER_FILES or n.startswith("gst/") for n in safe)
+    pulled = new_sha != old_sha
+    n = len(safe) if safe else int(pulled)
+    _update_set(
+        phase="done",
+        message=("Updated " + str(n) + " file" + ("s" if n != 1 else "")) if n else "Up to date",
+        sha=new_sha,
+        changed=n,
+        files=safe[:80],
+        reload=pulled and not restart,
+        restart=restart,
+    )
+    _write_saved_sha(new_sha)
+    return True
+
+
+def _try_api_update() -> None:
+    _update_set(phase="checking", message="Checking GitHub…")
+    head = _github_head_sha()
+    saved = _read_saved_sha()
+    local_head = ""
+    rev = _git(["rev-parse", "HEAD"])
+    if rev and rev.returncode == 0:
+        local_head = (rev.stdout or "").strip()
+    current = local_head or saved
+    if current and current == head:
+        _update_set(phase="done", message="Up to date", sha=head, changed=0, files=[], reload=False, restart=False)
+        _write_saved_sha(head)
+        return
+    tree = _http_json(f"{GITHUB_API}/repos/{GITHUB_REPO}/git/trees/{head}?recursive=1")
+    blobs = [e for e in (tree.get("tree") or []) if e.get("type") == "blob" and update_safe_rel(e.get("path") or "")]
+    changed: list[str] = []
+    restart = False
+    total = len(blobs)
+    for i, entry in enumerate(blobs, 1):
+        rel = update_safe_rel(entry.get("path") or "")
+        if not rel:
+            continue
+        if i % 25 == 0 or i == total:
+            _update_set(checked=i, message=f"Checking {i}/{total}…")
+        want = str(entry.get("sha") or "")
+        dest = os.path.join(ROOT, *rel.split("/"))
+        have = ""
+        try:
+            with open(dest, "rb") as f:
+                have = git_blob_sha(f.read())
+        except OSError:
+            have = ""
+        if have and want and have == want:
+            continue
+        _update_set(phase="downloading", message=f"Downloading {rel}…", checked=i)
+        url = f"https://raw.githubusercontent.com/{GITHUB_REPO}/{head}/{urllib.parse.quote(rel)}"
+        data = _http_get(url, timeout=90)
+        _write_rel(rel, data)
+        changed.append(rel)
+        if rel in UPDATE_SERVER_FILES or rel.startswith("gst/"):
+            restart = True
+        _update_set(changed=len(changed), files=changed[:80])
+    _write_saved_sha(head)
+    _update_set(
+        phase="done",
+        message=("Updated " + str(len(changed)) + " file" + ("s" if len(changed) != 1 else "")) if changed else "Up to date",
+        sha=head,
+        changed=len(changed),
+        files=changed[:80],
+        reload=bool(changed) and not restart,
+        restart=restart,
+    )
+
+
+def _run_update_job() -> None:
+    try:
+        if _try_git_update():
+            return
+        _try_api_update()
+    except urllib.error.HTTPError as exc:
+        msg = "GitHub returned " + str(exc.code)
+        if exc.code == 403:
+            msg = "GitHub rate limit. Try again in a few minutes."
+        _update_set(phase="error", error=msg, message=msg)
+    except Exception as exc:
+        msg = str(exc)[:160] or "Update failed"
+        _update_set(phase="error", error=msg, message=msg)
+    finally:
+        with _update_lock:
+            _update_job["running"] = False
+            if not _update_job.get("phase") or _update_job["phase"] in ("checking", "downloading", "applying"):
+                _update_job["phase"] = "error"
+                _update_job["error"] = _update_job.get("error") or "Update stopped"
+                _update_job["message"] = _update_job["error"]
+
+
+def start_update_job() -> dict:
+    with _update_lock:
+        if _update_job.get("running"):
+            return dict(_update_job)
+        _update_job.update(
+            {
+                "running": True,
+                "phase": "checking",
+                "message": "Checking GitHub…",
+                "checked": 0,
+                "changed": 0,
+                "files": [],
+                "sha": "",
+                "reload": False,
+                "restart": False,
+                "error": None,
+            }
+        )
+    threading.Thread(target=_run_update_job, daemon=True, name="blightnet-update").start()
+    return _update_snapshot()
+
+
 class WSClient:
     def __init__(self, handler: "Handler") -> None:
         self.handler = handler
@@ -756,6 +1061,11 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         if path in ("/api/displays", "/api/displays/"):
             self._json(200, {"ok": True, "displays": list_displays()})
             return
+        if path in ("/api/update", "/api/update/"):
+            snap = _update_snapshot()
+            snap["ok"] = not snap.get("error")
+            self._json(200, snap)
+            return
         super().do_GET()
 
     def do_POST(self):
@@ -766,6 +1076,11 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         if path in ("/api/quit", "/api/quit/"):
             self._json(200, {"ok": True})
             request_shutdown()
+            return
+        if path in ("/api/update", "/api/update/"):
+            snap = start_update_job()
+            snap["ok"] = True
+            self._json(200, snap)
             return
         if path in ("/api/display", "/api/display/"):
             length = int(self.headers.get("Content-Length", "0") or "0")

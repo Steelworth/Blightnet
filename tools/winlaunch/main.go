@@ -29,6 +29,7 @@ func main() {
 
 	port := pickPort(defaultPort)
 	hub := newHub(root)
+	initUpdate(root)
 	srv := &http.Server{
 		Addr:              fmt.Sprintf("0.0.0.0:%d", port),
 		Handler:           withCORS(newMux(root, port, hub)),
@@ -73,6 +74,13 @@ func newMux(root string, port int, hub *Hub) http.Handler {
 	})
 	mux.HandleFunc("/api/uploads", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, map[string]any{"files": hub.loadManifest()})
+	})
+	mux.HandleFunc("/api/update", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost {
+			writeJSON(w, startUpdate(root))
+			return
+		}
+		writeJSON(w, updateSnapshot())
 	})
 	mux.HandleFunc("/api/upload", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
