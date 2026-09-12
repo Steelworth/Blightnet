@@ -110,17 +110,17 @@ Switch **Hearthsong** / **Blight** in the top-right. The choice is remembered on
 
 ---
 
-## Share a table (same network)
+## Share a table (same house or other cities)
 
-Each computer runs Blightnet and sets a **Handle** in the top bar.
+Each computer runs Blightnet and sets a **Handle** in the top bar. Friends do **not** need to be on your Wi-Fi.
 
 1. Skip the wake sequence if you want. You are in Blightnet.
-2. Type a name. On the host click **Host**. The bar shows something like `blightnet://192.168.1.20:8765`. The console also prints **table →**.
-3. On the other computers click **Join** and type that address.
-4. **Chat** is in the yellow bar. `/w Name text` is a whisper (only those two see the body).
-5. Open **TABLE** when you want the mixer. **Add sound** uploads audio. The host keeps the file and sends it to guests on the LAN.
+2. Type a name. On the host click **Host**. Wait a few seconds. Status becomes **Hosting · Gamemaster** plus an address.
+3. Click **Copy address**. Same house: a LAN IP like `192.168.1.20:8765`. Other city: an `https://…` link (Blightnet opens an outbound tunnel so their router does not need a port forward).
+4. Send that address. They click **Join** and paste it, or open the https link in a browser.
+5. **Chat** is in the yellow bar. `/w Name text` is a whisper.
 
-**Leave** disconnects. Your firewall may ask the first time — allow it on the **private** network. Do not put this port on the public internet. See [SECURITY.md](SECURITY.md).
+If the https link never appears, the host machine needs OpenSSH (`ssh` on the PATH). LAN play still works. **Leave** disconnects. See [SECURITY.md](SECURITY.md).
 
 ---
 

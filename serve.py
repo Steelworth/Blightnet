@@ -79,6 +79,10 @@ def request_shutdown() -> None:
                     proc.kill()
                 except Exception:
                     pass
+        try:
+            stop_relay()
+        except Exception:
+            pass
         httpd = _httpd
         if httpd is not None:
             try:
@@ -93,6 +97,19 @@ def request_shutdown() -> None:
     threading.Thread(target=go, daemon=True).start()
 
 
+def _outbound_lan() -> str:
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("1.1.1.1", 80))
+        ip = s.getsockname()[0]
+        s.close()
+        if ip and not ip.startswith("127."):
+            return ip
+    except Exception:
+        pass
+    return ""
+
+
 def lan_ips() -> list[str]:
     found: list[str] = []
 
@@ -100,6 +117,7 @@ def lan_ips() -> list[str]:
         if ip and "." in ip and not ip.startswith("127.") and ip not in found:
             found.append(ip)
 
+    add(_outbound_lan())
     try:
         out = subprocess.check_output(["hostname", "-I"], text=True, stderr=subprocess.DEVNULL)
         for ip in out.split():
@@ -109,13 +127,6 @@ def lan_ips() -> list[str]:
     try:
         for info in socket.getaddrinfo(socket.gethostname(), None, socket.AF_INET):
             add(info[4][0])
-    except Exception:
-        pass
-    try:
-        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        s.connect(("1.1.1.1", 80))
-        add(s.getsockname()[0])
-        s.close()
     except Exception:
         pass
     return found
@@ -160,7 +171,9 @@ def ipv6_ips() -> list[str]:
     return found
 
 
-NET = {"wan": "", "wan6": "", "upnp": False, "port": PORT_DEFAULT}
+NET = {"wan": "", "wan6": "", "upnp": False, "port": PORT_DEFAULT, "relay": ""}
+_relay_proc = None
+_relay_lock = threading.Lock()
 
 
 def stun_wan_ip() -> str:
@@ -301,7 +314,7 @@ def _upnp_map(port: int) -> str:
             action = ctrl
         else:
             action = base + "/" + ctrl
-        lan = (lan_ips() or ["127.0.0.1"])[0]
+        lan = _outbound_lan() or (lan_ips() or ["127.0.0.1"])[0]
         body = f"""<?xml version="1.0"?>
 <s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/" s:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/">
 <s:Body><u:AddPortMapping xmlns:u="{svc_type}">
@@ -312,7 +325,7 @@ def _upnp_map(port: int) -> str:
 <NewInternalClient>{lan}</NewInternalClient>
 <NewEnabled>1</NewEnabled>
 <NewPortMappingDescription>Blightnet</NewPortMappingDescription>
-<NewLeaseDuration>0</NewLeaseDuration>
+<NewLeaseDuration>86400</NewLeaseDuration>
 </u:AddPortMapping></s:Body></s:Envelope>"""
         req = urllib.request.Request(
             action,
@@ -330,6 +343,143 @@ def _upnp_map(port: int) -> str:
         return ""
 
 
+def _is_cgnat(ip: str) -> bool:
+    parts = (ip or "").split(".")
+    if len(parts) != 4:
+        return False
+    try:
+        a, b = int(parts[0]), int(parts[1])
+    except ValueError:
+        return False
+    return a == 100 and 64 <= b <= 127
+
+
+def _pick_relay_url(text: str) -> str:
+    for m in re.finditer(r"https?://[a-zA-Z0-9][a-zA-Z0-9.-]+\.[a-zA-Z]{2,}", text or ""):
+        url = m.group(0).rstrip("/.,)")
+        if url.startswith("http://"):
+            url = "https://" + url[7:]
+        host = (urllib.parse.urlparse(url).hostname or "").lower()
+        if not host or host in ("github.com", "localhost", "127.0.0.1"):
+            continue
+        if host.endswith(".github.com") or host.endswith(".google.com"):
+            continue
+        return url
+    return ""
+
+
+def stop_relay() -> None:
+    global _relay_proc
+    with _relay_lock:
+        proc = _relay_proc
+        _relay_proc = None
+    if not proc:
+        return
+    if proc.poll() is None:
+        try:
+            proc.terminate()
+        except Exception:
+            pass
+        try:
+            proc.wait(timeout=2)
+        except Exception:
+            try:
+                proc.kill()
+            except Exception:
+                pass
+    NET["relay"] = ""
+
+
+def _spawn_relay(cmd: list[str], port: int) -> str:
+    global _relay_proc
+    try:
+        proc = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            stdin=subprocess.DEVNULL,
+        )
+    except Exception:
+        return ""
+    buf = []
+    deadline = time.time() + 18
+
+    def pump() -> None:
+        try:
+            while True:
+                chunk = proc.stdout.read(256)
+                if not chunk:
+                    break
+                buf.append(chunk.decode("utf-8", "ignore"))
+                url = _pick_relay_url("".join(buf[-40:]))
+                if url and not NET.get("relay"):
+                    NET["relay"] = url.rstrip("/")
+                    print(f"Internet table (relay) → {NET['relay']}", flush=True)
+        except Exception:
+            pass
+
+    threading.Thread(target=pump, daemon=True, name="blightnet-relay-log").start()
+    while time.time() < deadline:
+        if NET.get("relay"):
+            with _relay_lock:
+                old = _relay_proc
+                _relay_proc = proc
+            if old and old is not proc and old.poll() is None:
+                try:
+                    old.kill()
+                except Exception:
+                    pass
+            return NET["relay"]
+        if proc.poll() is not None:
+            return ""
+        time.sleep(0.2)
+    if proc.poll() is None and NET.get("relay"):
+        with _relay_lock:
+            _relay_proc = proc
+        return NET["relay"]
+    if proc.poll() is None:
+        try:
+            proc.kill()
+        except Exception:
+            pass
+    return ""
+
+
+def start_relay(port: int) -> None:
+    if NET.get("relay"):
+        return
+    ssh = shutil.which("ssh")
+    cloud = shutil.which("cloudflared")
+    local = f"127.0.0.1:{port}"
+    attempts: list[list[str]] = []
+    if cloud:
+        attempts.append(
+            [cloud, "tunnel", "--no-autoupdate", "--url", f"http://{local}"]
+        )
+    if ssh:
+        ssh_base = [
+            ssh,
+            "-T",
+            "-o",
+            "StrictHostKeyChecking=accept-new",
+            "-o",
+            "ServerAliveInterval=30",
+            "-o",
+            "ExitOnForwardFailure=yes",
+        ]
+        attempts.append(ssh_base + ["-p", "443", "-R", f"0:{local}", "a.pinggy.io"])
+        attempts.append(ssh_base + ["-R", f"80:{local}", "nokey@localhost.run"])
+        attempts.append(ssh_base + ["-R", f"80:{local}", "serveo.net"])
+    for cmd in attempts:
+        print("Internet table: opening a path friends can reach…", flush=True)
+        url = _spawn_relay(cmd, port)
+        if url:
+            return
+        stop_relay()
+    if not NET.get("relay"):
+        print("Internet table: no automatic tunnel. LAN still works. Copy address after Host.", flush=True)
+
+
 def punch_internet(port: int) -> None:
     NET["port"] = port
     wan6 = (ipv6_ips() or [""])[0]
@@ -341,11 +491,15 @@ def punch_internet(port: int) -> None:
         wan = _upnp_map(port) or _natpmp_map(port) or stun_wan_ip() or _http_wan_ip()
     except Exception:
         wan = stun_wan_ip() or _http_wan_ip()
+    if wan and _is_cgnat(wan):
+        print(f"Public IPv4 {wan} is carrier NAT — friends cannot dial it directly.", flush=True)
+        wan = ""
     if wan:
         NET["wan"] = wan
         mapped = " (router opened)" if NET["upnp"] else ""
         print(f"Internet table (IPv4) → http://{wan}:{port}/{mapped}", flush=True)
-    elif not wan6:
+    start_relay(port)
+    if not NET.get("relay") and not wan and not wan6:
         print("Internet table: no public address yet. Join still works on the LAN.", flush=True)
 
 
@@ -1047,6 +1201,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                     "wan": NET.get("wan") or "",
                     "wan6": NET.get("wan6") or "",
                     "upnp": bool(NET.get("upnp")),
+                    "relay": NET.get("relay") or "",
                     "url": f"http://127.0.0.1:{port}/",
                 },
             )

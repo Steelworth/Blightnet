@@ -581,8 +581,9 @@ function tableStatus(text, extra = {}) {
   }
   const box = $("#bn-omnibox");
   if (extra.hosting && extra.share) {
-    if (el) el.title = extra.share;
-    if (box) box.dataset.share = "blightnet://" + extra.share;
+    const raw = String(extra.share).replace(/^(blightnet|blighnet):\/\//i, "");
+    if (el) el.title = raw;
+    if (box) box.dataset.share = /^https?:\/\//i.test(raw) ? raw : "blightnet://" + raw;
   } else if (table.state.role === "idle" && box) {
     delete box.dataset.share;
   }
@@ -1118,7 +1119,11 @@ function applyRemoteMix(mix) {
 const chars = createChars();
 const table = createTable({
   onStatus(text, extra) {
-    if (text === "Hosting") text = "Hosting · Gamemaster";
+    if (text === "Hosting") {
+      const share = $("#table-copy")?.dataset.share;
+      text = share ? "Hosting · Gamemaster · " + String(share).replace(/^https?:\/\//i, "") : "Hosting · Gamemaster";
+      extra = { ...(extra || {}), hosting: true, share: share || extra?.share };
+    }
     tableStatus(text, extra);
   },
   onPeers(peers) {
@@ -1611,8 +1616,15 @@ function tableShareFromInfo(info) {
   const wan = info.wan || "";
   const wan6 = info.wan6 || (info.ip6 && info.ip6[0]) || "";
   const lan = (info.ips && info.ips[0]) || "";
-  const net = wan ? `${wan}:${port}` : wan6 ? `[${wan6}]:${port}` : lan ? `${lan}:${port}` : `127.0.0.1:${port}`;
-  return { port, wan, wan6, lan, net };
+  const relay = String(info.relay || "").replace(/\/+$/, "");
+  const reachableWan = wan && info.upnp ? `${wan}:${port}` : "";
+  const net = relay
+    ? relay.replace(/^https?:\/\//i, "")
+    : lan
+      ? `${lan}:${port}`
+      : reachableWan || (wan6 ? `[${wan6}]:${port}` : wan ? `${wan}:${port}` : `127.0.0.1:${port}`);
+  const copy = relay || (lan ? `${lan}:${port}` : net);
+  return { port, wan, wan6, lan, relay, net, copy, upnp: Boolean(info.upnp) };
 }
 
 async function copyJoinAddress(share) {
@@ -1636,41 +1648,62 @@ async function copyJoinAddress(share) {
   }
 }
 
+function applyHostShare(info) {
+  if (table.state.role !== "host") return;
+  const { net, lan, wan, wan6, port, relay, copy } = tableShareFromInfo(info || {});
+  tableStatus("Hosting · Gamemaster · " + net, { hosting: true, share: copy || net });
+  const copyBtn = $("#table-copy");
+  if (copyBtn) {
+    copyBtn.hidden = false;
+    copyBtn.dataset.share = copy || net;
+  }
+  return { net, lan, wan, wan6, port, relay, copy };
+}
+
 async function hostTable() {
   table.connect(location.origin, "host");
   loadHostMaps();
-  try {
-    const info = await fetchInfo(location.origin);
-    const { net, lan, wan, wan6, port } = tableShareFromInfo(info);
-    if (table.state.role === "host") {
-      tableStatus("Hosting · Gamemaster · " + net, { hosting: true, share: net });
-      const bits = [];
-      if (lan) bits.push("LAN " + lan + ":" + port);
-      if (wan) bits.push("Internet " + wan + ":" + port);
-      else if (wan6) bits.push("Internet [" + wan6 + "]:" + port);
-      pushChat({ sys: true, text: "Table open. You are the Gamemaster. " + (bits.join(" · ") || net) });
-      pushChat({
-        sys: true,
-        text: wan || wan6
-          ? "Friends on other networks open http://" + net + " or Join with that address."
-          : "Other networks: share this address after port 8765 is open on your router, or use the IPv6 link if they have IPv6.",
-      });
-      const copyBtn = $("#table-copy");
-      if (copyBtn) {
-        copyBtn.hidden = false;
-        copyBtn.dataset.share = net;
-      }
+  pushChat({ sys: true, text: "Table open. You are the Gamemaster. Opening a path for friends on other networks…" });
+  let info = {};
+  let share = null;
+  for (let i = 0; i < 24; i++) {
+    try {
+      info = await fetchInfo(location.origin);
+    } catch {
+      info = {};
     }
-  } catch {
-    if (table.state.role === "host") tableStatus("Hosting · Gamemaster");
+    share = applyHostShare(info);
+    if (info.relay || (info.upnp && info.wan && i >= 4)) break;
+    await new Promise((r) => window.setTimeout(r, 500));
   }
+  if (table.state.role !== "host") return;
+  const { net, lan, wan, wan6, port, relay } = share || tableShareFromInfo(info);
+  const bits = [];
+  if (lan) bits.push("LAN " + lan + ":" + port);
+  if (relay) bits.push("Internet " + relay);
+  else if (wan) bits.push("Internet " + wan + ":" + port);
+  else if (wan6) bits.push("Internet [" + wan6 + "]:" + port);
+  pushChat({ sys: true, text: bits.join(" · ") || net });
+  pushChat({
+    sys: true,
+    text: relay
+      ? "Friends anywhere: click Copy address and send that link. They Join with it, or open it in a browser."
+      : wan || wan6
+        ? "Friends on other networks Join with " + net + ". If that fails, their network cannot reach your router — try again, or open port " + port + "."
+        : "No public path yet. Same-house friends use the LAN address. Across the internet, open port " + port + " on your router or install OpenSSH (ssh) so Blightnet can open a tunnel.",
+  });
 }
 
 function joinTable(addr) {
   let raw = String(addr || "").trim();
   if (!raw) return;
   raw = raw.replace(/^(blightnet|blighnet):\/\//i, "");
-  if (!/^https?:\/\//i.test(raw)) raw = "http://" + raw;
+  if (!/^https?:\/\//i.test(raw)) {
+    const hostport = raw.split("/")[0];
+    const ipv4 = /^\d{1,3}(?:\.\d{1,3}){3}(?::\d+)?$/.test(hostport);
+    const ipv6 = hostport.startsWith("[");
+    raw = (ipv4 || ipv6 ? "http://" : "https://") + raw;
+  }
   table.connect(raw, "guest");
   pushChat({ sys: true, text: "Joining " + raw });
 }

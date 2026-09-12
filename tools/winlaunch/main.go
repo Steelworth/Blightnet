@@ -47,6 +47,7 @@ func main() {
 		fmt.Printf("  table  → http://%s:%d/\n", ip, port)
 	}
 	fmt.Println("Leave this window open while you play. Close it to stop.")
+	go punchInternet(port)
 	go openBrowser(url)
 	if err := srv.Serve(ln); err != nil && err != http.ErrServerClosed {
 		fatal("Server stopped: %v", err)
@@ -58,12 +59,17 @@ func newMux(root string, port int, hub *Hub) http.Handler {
 	files := &fileHandler{root: root}
 	mux.HandleFunc("/ws", hub.serveWS)
 	mux.HandleFunc("/api/info", func(w http.ResponseWriter, r *http.Request) {
+		wan, relay, upnp := netSnapshot()
 		writeJSON(w, map[string]any{
-			"ok":   true,
-			"app":  "blightnet",
-			"port": port,
-			"ips":  lanIPs(),
-			"url":  fmt.Sprintf("http://127.0.0.1:%d/", port),
+			"ok":    true,
+			"app":   "blightnet",
+			"port":  port,
+			"ips":   lanIPs(),
+			"wan":   wan,
+			"wan6":  "",
+			"upnp":  upnp,
+			"relay": relay,
+			"url":   fmt.Sprintf("http://127.0.0.1:%d/", port),
 		})
 	})
 	mux.HandleFunc("/__hearthsong", func(w http.ResponseWriter, r *http.Request) {

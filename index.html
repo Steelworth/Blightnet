@@ -829,8 +829,8 @@
             <ol>
               <li>Type your name in <b>Handle</b>. Optional: click the circle for a contact picture.</li>
               <li>Click <b>Host</b> in the yellow bar. Status should change from Offline to <b>Hosting · Gamemaster</b>. You are the GM for this table. Guests see <b>(GM)</b> on your name.</li>
-              <li>Click <b>Copy address</b>. That puts a join code on the clipboard (LAN or internet).</li>
-              <li>Send that address to friends. Same house: they Join with it, or open the http link. Across the internet: they need your WAN address, and port 8765 must be reachable.</li>
+              <li>Click <b>Copy address</b>. That is what friends paste into Join. Same house gets a LAN IP. Other cities get an https link once the internet path is open (a few seconds).</li>
+              <li>Send that address. They click <b>Join</b> and paste it, or open the https link in a browser. They do not need to be on your Wi-Fi.</li>
               <li>You are the source of truth. Your mix and your map are what guests see. Guests can still draw and chat.</li>
             </ol>
           </section>
@@ -840,7 +840,7 @@
             <ol>
               <li>Type your name in <b>Handle</b>. Optional: click the circle for a contact picture.</li>
               <li>Click <b>Join</b>.</li>
-              <li>Paste the host’s address. Examples: <b>192.168.1.20:8765</b> or <b>http://91.2.3.4:8765</b>.</li>
+              <li>Paste the host’s address. Same house: <b>192.168.1.20:8765</b>. Other city: the https link from Copy address.</li>
               <li>Click <b>Join</b> in that box. Status should say you are a guest.</li>
               <li>Open TABLE the same way the host did. Follow the host’s mix. Use <b>Chat</b> to talk.</li>
             </ol>
@@ -987,7 +987,7 @@
             <h2>19 · If something feels broken</h2>
             <ul>
               <li><b>No sound</b> — did you press Light the hearth? Is Master up? Is Silence / Escape latched? Speakers unmuted?</li>
-              <li><b>Friends cannot join</b> — they need the address from Copy address. Same house uses the LAN IP. Across the internet needs the WAN IP and a working path to port 8765.</li>
+              <li><b>Friends cannot join</b> — they need Copy address from the host. Same house: LAN IP. Other city: the https link. Both people keep Blightnet open. If the https link never appears, the host’s PC needs OpenSSH (<code>ssh</code>) so a tunnel can open.</li>
               <li><b>Wrong monitor</b> — INDEX → DISPLAY → click the other plate.</li>
               <li><b>Lost the mixer</b> — you are on INDEX. Click the TABLE tab.</li>
               <li><b>Cannot find Bestiary, NPCs, or Gods</b> — switch the top-bar skin to Hearthsong. Datashard, Faces, Corps, and Lore are Blight only.</li>
@@ -1002,8 +1002,8 @@
     <div class="modal hidden" id="join-modal">
       <div class="modal-card">
         <h1>Join a table</h1>
-        <p>Paste the host’s address. Same house or across the internet — both work. Example: 192.168.1.20:8765 or 91.2.3.4:8765</p>
-        <input id="join-addr" type="text" maxlength="200" placeholder="host address or http://ip:8765" />
+        <p>Paste the host’s Copy address. Same house: an IP like 192.168.1.20:8765. Other city: an https link they sent you.</p>
+        <input id="join-addr" type="text" maxlength="240" placeholder="https://… or 192.168.1.20:8765" />
         <div class="modal-actions">
           <button class="ghost" id="join-cancel">Cancel</button>
           <button class="primary" id="join-confirm">Join</button>
