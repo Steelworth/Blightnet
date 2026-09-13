@@ -193,17 +193,32 @@ func runGit(args ...string) (string, error) {
 	return strings.TrimSpace(string(out)), err
 }
 
+func replaceFile(src, dest string) error {
+	if err := os.Rename(src, dest); err == nil {
+		return nil
+	}
+	_ = os.Remove(dest)
+	if err := os.Rename(src, dest); err != nil {
+		_ = os.Remove(src)
+		return err
+	}
+	return nil
+}
+
 func writeRel(rel string, data []byte) error {
 	dest := filepath.Join(append([]string{updateRoot}, strings.Split(rel, "/")...)...)
 	if err := os.MkdirAll(filepath.Dir(dest), 0755); err != nil {
 		return err
 	}
+	base := filepath.Base(rel)
+	if strings.EqualFold(base, "Blightnet.exe") || strings.EqualFold(base, "Hearthsong.exe") {
+		return os.WriteFile(dest+".new", data, 0644)
+	}
 	tmp := dest + ".blightnet-new"
 	if err := os.WriteFile(tmp, data, 0644); err != nil {
 		return err
 	}
-	if err := os.Rename(tmp, dest); err != nil {
-		_ = os.Remove(tmp)
+	if err := replaceFile(tmp, dest); err != nil {
 		return err
 	}
 	return nil
@@ -359,6 +374,9 @@ func tryAPIUpdate() error {
 		have := ""
 		if b, err := os.ReadFile(dest); err == nil {
 			have = gitBlobSHA(b)
+		}
+		if sidecar, err := os.ReadFile(dest + ".new"); err == nil && e.SHA != "" && gitBlobSHA(sidecar) == e.SHA {
+			have = e.SHA
 		}
 		if have != "" && e.SHA != "" && have == e.SHA {
 			continue

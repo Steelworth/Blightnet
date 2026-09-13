@@ -10,7 +10,6 @@ import (
 	"net"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -65,6 +64,7 @@ func newMux(root string, port int, hub *Hub) http.Handler {
 			"app":   "blightnet",
 			"port":  port,
 			"ips":   lanIPs(),
+			"ip6":   []string{},
 			"wan":   wan,
 			"wan6":  "",
 			"upnp":  upnp,
@@ -94,6 +94,33 @@ func newMux(root string, port int, hub *Hub) http.Handler {
 			return
 		}
 		handleUpload(w, r, hub)
+	})
+	mux.HandleFunc("/api/quit", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, map[string]any{"ok": true})
+		go func() {
+			time.Sleep(250 * time.Millisecond)
+			scheduleExeSwap()
+			os.Exit(0)
+		}()
+	})
+	mux.HandleFunc("/api/displays", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, map[string]any{"ok": true, "displays": listDisplays()})
+	})
+	mux.HandleFunc("/api/display", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "method", http.StatusMethodNotAllowed)
+			return
+		}
+		var body struct {
+			Name string `json:"name"`
+		}
+		_ = json.NewDecoder(io.LimitReader(r.Body, 4096)).Decode(&body)
+		rec := placeOnDisplay(body.Name)
+		if rec == nil {
+			writeJSONStatus(w, 400, map[string]any{"ok": false, "error": "unknown display"})
+			return
+		}
+		writeJSON(w, map[string]any{"ok": true, "display": rec, "displays": listDisplays()})
 	})
 	mux.Handle("/uploads/", http.StripPrefix("/uploads/", http.FileServer(http.Dir(hub.uploadDir))))
 	mux.Handle("/", files)
@@ -326,21 +353,6 @@ func lanIPs() []string {
 		}
 	}
 	return found
-}
-
-func openBrowser(u string) {
-	time.Sleep(250 * time.Millisecond)
-	app := [][]string{
-		{"cmd", "/C", "start", "", "msedge", "--app=" + u},
-		{"cmd", "/C", "start", "", "chrome", "--app=" + u},
-	}
-	for _, c := range app {
-		cmd := exec.Command(c[0], c[1:]...)
-		if err := cmd.Start(); err == nil {
-			return
-		}
-	}
-	_ = exec.Command("cmd", "/C", "start", "", u).Start()
 }
 
 func fatal(format string, args ...any) {

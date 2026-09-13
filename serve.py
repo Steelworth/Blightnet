@@ -921,6 +921,11 @@ def _write_rel(rel: str, data: bytes) -> None:
     parent = os.path.dirname(dest)
     if parent:
         os.makedirs(parent, exist_ok=True)
+    base = os.path.basename(rel)
+    if sys.platform == "win32" and base in ("Blightnet.exe", "Hearthsong.exe"):
+        with open(dest + ".new", "wb") as f:
+            f.write(data)
+        return
     tmp = dest + ".blightnet-new"
     with open(tmp, "wb") as f:
         f.write(data)

@@ -30,8 +30,8 @@ type fileRec struct {
 }
 
 type Hub struct {
-	mu       sync.Mutex
-	clients  map[string]*wsClient
+	mu        sync.Mutex
+	clients   map[string]*wsClient
 	lastMix   any
 	lastMap   any
 	lastChars map[string]map[string]any

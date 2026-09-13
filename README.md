@@ -36,16 +36,18 @@ Then follow **Windows**, **Linux**, or **macOS** below. **02 UPDATE** can fast-f
 
 ### Windows
 
-You do **not** need Python.
+You do **not** need Python or Git.
 
-1. Open the unzipped **`Blightnet-main`** folder (or the `Blightnet` folder from git).
-2. Double-click **`Blightnet.exe`**. If that is missing, double-click **`start.bat`**.
+1. Open the unzipped **`Blightnet-main`** folder (or the `Blightnet` folder from git). You should see **`Blightnet.exe`** next to **`index.html`**.
+2. Double-click **`Blightnet.exe`**. If Windows blocks it, use **`start.bat`** instead (it unblocks the launcher, then starts it).
 3. A black console stays open — that is the server. Leave it open.
-4. Blightnet tries to open as its own window. If it does not, open a browser to **http://127.0.0.1:8765**.
+4. Edge or Chrome should open as a Blightnet window. If nothing appears, read the console and open **http://127.0.0.1:8765** yourself.
 
-Closing the console stops the table. You do not need the `tools` folder on Windows.
+Closing the console (or INDEX **00 DISCONNECT**) stops the table. You do not need the `tools` folder on Windows.
 
-If Windows SmartScreen warns about an unknown app, choose **More info** → **Run anyway**. That is the local launcher, not a download from the Store.
+If Windows SmartScreen warns about an unknown app: **More info** → **Run anyway**. That is the local launcher, not a Store download.
+
+If Windows Firewall asks, allow **Blightnet** on a private network so friends on the same house Wi-Fi can Join.
 
 ### Linux
 
@@ -220,7 +222,9 @@ No account. No internet after you have the folder, except joining a table on you
 
 | What you see | What to do |
 | --- | --- |
-| “Run start.sh first” | Do not open `index.html` from the folder. Windows: `Blightnet.exe`. Linux/Mac: `./start.sh`. Then **http://127.0.0.1:8765** |
+| “Run start.sh first” | Do not open `index.html` from the folder. Windows: `Blightnet.exe` (or `start.bat`). Linux/Mac: `./start.sh`. Then **http://127.0.0.1:8765** |
+| Windows SmartScreen | **More info** → **Run anyway**. Or double-click `start.bat`. |
+| Windows: no window | Leave the black console open. Open **http://127.0.0.1:8765**. |
 | No sound after Light the hearth | Click the page once. Unmute the tab. |
 | Sound stopped | Click the page. Some browsers pause when you leave the tab. |
 | Port 8765 is busy | The starter picks another port and prints it. |
