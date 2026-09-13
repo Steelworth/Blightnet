@@ -11,10 +11,13 @@ import { createChars, resizeImage } from "./chars.js";
 import { createBestiary } from "./bestiary.js";
 import { createDatashard } from "./datashard.js";
 import { createKit } from "./kit.js";
+import { createVendors } from "./vendors.js";
+import { createBlackjack } from "./blackjack.js";
 import { createCorps } from "./corps.js";
 import { createNpcs, KINDS_SRD } from "./npcs.js";
 import { createGods } from "./gods.js";
 import { createLore } from "./lore.js";
+import { createGangs } from "./gangs.js";
 import {
   paintRadioChip,
   stationForMood,
@@ -46,6 +49,7 @@ const ui = {
   time: HOURS.includes(localStorage.getItem("hearthsong.time"))
     ? localStorage.getItem("hearthsong.time")
     : "day",
+  clock: loadClock(),
   setting: settingById(localStorage.getItem("hearthsong.setting")).id,
   custom: loadCustom(),
   musicMood: "all",
@@ -588,6 +592,7 @@ function tableStatus(text, extra = {}) {
     delete box.dataset.share;
   }
   syncBnChrome();
+  paintWatch();
 }
 
 function loadContacts() {
@@ -1080,6 +1085,7 @@ function currentMix() {
     scene: ui.scene,
     setting: ui.setting,
     time: ui.time,
+    clock: ui.clock,
     place: ui.place,
     master: mixer.masterVolume,
   };
@@ -1103,7 +1109,8 @@ function applyRemoteMix(mix) {
   mixer.resume();
   try {
     if (mix.setting) setSetting(mix.setting, true);
-    if (mix.time) setTime(mix.time, true);
+    if (mix.clock != null && mix.clock !== "") setClock(mix.clock, true);
+    else if (mix.time) setTime(mix.time, true);
     if (mix.place) setPlace(mix.place, true);
     if (mix.scene) ui.scene = mix.scene;
     mixer.applyScene({ layers: mix.layers || {} }, 0.8);
@@ -1288,6 +1295,8 @@ chars.setNet({
 const bestiary = createBestiary();
 const datashard = createDatashard();
 const kit = createKit();
+const vendors = createVendors(chars);
+const blackjack = createBlackjack(chars);
 const corps = createCorps();
 const npcs = createNpcs();
 const srdNpcs = createNpcs({
@@ -1304,9 +1313,10 @@ const srdNpcs = createNpcs({
 });
 const gods = createGods();
 const lore = createLore();
+const gangs = createGangs();
 
 function closeCatalogs(keep) {
-  const boards = { bestiary, datashard, kit, corps, npcs, srdNpcs, gods, lore };
+  const boards = { bestiary, datashard, kit, vendors, corps, npcs, srdNpcs, gods, lore, gangs };
   for (const [name, board] of Object.entries(boards)) {
     if (name !== keep) board.closeBoard();
   }
@@ -1793,6 +1803,7 @@ function holdMix() {
     scene: ui.scene,
     setting: ui.setting,
     time: ui.time,
+    clock: ui.clock,
     place: ui.place,
     musicMood: ui.musicMood,
     playlist: ui.playlist
@@ -1844,7 +1855,8 @@ function fadeMix() {
   if (!held || !Object.keys(held.layers || {}).length) return;
   ui.scene = held.scene;
   if (held.setting) setSetting(held.setting, true);
-  if (held.time) setTime(held.time, true);
+  if (held.clock != null) setClock(held.clock, true);
+  else if (held.time) setTime(held.time, true);
   if (held.place) setPlace(held.place, true);
   if (held.musicMood) ui.musicMood = held.musicMood;
   if (held.playlist) {
@@ -1951,6 +1963,106 @@ function setPlace(place, fromNet = false) {
   broadcastMix();
 }
 
+function wrapClock(n) {
+  n = Math.round(Number(n) || 0) % 1440;
+  if (n < 0) n += 1440;
+  return n;
+}
+
+function periodFromClock(mins) {
+  const t = wrapClock(mins);
+  if (t >= 21 * 60 || t < 6 * 60) return "night";
+  if (t < 11 * 60) return "morning";
+  if (t < 17 * 60) return "day";
+  return "evening";
+}
+
+function clockFromPeriod(period) {
+  return { morning: 7 * 60, day: 13 * 60, evening: 18 * 60 + 30, night: 23 * 60 }[period] ?? 13 * 60;
+}
+
+function formatClock(mins) {
+  const t = wrapClock(mins);
+  const h = String(Math.floor(t / 60)).padStart(2, "0");
+  const m = String(t % 60).padStart(2, "0");
+  return h + ":" + m;
+}
+
+function parseClock(value) {
+  const hit = String(value || "").match(/^(\d{1,2}):(\d{2})/);
+  if (!hit) return null;
+  const h = Math.max(0, Math.min(23, Number(hit[1])));
+  const m = Math.max(0, Math.min(59, Number(hit[2])));
+  return h * 60 + m;
+}
+
+function loadClock() {
+  const raw = localStorage.getItem("hearthsong.clock");
+  if (raw != null && raw !== "") {
+    const n = Number(raw);
+    if (Number.isFinite(n)) return wrapClock(n);
+  }
+  const time = HOURS.includes(localStorage.getItem("hearthsong.time"))
+    ? localStorage.getItem("hearthsong.time")
+    : "day";
+  return clockFromPeriod(time);
+}
+
+function paintWatch() {
+  const mins = wrapClock(ui.clock);
+  const digits = formatClock(mins);
+  const period = periodFromClock(mins);
+  const names = { morning: "Morning", day: "Day", evening: "Evening", night: "Night" };
+  const hh = Math.floor(mins / 60);
+  const mm = mins % 60;
+  const hourDeg = ((hh % 12) + mm / 60) * 30;
+  const minDeg = mm * 6;
+  $("#watch-hour")?.setAttribute("transform", `rotate(${hourDeg} 32 32)`);
+  $("#watch-min")?.setAttribute("transform", `rotate(${minDeg} 32 32)`);
+  const dig = $("#watch-digits");
+  if (dig) dig.textContent = digits;
+  const per = $("#watch-period");
+  if (per) per.textContent = names[period] || period;
+  const stamp = $("#bn-status-time");
+  if (stamp) stamp.textContent = digits;
+  const deckClk = $("#net-deck-clk");
+  if (deckClk) deckClk.textContent = digits;
+  const face = $("#game-watch");
+  if (face) {
+    face.dataset.period = period;
+    face.title = mixLocked()
+      ? "In-game time " + digits + " (" + (names[period] || period) + "). The host sets the clock."
+      : "In-game time " + digits + " (" + (names[period] || period) + "). Click to set.";
+  }
+  const locked = mixLocked();
+  const slider = $("#watch-slider");
+  if (slider) {
+    if (document.activeElement !== slider) slider.value = String(mins);
+    slider.disabled = locked;
+  }
+  const input = $("#watch-hhmm");
+  if (input) {
+    if (document.activeElement !== input) input.value = digits;
+    input.disabled = locked;
+  }
+  $("#watch-back") && ($("#watch-back").disabled = locked);
+  $("#watch-fwd") && ($("#watch-fwd").disabled = locked);
+  const hint = $("#watch-hint");
+  if (hint) {
+    hint.textContent = mixLocked()
+      ? "The host sets the clock. You still see it."
+      : "Slider, type a time, or Morning / Day / Evening / Night. The painting follows.";
+  }
+}
+
+function setWatchPop(open) {
+  const pop = $("#watch-pop");
+  const btn = $("#game-watch");
+  if (!pop || !btn) return;
+  pop.hidden = !open;
+  btn.setAttribute("aria-expanded", String(Boolean(open)));
+}
+
 function syncTime() {
   for (const hour of HOURS) {
     const btn = $(`#time-${hour}`);
@@ -1960,15 +2072,22 @@ function syncTime() {
   }
   document.body.dataset.time = ui.time;
   paintSky();
+  paintWatch();
 }
 
-function setTime(time, fromNet = false) {
+function setClock(mins, fromNet = false) {
   if (mixLocked() && !fromNet) return;
-  ui.time = HOURS.includes(time) ? time : "day";
+  ui.clock = wrapClock(mins);
+  ui.time = periodFromClock(ui.clock);
+  localStorage.setItem("hearthsong.clock", String(ui.clock));
   localStorage.setItem("hearthsong.time", ui.time);
   mixer.setTime(ui.time, 0.7);
   syncTime();
-  broadcastMix();
+  if (!fromNet) broadcastMix();
+}
+
+function setTime(time, fromNet = false) {
+  setClock(clockFromPeriod(HOURS.includes(time) ? time : "day"), fromNet);
 }
 
 function syncSetting() {
@@ -2210,10 +2329,22 @@ function syncBestiaryTheme() {
   const loreBtn = $("#lore-toggle");
   if (loreBtn) loreBtn.hidden = !blight;
   if (!blight) lore.closeBoard();
+  const gangBtn = $("#gang-toggle");
+  if (gangBtn) gangBtn.hidden = !blight;
+  if (!blight) gangs.closeBoard();
+  const bjBtn = $("#bj-toggle");
+  if (bjBtn) bjBtn.hidden = !blight;
+  const launchBj = $("#launch-bj");
+  if (launchBj) launchBj.hidden = !blight;
+  if (!blight) blackjack.close();
   if (kitBtn) {
     kitBtn.hidden = false;
     kitBtn.innerHTML = icon("swords") + (blight ? "Night Market" : "Armory");
   }
+  const vendorBtn = $("#vendor-toggle");
+  if (vendorBtn) vendorBtn.innerHTML = icon("market") + "Vendors";
+  vendors.syncTheme();
+  blackjack.paint();
   if (blight) bestiary.closeBoard();
   else datashard.closeBoard();
   kit.syncTheme();
@@ -2389,7 +2520,7 @@ function paintDisplays(list) {
     .map((d) => {
       const hz = d.hz ? ` · ${d.hz} Hz` : "";
       const on = d.on ? " on" : "";
-      return `<button type="button" class="launch-screen-btn${on}" data-display="${escapeHtml(d.name)}"><b>${escapeHtml(d.name)}</b><small>${d.w}×${d.h}${hz}</small></button>`;
+      return `<button type="button" class="launch-screen-btn${on}" data-display="${escapeHtml(d.name)}"><span class="net-mon-glass" aria-hidden="true"></span><b>${escapeHtml(d.name)}</b><small>${d.w}×${d.h}${hz}</small></button>`;
     })
     .join("");
 }
@@ -2458,10 +2589,10 @@ function syncBnChrome() {
   if (fwd) fwd.disabled = bnPage === "hearthsong" || !hearthsongOpened;
   document.title = bnPage === "hearthsong" ? "Blightnet — table" : "Blightnet";
   const link = $("#bn-status-link");
-  if (link) {
-    link.textContent =
-      table.state.role === "host" ? "HOST" : table.state.role === "guest" ? "GUEST" : "LOCAL";
-  }
+  const role = table.state.role === "host" ? "HOST" : table.state.role === "guest" ? "GUEST" : "LOCAL";
+  if (link) link.textContent = role;
+  const deckLink = $("#net-deck-link");
+  if (deckLink) deckLink.textContent = role;
   const page = $("#bn-status-page");
   if (page) page.textContent = bnPage === "hearthsong" ? "TABLE" : "INDEX";
 }
@@ -2785,7 +2916,7 @@ function bind() {
         renderScenes();
         return;
       }
-      if ((fieldId === "beast-search" || fieldId === "shard-search" || fieldId === "kit-search" || fieldId === "corp-search" || fieldId === "npc-search" || fieldId === "srdnpc-search" || fieldId === "god-search" || fieldId === "lore-search") && e.target.value) {
+      if ((fieldId === "beast-search" || fieldId === "shard-search" || fieldId === "kit-search" || fieldId === "vendor-search" || fieldId === "corp-search" || fieldId === "npc-search" || fieldId === "srdnpc-search" || fieldId === "god-search" || fieldId === "lore-search" || fieldId === "gang-search") && e.target.value) {
         e.target.value = "";
         e.target.dispatchEvent(new Event("input", { bubbles: true }));
         return;
@@ -2795,6 +2926,10 @@ function bind() {
     }
     if ($("#setting-list") && !$("#setting-list").hidden) {
       toggleSettingMenu(false);
+      return;
+    }
+    if ($("#watch-pop") && !$("#watch-pop").hidden) {
+      setWatchPop(false);
       return;
     }
     if (!$("#join-modal")?.classList.contains("hidden")) {
@@ -2835,6 +2970,63 @@ function bind() {
   }
   mixer.time = ui.time;
   mixer.place = ui.place;
+  ui.time = periodFromClock(ui.clock);
+  paintWatch();
+  let watchDrag = false;
+  let watchMoved = false;
+  const watchFace = $("#game-watch");
+  const clockFromPointer = (ev) => {
+    const svg = watchFace?.querySelector("svg");
+    if (!svg) return ui.clock;
+    const r = svg.getBoundingClientRect();
+    const x = ev.clientX - (r.left + r.width / 2);
+    const y = ev.clientY - (r.top + r.height / 2);
+    let deg = (Math.atan2(y, x) * 180) / Math.PI + 90;
+    if (deg < 0) deg += 360;
+    const mins12 = Math.round((deg / 360) * 12 * 60) % (12 * 60);
+    return ui.clock >= 12 * 60 ? mins12 + 12 * 60 : mins12;
+  };
+  watchFace?.addEventListener("pointerdown", (e) => {
+    if (!e.target.closest("svg") || mixLocked()) return;
+    watchDrag = true;
+    watchMoved = false;
+    e.preventDefault();
+    watchFace.setPointerCapture?.(e.pointerId);
+    setClock(clockFromPointer(e));
+  });
+  watchFace?.addEventListener("pointermove", (e) => {
+    if (!watchDrag) return;
+    watchMoved = true;
+    setClock(clockFromPointer(e));
+  });
+  watchFace?.addEventListener("pointerup", () => {
+    watchDrag = false;
+  });
+  watchFace?.addEventListener("click", (e) => {
+    e.stopPropagation();
+    if (watchMoved) {
+      watchMoved = false;
+      return;
+    }
+    const pop = $("#watch-pop");
+    setWatchPop(Boolean(pop?.hidden));
+  });
+  $("#watch-slider")?.addEventListener("input", (e) => setClock(e.target.value));
+  $("#watch-hhmm")?.addEventListener("change", (e) => {
+    const n = parseClock(e.target.value);
+    if (n != null) setClock(n);
+  });
+  $("#watch-back")?.addEventListener("click", (e) => {
+    e.stopPropagation();
+    setClock(ui.clock - 15);
+  });
+  $("#watch-fwd")?.addEventListener("click", (e) => {
+    e.stopPropagation();
+    setClock(ui.clock + 15);
+  });
+  document.addEventListener("click", (e) => {
+    if (!e.target.closest(".game-watch-wrap")) setWatchPop(false);
+  });
   const nameInput = $("#profile-name");
   if (nameInput) {
     nameInput.value = profileName();
@@ -2996,11 +3188,14 @@ function bind() {
   bestiary.bind();
   datashard.bind();
   kit.bind();
+  vendors.bind();
+  blackjack.bind();
   corps.bind();
   npcs.bind();
   srdNpcs.bind();
   gods.bind();
   lore.bind();
+  gangs.bind();
   $("#bestiary-toggle")?.addEventListener("click", () => {
     closeCatalogs("bestiary");
     bestiary.toggle();
@@ -3012,6 +3207,10 @@ function bind() {
   $("#kit-toggle")?.addEventListener("click", () => {
     closeCatalogs("kit");
     kit.toggle();
+  });
+  $("#vendor-toggle")?.addEventListener("click", () => {
+    closeCatalogs("vendors");
+    vendors.toggle();
   });
   $("#corp-toggle")?.addEventListener("click", () => {
     closeCatalogs("corps");
@@ -3028,6 +3227,10 @@ function bind() {
   $("#god-toggle")?.addEventListener("click", () => {
     closeCatalogs("gods");
     gods.toggle();
+  });
+  $("#gang-toggle")?.addEventListener("click", () => {
+    closeCatalogs("gangs");
+    gangs.toggle();
   });
   $("#lore-toggle")?.addEventListener("click", () => {
     closeCatalogs("lore");
@@ -3295,6 +3498,9 @@ function bind() {
   $("#srdnpc-toggle") && ($("#srdnpc-toggle").innerHTML = icon("hero") + "NPCs");
   $("#god-toggle") && ($("#god-toggle").innerHTML = icon("bestiary") + "Gods");
   $("#lore-toggle") && ($("#lore-toggle").innerHTML = icon("book") + "Lore");
+  $("#gang-toggle") && ($("#gang-toggle").innerHTML = icon("mask") + "Gangs");
+  const gangIco = document.querySelector(".gang-search-ico");
+  if (gangIco) gangIco.innerHTML = icon("search");
   const loreIco = document.querySelector(".lore-search-ico");
   if (loreIco) loreIco.innerHTML = icon("search");
   const godIco = document.querySelector(".god-search-ico");
@@ -3308,6 +3514,10 @@ function bind() {
   $("#kit-toggle") && ($("#kit-toggle").innerHTML = icon("swords") + (currentTheme() === "blight" ? "Night Market" : "Armory"));
   const kitIco = document.querySelector(".kit-search-ico");
   if (kitIco) kitIco.innerHTML = icon("search");
+  const vendorIco = document.querySelector(".vendor-search-ico");
+  if (vendorIco) vendorIco.innerHTML = icon("search");
+  $("#vendor-toggle") && ($("#vendor-toggle").innerHTML = icon("market") + "Vendors");
+  $("#bj-toggle") && ($("#bj-toggle").innerHTML = "21");
   const beastIco = document.querySelector("#bestiary-board .beast-search .search-ico");
   if (beastIco) beastIco.innerHTML = icon("search");
   const shardIco = document.querySelector(".shard-search-ico");

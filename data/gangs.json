@@ -1,0 +1,1727 @@
+[
+  {
+    "id": "maelstrom",
+    "name": "Maelstrom",
+    "kind": "booster",
+    "era": "2020 · 2045 · 2077",
+    "status": "Active",
+    "turf": "Northside Industrial District, northern Kabuki, the Hot Zone, Old Japantown edges",
+    "look": "Exposed chrome, red optics, leather, cables, the gang mark etched into metal",
+    "leader": "Warlock (2045) · Royce and Brick (2077, All Foods plant)",
+    "origin": "Maelstrom is what crawled out of three funerals. In the late 2010s the Metal Warriors were a Combat Zone boostergang that treated flesh as a first draft. The Inquisitors nearly erased them for the sin of chrome. Survivors, plus leftovers from the Iron Sights and the Red Chrome Legion, welded themselves into a new name: Maelstrom — a word that means you do not swim out. By 2020 they were already a rumor with a body count. By 2045 Warlock had turned the rumor into a syndicate: smuggling, extortion, hired murder, and a philosophy that meat is a warranty problem. By 2077 they own the All Foods plant in Northside and the Totentanz, and the street still flinches when red eyes catch a headlamp.",
+    "text": "A Maelstrom ganger is easy to spot and hard to talk down. They install until the human outline is a suggestion: wolvers, skinweave, optics that never blink, pain editors that make interrogation a waste of time. Cyberpsychosis is not a warning label for them. It is a promotion track. The gang sells smash, Black Lace, stolen military chrome, and the kind of heist that ends with a warehouse full of holes.\n\nThey do not hold turf the way Valentinos do. They hold industrial wreckage and dare anyone to want it. NCPD writes them off as a MaxTac problem. Trauma Team will not land without a paid corridor. Edgerunners who take a Maelstrom gig should assume the client is also the ambush.\n\nThe name is the creed. Once you are in the whirlpool, the only way out is as parts.",
+    "hooks": [
+      "Warlock (or Royce) wants a crate of milspec chrome lifted from a Militech lockup before Inquisitors torch it.",
+      "A ganger is mid-cyberpsycho break in Northside. MaxTac is eight minutes out. The party is closer.",
+      "Someone etched the Maelstrom mark on a Forlorn Hope regular. The Hope wants the name, not a war."
+    ]
+  },
+  {
+    "id": "tyger-claws",
+    "name": "Tyger Claws",
+    "aka": "虎鉤衆 · Tyger's Claw (2020)",
+    "kind": "crime",
+    "era": "2020 · 2045 · 2077",
+    "status": "Active",
+    "turf": "Japantown, Kabuki, Charter Hill, Little China edges, Watson Development",
+    "look": "Embroidered jackets, reflex chrome, katanas, bikes, jewelry or tattoos of the claw",
+    "leader": "Hayato / Shinobu the Second (2045) · Jun Azegami and cell bosses (2077)",
+    "origin": "They started as a Japantown protector crew in the 2010s: kids with martial arts, cheap boosters, and Arasaka money in the background. The 2020 street called them Tyger's Claw. They kept Japanese families safe from the Combat Zone spillover and collected for the privilege. After the Fourth Corporate War, Arasaka's leash slipped. Hayato took more chrome to dull the pain of an empire that would not sit still, and Maelstrom tried to eat Old Japantown. The Claws did not give it to them. By 2077 they are the largest street gang in the city — five thousand plus — running clubs, dens, casinos, and the kind of protection that comes with a bill and a blade.",
+    "text": "Tyger Claws look like a night out until they do not. They own more legitimate fronts than any other crew: karaoke, noodles, bikes, rooms you should not ask the hourly rate of. Under the lanterns it is yakuza math. Honor is a costume they wear in front of the block and take off in the back room.\n\nThey prefer speed — Sandevistan, bikes, katanas — over the full-borg religion of Maelstrom. That does not make them gentle. The Mox exist because Claws killed Lizzie Borden and decided the lesson was not finished. Wakako Okada has made a career out of being the fixer who can still pick up a Claw phone.\n\nIf you work Japantown, you pay them, you join them, or you leave before last call.",
+    "hooks": [
+      "A Kabuki club wants the party to retrieve a stolen Kendachi blade before the Claws notice it moved.",
+      "Hayato (or a 2077 cell boss) will pay outsiders to hit a Maelstrom chop-shop his people cannot be seen near.",
+      "A Mox runner asks for proof that a Claw lieutenant ordered a beating. Proof is rarer than the beating."
+    ]
+  },
+  {
+    "id": "valentinos",
+    "name": "Valentinos",
+    "aka": "Valentino's (2020 spelling)",
+    "kind": "crime",
+    "era": "2020 · 2045 · 2077",
+    "status": "Active",
+    "turf": "Heywood, the Glen, Vista del Rey, Santo Domingo edges",
+    "look": "Gold, roses, saints, lowriders, church candles, family ink",
+    "leader": "Padre and block captains (2045–2077) · family tables, not a single throne",
+    "origin": "The Valentinos grew out of Heywood's Latino neighborhoods when the city still pretended those streets had a police department. In the 2010s they were already a family gang: protection, pride, a dress code, and a church calendar. The 2020 books spelled them Valentino's. The apostrophe fell off. The rules did not. They survived the Fourth Corporate War by being the one crew that still buried its dead with a priest in the room. By 2045 Padre was the quiet center of gravity. By 2077 they are Heywood's other government — honor, vendetta, lowriders, and a punishment for every sin that has a name.",
+    "text": "Valentinos will feed you, dance with you, and kill you for disrespecting a cousin. They are not Maelstrom. They have mothers and saints and a sense of the block as a living thing. That makes them more dangerous in their own zip code, not less. Outsiders who treat them like a booster gang learn that the gold is not costume jewelry.\n\nThey run cars, protection, street pharmacies, and the kind of funeral that shuts a whole avenue. Jackie Welles came out of this water. So did a lot of people who never got a drink named after them.\n\n6th Street shares Heywood and pretends that makes them neighbors. It does not.",
+    "hooks": [
+      "Padre wants a stolen lowrider returned before a funeral. The thieves are 6th Street kids who thought it was a joke.",
+      "A Valentino cousin took a gig in Pacifica and did not come back. The family will pay for a body or a name.",
+      "A church on the Glen is being taxed by a new crew. The Valentinos will not fire first in a nave. They will hire someone who will."
+    ]
+  },
+  {
+    "id": "sixth-street",
+    "name": "6th Street",
+    "aka": "The Street · Davis Squad (a cell)",
+    "kind": "guardian",
+    "era": "2045 · 2077",
+    "status": "Active",
+    "turf": "Vista del Rey, the Glen, North Heywood, Rancho Coronado, Little Europe edges",
+    "look": "NUSA surplus, faded flags, block-watch armor, militia haircuts",
+    "leader": "Solomon \"X\" Wright and veteran captains (2045) · militia councils (2077)",
+    "origin": "6th Street was born from people who came home from the Fourth Corporate War and found NCPD was a rumor with a badge. Veterans in Vista del Rey stacked sandbags, issued radios, and told the block they were the law now. In 2045 they still looked like a neighborhood watch that had gotten into surplus crates. By the Unification War they had practiced being an army. By 2077 the watch is a racket: checkpoints, smuggling, 'security' contracts, and a patriotic brand that covers a lot of graves.",
+    "text": "They will tell you they protect Heywood. Sometimes they do. They also shake down the same bodegas they 'saved,' run guns, and pick fights with Valentinos over whose mural stays on which wall. The surplus gear is real. So is the veteran skill. So is the slide from guardian gang to PMC that forgot who hired it.\n\nDavis Squad and other cells have their own grudges. Treat 6th Street as one animal and you will be surprised by the teeth in the next alley.\n\nIf a checkpoint asks for papers in Heywood, smile. If they ask for your chrome serials, you are already in a scene.",
+    "hooks": [
+      "X Wright wants proof a Militech stash is feeding Maelstrom, not the block.",
+      "A 6th Street checkpoint 'lost' a nomad convoy's papers. The Aldecaldos will pay to get the people back.",
+      "A veteran in the Willows says 6th Street is recruiting her patients as muscle. She wants it stopped quietly."
+    ]
+  },
+  {
+    "id": "voodoo-boys",
+    "name": "Voodoo Boys",
+    "kind": "net",
+    "era": "2020 · 2045 · 2077",
+    "status": "Active (two different crews have worn the name)",
+    "turf": "2045: Pacifica Playground, Rancho Coronado drug corners · 2077: Pacifica, the Grand Imperial wreck, the Old NET",
+    "look": "2045 posers in Hollywood 'voodoo' fashion · 2077 netrunners in white, veves, decks, and silence",
+    "leader": "Baron D (2045 posers) · Placide and the houngans (2077 Pacifica nation)",
+    "origin": "The name is a theft that became a nation. In 2020 and still in 2045, a poser/drug crew draped itself in Hollywood voodoo, sold product, and lost ground to the Piranhas. They were violent tourists. The Haitian community in Pacifica — the people who actually had rites, language, and a reason to hide — took the insult and outlived it. After the Fourth Corporate War and the collapse of the Old NET, Pacifica's netrunners built a church out of ice and black ice. By 2077 the Voodoo Boys are not a fashion. They are the only crew that treats the Blackwall as a door instead of a fence, and they will kill a tourist for knocking.",
+    "text": "Do not confuse the 2045 posers with the 2077 nation. The posers mug, deal, and dress for a camera. The Pacifica Boys run the NET the way a houngan runs a rite: initiation, secrecy, and a body if you talk. They hired outsiders only when the job would get a citizen killed. They burn the outsiders after.\n\nAnimals share Pacifica and want the mall. The Boys want the cables under the mall. That war is still on the map.\n\nIf a client says they can get you past the Blackwall, they are lying, or they are a Voodoo Boy, or you are already dead.",
+    "hooks": [
+      "A 2045 Baron D wants a Piranha shoal embarrassed, not killed. The embarrassment should make the news.",
+      "A 2077 houngan needs a meat body to walk into a corp icebox their runners cannot physically enter.",
+      "Someone in the party has a Haitian grandmother's veve as a tattoo. A Pacifica runner wants to know why."
+    ]
+  },
+  {
+    "id": "animals",
+    "name": "Animals",
+    "kind": "booster",
+    "era": "2077",
+    "status": "Active",
+    "turf": "Pacifica, Santo Domingo gyms, the Grand Imperial Mall, underground fight circuits",
+    "look": "Combat-drug muscle, tank tops, veins, little chrome compared to the mass",
+    "leader": "Pack bosses and pit promoters, not a single king",
+    "origin": "The Animals are a 2070s answer to a city that sells strength in a syringe. They grew out of Santo Domingo gyms, Pacifica wrecks, and the underground fight economy — people who decided the next evolution was not a neural link but a body that could throw a car. They are boosters who mostly skip the obvious metal and go for grafted tissue, hormones, and the kind of 'dorphs that make a heart a countdown. By 2077 they own pits in the Grand Imperial Mall and a turf war with the Voodoo Boys that is less ideology than gravity: two big animals in one ruined district.",
+    "text": "You do not out-box an Animal. You out-think one, or you bring a gun and a plan for the second Animal behind you. They run fights, muscle jobs, and the drug pipeline that keeps the pits full. Close combat is a religion. Smartguns are for people who missed leg day.\n\nThey are not stupid. Promoters who last a year can count. Packs that last five years can read a contract. Treat them like dumb meat and you become the undercard.\n\nPacifica at night is their gym. The mall is the locker room. The street is the ring.",
+    "hooks": [
+      "A pit boss wants a ringer to throw a fight without looking like they threw it.",
+      "Voodoo Boys paid to have an Animal pack's juice cut with something that causes heart failure. The pack wants the chemist.",
+      "A Santo gym is 'recruiting' with broken kneecaps. The owner will pay for a week of peace."
+    ]
+  },
+  {
+    "id": "mox",
+    "name": "The Mox",
+    "aka": "Moxes",
+    "kind": "guardian",
+    "era": "2070s · 2077",
+    "status": "Active",
+    "turf": "Kabuki, Lizzie's Bar, Watson's working doors",
+    "look": "Pink and electric hair, bats, patched jackets, heart-and-bat iconography",
+    "leader": "The memory of Anna Nox and Lizzie Borden · bar captains at Lizzie's",
+    "origin": "The Mox are new by Night City standards and old by the standards of people who work doors. Anna 'Mox' Nox started a crew to keep sex workers from being the city's cheapest punching bag. Tyger Claws killed Lizzie Borden and several of her people and expected the lesson to stick. It stuck the other way. By 2077 Lizzie's Bar is a chapel, an armory, and a hiring hall. The Mox are small. They are not soft. They remember names.",
+    "text": "They protect working girls and guys, run braindance rooms, and keep a list of Claw faces that does not get shorter. They will hire edgerunners who can hit a den without turning Kabuki into a war the Mox cannot win. They will not hire edgerunners who talk about the clients.\n\nIf you want a safe room in Watson, this is one of the few that is not a trap. If you want to slum in Lizzie's for atmosphere, read the room. The bats are not decor.",
+    "hooks": [
+      "A Claw lieutenant who was at Lizzie's the night she died is drinking in Charter Hill. The Mox want him walking, not famous.",
+      "A BD wreath in the back room has a recording the Mox cannot decrypt. They will pay a netrunner who can keep a secret.",
+      "A working kid from Pacifica asks for Mox colors. The bar wants a background check that does not go through NCPD."
+    ]
+  },
+  {
+    "id": "scavengers",
+    "name": "Scavengers",
+    "aka": "Scavs · Scavvers (the older, smaller crews)",
+    "kind": "crime",
+    "era": "2045 (scavvers) · 2077 (scavs)",
+    "status": "Active",
+    "turf": "No flag. Hot Zone wrecks, Combat Zone alleys, anywhere a body still has chrome",
+    "look": "Filthy raincoats, surgical masks, vans, plastic sheeting, stolen optics",
+    "leader": "Crew bosses. There is no council. That is the point.",
+    "origin": "In 2045 a scavver is a classification: small crews picking the Hot Zone and the junkyards for salvage that will not scream. By 2077 the worst of them organized into harvest gangs. They do not want your wallet. They want your linear frame, your second heart, your eyes. Night City taught them that Trauma Team only lands for a card, so a sleeper in a wreck is a buffet. The street shortened the name to scavs and started locking doors from the inside.",
+    "text": "A scavver in 2045 might sell you a decent generator and a story. A scav in 2077 will sell your kidneys to a body bank before the story is finished. The overlap is real. The difference is whether the crew still pretends the chrome was already detached.\n\nThey have no turf because turf is a place you sleep. They have routes, vans, and ripperdocs who do not ask. If a van idles at the end of an alley with the side door open, you are not looking at a delivery.",
+    "hooks": [
+      "A ripper in Watson is buying 'fresh' optics that still have a serial from a living client.",
+      "The party finds a marked wreck in the Hot Zone. The mark is tonight.",
+      "A scav crew stole a Trauma Team crash cart. The Team will not file a report. They will hire."
+    ]
+  },
+  {
+    "id": "barghest",
+    "name": "Barghest",
+    "kind": "crime",
+    "era": "2077 (Dogtown)",
+    "status": "Active",
+    "turf": "Dogtown — the walled Pacifica exclusion, Hansen's city-state",
+    "look": "Milspec patches, skull motifs, checkpoints, yellow-and-black hazard, stolen NUSA kit",
+    "leader": "Kurt Hansen",
+    "origin": "Barghest is what happens when a warlord is handed a district and a leftover army. After the Unification War, Kurt Hansen took the abandoned NUSA expeditionary force, the walls, and Pacifica's forgotten stadium district and declared a new law: his. Dogtown is not a gang turf. It is a city with one gang. Barghest runs the checkpoints, the black market under the stadium, the AV corridor, and the firing squads. Night City pretends the wall is someone else's problem. It is Hansen's product.",
+    "text": "You do not join Barghest the way you join 6th Street. You enlist, you buy a pass, or you die on the wrong side of a painted line. They have ranks, radios, and a logistics chain stolen from a national army. Street kids who wear a Barghest patch without the paperwork last as long as the next patrol.\n\nIf your table is in Dogtown, Barghest is the weather. If your table is outside the wall, Barghest is the rumor that buys prototype chrome and sells it back to the city that built the wall.",
+    "hooks": [
+      "A pass into Dogtown expires at dawn. Hansen's people will extend it for a job that cannot have Barghest fingerprints.",
+      "A prototype from the stadium black market is walking. Hansen wants it back quieter than a firefight.",
+      "Someone inside Barghest wants out. Out is a hole in the wall and a list of names they are willing to sell."
+    ]
+  },
+  {
+    "id": "wraiths",
+    "name": "Wraiths",
+    "aka": "Raffen Shiv clan (Badlands)",
+    "kind": "nomad",
+    "era": "2077",
+    "status": "Active",
+    "turf": "Badlands around Night City, highway cuts, wreck-farms",
+    "look": "Spiked buggies, dusty leathers, bone and chrome fetishes, night-running lights",
+    "leader": "Clan bosses. No office. No phone tree.",
+    "origin": "Wraiths are the Badlands' answer to a city that still thinks the desert is empty. They are a Raffen Shiv strain: nomads who were exiled from the nations for the kind of crime even a pack will not carry. They raid convoys, strip wrecks, and treat Aldecaldo camps as a pantry. By 2077 they are the reason a night drive to the city is a scene, not a commute.",
+    "text": "They are not a street gang. They are a weather system with engines. A Wraith pack will run you off the asphalt, take the CHOOH2, and leave the bodies where the next pack can see the lesson. Aldecaldos hate them the way ranchers hate a fire that thinks it is a neighbor.\n\nIf your table leaves the metro, put Wraiths on the random encounter table and mean it.",
+    "hooks": [
+      "An Aldecaldo panzer never arrived. The wreck is still warm. The Wraiths who hit it took a kid, not just fuel.",
+      "A corp convoy wants desert muscle that is not nomad-nation. They will regret this. The party can be the regret or the invoice.",
+      "A Wraith scout is dying of a bioplague in a culvert and will trade a camp location for a medkit."
+    ]
+  },
+  {
+    "id": "aldecaldos",
+    "name": "Aldecaldos",
+    "kind": "nomad",
+    "era": "2020 · 2045 · 2077",
+    "status": "Active (nation, not a street gang — still on this list because Night City treats them as one)",
+    "turf": "Badlands camps east and south of the metro, mobile",
+    "look": "Family panzers, sun-faded jackets, camp tattoos, working chrome",
+    "leader": "Clan heads (Saul in the 2077 Night City camp, among others)",
+    "origin": "The Aldecaldos are one of the great nomad nations, older than most of the buildings that sneer at them. They were not founded to mug Heywood. They were founded to leave a country that had stopped being a country. Night City still files them under 'gang' because the NCPD form only has so many boxes. They run salvage, escort, smuggling, and the last honest mechanic culture in a hundred klicks of dust.",
+    "text": "An Aldecaldo camp is a town that can move. They will hire edgerunners who keep their word. They will exile edgerunners who treat the camp like a pit stop with a bar. Wraiths are the enemy. Corps are the weather. The city is a market you enter in daylight and leave before the wall cameras learn your plates.\n\nIf you need a family that is not a Valentino sermon and not a 6th Street flag, this is the one. Do not call them a gang to their face unless you like walking home.",
+    "hooks": [
+      "The camp needs a part that only exists in a Santo chop-shop. The shop is Maelstrom-adjacent.",
+      "A young Aldecaldo wants out of the desert and into the Afterlife. The clan wants them talked out of it, or followed.",
+      "Wraiths hit a water tanker. The next one leaves at dusk. They want guns that can keep up."
+    ]
+  },
+  {
+    "id": "bozos",
+    "name": "The Bozos",
+    "kind": "cult",
+    "era": "2017 · 2020 · 2045",
+    "status": "Active in splinter circuses; a Night City tradition nobody asked to keep",
+    "turf": "Citywide. Circuses claim buses, ice-cream trucks, and whatever block they ruin this week.",
+    "look": "Full clown bodysculpt. You will not mistake them.",
+    "leader": "Multiple circus bosses after Hilaria 2045 (Great Bozo, Blammo, Jester, Dead Ringer…)",
+    "origin": "They appeared in West Hill around 2017 as a prankster gang with circus chrome: red noses, rictus smiles, the whole cursed poster. Night City laughed. Then the pranks started removing fingers, then families, then city blocks. By 2020 they were a terrorism story with a honk. The Fourth Corporate War did not kill the joke. In 2045 a festival called Hilaria split them into at least thirteen circuses, now at war with each other in the only language they have. The Inquisitors hate them. Everyone else just runs.",
+    "text": "A Bozo is a poser who crossed the line into cult. Exotic bodysculpt, bike horns, squirt guns full of things that are not water, school buses with ramming plates. They will torture for timing. They will kill for a punchline. Civil war between circuses is not a relief. It is two clowns in your living room.\n\nPhilharmonic Vampyres think they are artists. Bozos think artists are props. Julliard crosses the street.",
+    "hooks": [
+      "Two circuses have scheduled a 'show' in the same plaza. The Chamber of Commerce will pay to make it not happen.",
+      "A Dead Ringer stole a kid. The other Dead Ringer (different hair) says it wasn't them. Someone is lying in greasepaint.",
+      "An Inquisitor cell wants Bozo chrome peeled. They will not pay in cash. They will pay in a name."
+    ]
+  },
+  {
+    "id": "inquisitors",
+    "name": "Inquisitors",
+    "kind": "cult",
+    "era": "2013 · 2020 · 2045 · 2077 (cells persist)",
+    "status": "Active as cells",
+    "turf": "Nowhere and everywhere. White hoodies in a crowd.",
+    "look": "White hoodies, gas masks, jewelry etched with the mark, almost no chrome",
+    "leader": "Unknown. Cells are built so torture does not map the church.",
+    "origin": "The Inquisitors are older than Maelstrom and they would like credit for the body count. They believe cyberware is a sin you can tear out of a person with a pair of pliers and a hymn. In the 2010s they nearly annihilated the Metal Warriors and made a hobby of hunting boosters. Blood Razors put a bounty on their leader. It did not end them. By 2045 they still operate in cells, still wear the hoodie, still carry microwavers and EMP, still think a chrome arm is a confession.",
+    "text": "They are not street clowns. They are a cult with operational security. A cell can be your coworker, your trauma-team nurse, your landlord. They target chrome users, ripperdocs, and the occasional corpo who thinks a hidden holster is subtle.\n\nMaelstrom is the theological enemy. That does not make Inquisitors the heroes. A party with obvious implants is a sermon waiting to happen.",
+    "hooks": [
+      "A ripperdoc's chair was stripped of tools and the last patient is missing an arm that was not scheduled.",
+      "An Inquisitor hoodie was found in a 6th Street locker. X Wright wants it handled before the block becomes a crusade.",
+      "A cell offers the party a job on a Maelstrom chop-shop. Payment is 'absolution.' Read that twice."
+    ]
+  },
+  {
+    "id": "iron-sights",
+    "name": "Iron Sights",
+    "kind": "booster",
+    "era": "2020 · 2045",
+    "status": "Active (2045), reduced from their 2020 peak",
+    "turf": "Old Combat Zone, Old Japantown edges",
+    "look": "Mohawks, punk leathers, facial scarification, old-school booster chrome",
+    "leader": "BloodGuts, with fixer Hornet as the new money",
+    "origin": "Classic Combat Zone booster gang: turf, mohawks, and a long memory of being almost eaten by history. They lost people to Maelstrom's founding and spent years in a knife fight with the Red Chrome Legion. In 2045 a fixer named Hornet put real backing behind BloodGuts and the Sights stopped being a nostalgia act. They still look like 2020. They hit like someone paid the ammo bill.",
+    "text": "If you want a gang that still believes in holding a street corner with a pipe, this is the one. They run theft, drugs, sex work, and extortion the old way. Red Chrome Legion is the war that never ended. Maelstrom is the cousin who made it. Hornet is the reason they have grenades again.",
+    "hooks": [
+      "Hornet wants a Red Chrome gas-mask cache stolen, not destroyed. BloodGuts wants it burned. The party is the tie-breaker.",
+      "An Old Japantown shop paid both Sights and Claws. Both noticed.",
+      "A kid with a new mohawk says they were jumped in. The Sights say they were not."
+    ]
+  },
+  {
+    "id": "red-chrome-legion",
+    "name": "Red Chrome Legion",
+    "kind": "cult",
+    "era": "2020 · 2045",
+    "status": "Active, at war with Iron Sights",
+    "turf": "Little China, Old Japantown",
+    "look": "Gas masks with glowing red lenses, hate-group theater, cheap pistols",
+    "leader": "Vox and Populi, preaching a 'Great Caesar'",
+    "origin": "A neo-nazi combat cult that has been a stain on Night City since the 2020 books. They talk about a messiah who will rise from their ranks and 'cleanse' the metro. They have been in a war of attrition with the Iron Sights so long that some street kids think the war is the gang. Maelstrom took some of their leftovers when the Metal Warriors died. The Legion did not get kinder.",
+    "text": "They mug, extort, and hunt people who do not fit the sermon. Gold Dragons and Tyger Claws share zip codes and do not share patience. If your table wants a villain with no romance, put red lenses on them and do not give them a redemption arc.",
+    "hooks": [
+      "A Little China shopkeeper paid Gold Dragons for protection. The Legion still came. Eddy Sing wants a message.",
+      "Vox and Populi are splitting over who gets to be Caesar. A fixer will pay to pick a winner, or neither.",
+      "Someone is selling Legion masks to poser kids in Kabuki. The real Legion will not find that funny."
+    ]
+  },
+  {
+    "id": "philharmonic-vampyres",
+    "name": "Philharmonic Vampyres",
+    "kind": "poser",
+    "era": "2010 · 2020 · 2045",
+    "status": "Active",
+    "turf": "University District, tunnels under the symphony hall, citywide pranks",
+    "look": "Goth evening wear, capes, fangs (some chrome, some sculpt), theater makeup",
+    "leader": "The Master (goth/art faction) and Acme (prankster faction)",
+    "origin": "They began as a prankster gang. In 2010 a bit involving tuxedos, capes, and fangs landed so hard that half the crew never took the costume off. They nested under the performing-arts halls, which puts them in occasional knife-range of Arasaka security and in permanent feud with street mimes — and therefore with Julliard. By 2045 the gang has a split personality that somehow still shares a rehearsal space.",
+    "text": "The Master's people stage productions and expensive jokes aimed at rockerboys and corpos who can afford the cleanup. Acme's people want the old chaotic bit back. Rank and file of both factions get along. Leadership does not. They are rarely lethal. They are often career-ending. Do not hire them as muscle. Hire them as a problem for someone else's evening.",
+    "hooks": [
+      "The Master wants a corpo premiere ruined without blood. Acme wants blood. The party is the director.",
+      "Julliard mimes have been disappearing into the symphony tunnels. Someone should look before Arasaka does.",
+      "A famous media wants to 'collaborate' on a prank. The Vampyres want a cut and a hostage clause."
+    ]
+  },
+  {
+    "id": "julliard",
+    "name": "Julliard Guild",
+    "kind": "guardian",
+    "era": "2020 · 2045",
+    "status": "Active",
+    "turf": "Downtown, the Glen, NCART stations, any street corner with an open case",
+    "look": "Instrument cases with the guild sticker, performance clothes, a quiet pistol",
+    "leader": "Sebastian \"Shakespeare\" McBride",
+    "origin": "Night City buskers used to get robbed, recruited, or both. Julliard turned that into a closed shop. If you play on a corner in 2045, you are in the Guild or you are about to have a conversation about dues. They protect their stages the way Tyger Claws protect a den, just with better timing.",
+    "text": "They are artists with a monopoly. Charisma is the weapon until it is not. They hate Bozos (chaos), feud with Philharmonic Vampyres (mimes), and can fill a plaza with a flash mob that is also a picket line. Shakespeare McBride runs it like a union that never heard of a strike fund because the strike is a brick.",
+    "hooks": [
+      "A NCART busker refused the sticker. The Guild wants them in. The busker wants a bodyguard for one week.",
+      "A corpo wants 'authentic street music' for a launch and will not pay Guild rates. Shakespeare noticed.",
+      "A stolen violin is a Kendachi. The Guild wants it back before the Claws smell the steel."
+    ]
+  },
+  {
+    "id": "piranhas",
+    "name": "Piranhas",
+    "kind": "party",
+    "era": "2020 · 2045",
+    "status": "Active",
+    "turf": "Pacifica Playground, Playland by the Sea, any party worth crashing",
+    "look": "Club fashion, the shoal tattoo, too much chrome in the smile",
+    "leader": "Corpse Reviver; the gang is split into shoals",
+    "origin": "Night City's premiere party gang, and they will mug you on the way in. In 2020 they were already the 'just because' crew: drink, dance, rob, repeat. By 2045 they do not just attend the best nights. They throw them. Cells called shoals keep the brand alive without a single clubhouse the NCPD can bomb twice.",
+    "text": "They ate ground from the 2045 Voodoo Boys posers and keep trying to swallow the Andersons. A Piranha gig is a plus-one that ends with a cybersnake. They are not ideological. They are hungry. If your table needs a crowd that becomes a combat, start here.",
+    "hooks": [
+      "A shoal is throwing a party in Playland. The ticket is a job. The job is inside someone else's turf.",
+      "Corpse Reviver wants the Andersons absorbed, not murdered. Molly Anderson has other plans.",
+      "A stolen guest list from a corpo tower is circulating in a shoal. The tower will pay. So will the shoal."
+    ]
+  },
+  {
+    "id": "reckoners",
+    "name": "Reckoners",
+    "kind": "cult",
+    "era": "2045",
+    "status": "Active",
+    "turf": "Hot Zone, the Glen, South Night City",
+    "look": "Medallions of the Gibbering Eye, merch, a smile that is a donation plate",
+    "leader": "The Beloved Gaping Maw of the Gibbering Eye",
+    "origin": "A nihilist street church that preaches a coming Harvest of Souls and will take your wallet while they wait. They sell plushies. They sell tracts. They sell the idea that dying in the Hot Zone is a coupon. Night City has always grown cults in the cracks. This one learned merchandising.",
+    "text": "They are funny until the stun baton. They proselytize, they roll unconscious bodies, they argue theology with a pop-up weapon. The Enhanced think cyberpsychosis is evolution. Reckoners think the void is a product line. Do not leave them alone with a wounded teammate.",
+    "hooks": [
+      "A Glen landlord wants the medallion preachers off his stoop without a hate-crime headline.",
+      "The Maw's lieutenant is skimming donations. The Maw wants a quiet audit.",
+      "A plushie in a kid's bag has a tracker. Follow it."
+    ]
+  },
+  {
+    "id": "gold-dragons",
+    "name": "Gold Dragons",
+    "kind": "guardian",
+    "era": "2045",
+    "status": "Active",
+    "turf": "Little China",
+    "look": "Puffy gold jackets, jump boosters, grip feet, Hong Kong-action posing",
+    "leader": "Edwina \"Eddy\" Sing, under city manager David Ling Po",
+    "origin": "Little China's other government needed a visible fist. Ling Po — parlor, office, the whole doubled life — put Eddy Sing in gold and told her to make the district look like a movie. The Dragons took the brief literally: honor codes from old discs, wire-fu chrome, protection that is also a tax.",
+    "text": "They are a guardian gang with a poser streak. They will catch you off a fire escape because the jump booster made it pretty. Tyger Claws have opinions. Maelstrom has appetites. The Dragons hold the middle by looking expensive and hitting like stunt people who rehearse.",
+    "hooks": [
+      "Eddy Sing wants a Red Chrome cell walked out of Little China on camera, not in a bag.",
+      "Ling Po hires the party for a job the Dragons cannot be seen doing. Guess which kind.",
+      "A gold jacket was stripped off a dead kid who was not a Dragon. Eddy wants the thief more than the jacket."
+    ]
+  },
+  {
+    "id": "albino-alligators",
+    "name": "Albino Alligators",
+    "kind": "poser",
+    "era": "2045",
+    "status": "Active, squeezed",
+    "turf": "Rancho Coronado car-wash ruin, South Night City's Hen House",
+    "look": "Black polos with a white cartoon gator toting a rifle — the last print run of a dead car wash",
+    "leader": "Big Bruno, with Tarquin under him",
+    "origin": "They found a pile of promotional shirts in an abandoned car wash and decided that was a mythology. Poser gang, small, armed, and currently being pushed out of the neighborhood by locals and mercs who are tired of the bit. Night City is full of crews that started as a joke. Some stay funny. The Alligators bought rifles.",
+    "text": "They want to be a real gang. Rancho keeps telling them no. Bruno is loud. Sin Gin watches the lot. If they survive the year it will be because someone hired them as disposable color.",
+    "hooks": [
+      "Bruno wants the car wash recognized as turf. The block association will pay to keep the hoses dry.",
+      "A mer group already ran them off once. The Alligators want a rematch with rented legends.",
+      "The last box of original shirts is in a Biotechnica storage unit. Bruno will pay stupid money."
+    ]
+  },
+  {
+    "id": "andersons",
+    "name": "The Andersons",
+    "kind": "party",
+    "era": "2045",
+    "status": "Active, aging, in danger of being eaten by Piranhas",
+    "turf": "Old Combat Zone, Playland by the Sea",
+    "look": "Denim, ANDERSON tattooed across both sets of knuckles",
+    "leader": "Molly Anderson — yogang boss and rising fixer",
+    "origin": "A family-themed yogang that got old without getting a pension. They mug, scav, and run Night Markets in the Old Combat Zone because Molly turned a street name into a brand. The Piranhas smell weakness. Molly smells a Night Market stall with better lighting.",
+    "text": "They are kids who named themselves after a sitcom family and then had to live in a war ruin. Molly is the reason they still exist. She is also the reason a crew of edgerunners might get a real gig instead of a turf funeral.",
+    "hooks": [
+      "Molly needs stall security for a Combat Zone Night Market. Piranhas RSVP'd themselves.",
+      "A knuckle tattoo walks into the Forlorn Hope asking for work. Molly says they are not hers.",
+      "Playland wants the Andersons off the pier. Molly wants a counteroffer."
+    ]
+  },
+  {
+    "id": "arzin-tynon",
+    "name": "Arzin Tynon",
+    "kind": "booster",
+    "era": "2020 · 2045",
+    "status": "Active",
+    "turf": "New Westbrook, Watson Development, the northern edge",
+    "look": "Armorjacks with the mark on the back, 20th-century biker cosplay with real engines",
+    "leader": "Jimmy \"Dequiallo\" Miles",
+    "origin": "An old boostergang that never got the message that Night City moved on from choppers. They smuggle, deal, race, extort, and throw random violence like it is a seasoning. In 2020 they were already in the books. In 2045 they are still on the northern rim, still louder than the law.",
+    "text": "Biker culture as a combat style. Skinweave, shotguns, roadbikes, a leader who thinks the 1900s are a personality. They will race you, then rob you, then tell you it was the same event.",
+    "hooks": [
+      "Dequiallo wants a Dragula Racers hearse beaten in a night race. Cheating is expected. Getting caught is not.",
+      "A smuggling run from Watson Development needs a second set of guns that is not Maelstrom.",
+      "NCPD is too scared to ticket a funeral ride. A widow is not. She will pay."
+    ]
+  },
+  {
+    "id": "culper-ring",
+    "name": "Culper Ring",
+    "kind": "cult",
+    "era": "2045",
+    "status": "Active, deniable",
+    "turf": "NorCal Military Base, rumored South Night City safehouses",
+    "look": "Nothing obvious — a mark in jewelry or under a sleeve, COG uniforms by day",
+    "leader": "Unknown",
+    "origin": "A secret sect inside the Estero Bay Military COG that wants NorCal back in the United States the old-fashioned way: spies, rifles, and patience. They are combat trained because most of them already have a duty roster. Night City street kids will never see them. Edgerunners who take a 'patriotic' gig might.",
+    "text": "Not a booster gang. A conspiracy with a logo. If your table likes midnight meetings and the chance that the client is wearing a real rank, this is the file. They are not here to mug a kiosk.",
+    "hooks": [
+      "A COG lieutenant wants a data slate from Night Corp without a paper trail.",
+      "Someone in the party used to serve. A ring member recognizes the unit tattoo and makes an offer.",
+      "A South Night City safehouse burned. The Ring thinks it was NUSA. It might have been 6th Street playing dress-up."
+    ]
+  },
+  {
+    "id": "deadwoods",
+    "name": "DeadWoods",
+    "kind": "poser",
+    "era": "2045",
+    "status": "Active",
+    "turf": "The Glen, South Night City, trains and railyards",
+    "look": "Cowboy hats in 2045, dusters, targeting optics they pretend are just eyes",
+    "leader": "Isaiah \"Gunslinger\" Hurston",
+    "origin": "A cowboy poser gang that appointed itself the railroad's guardian. They extort, gamble, sell companionship, and actually do keep some of the cargo moving because a dead rail line is a dead bit. They run The Molly May, a casino in the Glen, which is the closest thing they have to a ranch house.",
+    "text": "Sandevistan cowboys. They will quote a western and then pull a pistol that does not care about quotes. Useful on a train. Loud in a city. The Steel Vaqueros think they are tourists. The DeadWoods think the Vaqueros are the help.",
+    "hooks": [
+      "A cargo train is being bled by Toecutters. Hurston will pay for a posse that can stay on a moving car.",
+      "The Molly May's tables are running hot with a cheater who is also a netrunner.",
+      "A Glen landlord wants the casino's 'security' to stop looking like a hanging."
+    ]
+  },
+  {
+    "id": "dirty-hippies",
+    "name": "The Dirty Hippies",
+    "kind": "party",
+    "era": "2045",
+    "status": "Active",
+    "turf": "Rancho Coronado, University District",
+    "look": "Faded tie-dye, guns under the peace print, dirt under the nails that is actually product",
+    "leader": "Canary",
+    "origin": "Guerrilla gardeners who grow weeds and herbs laced with whatever the week is selling, collectively called ganga. The name is a joke they do not live up to. They do not believe in peace. They believe in botany and a pistol.",
+    "text": "They will sell you a calm and then shoot the cop who followed you. University kids think they are a vibe. Rancho thinks they are a zoning violation with automatic fire.",
+    "hooks": [
+      "Canary's crop was sprayed by Biotechnica 'by accident.' She wants a greenhouse camera's memory.",
+      "A University dealer cut ganga with something that kills. The Hippies want the cutter more than NCPD does.",
+      "A community garden is real. The Hippies are using it as cover. The gardeners have started to notice the night shifts."
+    ]
+  },
+  {
+    "id": "dragula-racers",
+    "name": "Dragula Racers",
+    "kind": "poser",
+    "era": "2045",
+    "status": "Active",
+    "turf": "Watson Development street circuits",
+    "look": "Monster bodysculpts, hearses with NOS, racing numbers painted like grave markers",
+    "leader": "Frankie Sparks",
+    "origin": "Largely harmless by Night City standards, which still means people die on the course. They sculpt themselves into movie monsters and race hot-rod hearses. Frankie Sparks currently owns the street-racing scene the way a good driver owns a corner.",
+    "text": "Hire them for a ride, a race, or a funeral that needs to arrive first. Do not hire them for a firefight unless the firefight is on wheels. Arzin Tynon wants their crown. The Racers want another lap.",
+    "hooks": [
+      "Frankie will throw a race if the party can guarantee a corp spectator gets humiliated, not killed.",
+      "A hearse is carrying an actual body someone wants to steal mid-race.",
+      "Maelstrom thinks a racer's chrome is 'wasted on a costume.' A challenge was issued."
+    ]
+  },
+  {
+    "id": "enhanced",
+    "name": "The Enhanced",
+    "kind": "cult",
+    "era": "2045",
+    "status": "Active, secretive",
+    "turf": "Possibly Heywood Industrial Zone and South Night City; they prefer not to be found",
+    "look": "The mark branded or etched into chrome. No uniform. That is the uniform.",
+    "leader": "Unknown",
+    "origin": "A cult that decided cyberpsychosis is not a disease. It is the next human. They are invested in GunMart — cheap weapons flooding the street so violence becomes weather — and they would rather detonate than be questioned. Street rumor says the Maelstrom of 2077 is what the Enhanced were aiming at in 2045.",
+    "text": "You will not get a sit-down. You will get a philosophy lecture from a person who is already halfway gone, or you will get a bomb. They promote megaviolence the way a corp promotes a product line: volume, price, ubiquity.",
+    "hooks": [
+      "A GunMart crate is being diverted to a South Night City cell. Militech will pay. So will the Enhanced, in bullets.",
+      "A cyberpsycho break has the Enhanced's mark on the remaining metal. MaxTac wants a consultant who is not a cop.",
+      "Someone in the party is slipping. An Enhanced recruiter noticed first."
+    ]
+  },
+  {
+    "id": "eurotrashers",
+    "name": "Eurotrashers",
+    "kind": "party",
+    "era": "2045",
+    "status": "Active",
+    "turf": "Little Europe",
+    "look": "1980s European fashion as imagined by someone who has never been, plus an unplaceable accent",
+    "leader": "Lys \"Refrain\" Schärer",
+    "origin": "A Little Europe party gang that mugs with a blackjack more often than a rifle, until the Undertow shows up. They are posers of a continent. The accent is a bit. The knives are not.",
+    "text": "Useful as local color and as a street fight that starts over a look. They hate the Undertow's greaser nostalgia because there is only so much room on one boulevard for two decades that never happened.",
+    "hooks": [
+      "Refrain wants an Undertow greaser walked out of a Little Europe club without gunfire.",
+      "A fake accent hid a real Euro corp kid on the run. Both gangs want the bounty.",
+      "A blackjack artist from the gang is better than they should be. Someone trained them."
+    ]
+  },
+  {
+    "id": "fixies-couriers",
+    "name": "Fixie's Couriers",
+    "kind": "guardian",
+    "era": "2045",
+    "status": "Active",
+    "turf": "Heywood Industrial Zone and every sidewalk that will take a bike",
+    "look": "Reflective caps and arm bands, cyberlegs, a package you do not open",
+    "leader": "Fixie — a fixer who guides, not a general who orders",
+    "origin": "Half the small-package economy of Night City on two wheels. They are a gang the way a union is a gang: shared risk, shared routes, a boss who is also the dispatcher. You do not mug a courier twice.",
+    "text": "If your table needs a faction that knows every alley and hates surprise inspections, this is it. They will carry a soul or a sandwich. The rate changes. The legs do not stop.",
+    "hooks": [
+      "A package is ticking. Fixie wants it delivered anyway, and a team to make sure the destination is the right sin.",
+      "Maelstrom is taxing a bike route. The couriers will pay for a week of fear in the other direction.",
+      "A courier vanished in H4. The Rat Kings know why."
+    ]
+  },
+  {
+    "id": "g3",
+    "name": "G3",
+    "kind": "poser",
+    "era": "2045",
+    "status": "Active",
+    "turf": "Kabuki, Watson Development",
+    "look": "Anime-themed bodysculpt, J-pop fashion, too much chrome around the eyes",
+    "leader": "Hazumi Ihara",
+    "origin": "A disturbingly violent anime poser gang that also runs 100.0 G3 Gun-Gal, a Kabuki radio station. They pirate discs, talk shop, and then commit random violence like it is a transformation sequence. Many members are close to cyberpsychosis and do not treat that as a problem.",
+    "text": "Cute until the very heavy melee. Tyger Claws share Kabuki and find them embarrassing, which is not the same as safe. If a radio drop sounds like a hit announcement, it might be.",
+    "hooks": [
+      "Hazumi wants a pirate archive pulled off a corp shard before a Claw lawyer does.",
+      "A G3 sculpt job went wrong. The ripper wants muscle when the family comes.",
+      "Gun-Gal accidentally broadcast a real assassination. The station needs the file gone and the listener quiet."
+    ]
+  },
+  {
+    "id": "generation-red",
+    "name": "Generation Red",
+    "kind": "party",
+    "era": "2045",
+    "status": "Active",
+    "turf": "Old Combat Zone",
+    "look": "A logo patch somewhere on the clothes, scavenged everything else",
+    "leader": "Apex",
+    "origin": "A Combat Zone yogang that survived a Kill Krasher invasion of their clubhouse and accidentally impressed both ERI (the Zone's nominal government) and Danger Gal. They are kids. They are resourceful. They are one bad night from a documentary or a funeral.",
+    "text": "Hire them as local guides. Do not hire them as a war. Apex knows the difference. Carrion of the Kill Krashers does not.",
+    "hooks": [
+      "Apex wants the party to sit in on a Danger Gal meeting so the kids are not eaten by a contract.",
+      "Kill Krashers are coming back for the clubhouse. Generation Red has paint, not anti-armor.",
+      "ERI offers the gang a 'charter.' The fine print is a leash."
+    ]
+  },
+  {
+    "id": "kill-krashers",
+    "name": "Kill Krashers",
+    "kind": "booster",
+    "era": "2045",
+    "status": "Active, growing too fast",
+    "turf": "Southern Island, with raids into the Combat Zone",
+    "look": "Black and red painted rippers",
+    "leader": "Carrion",
+    "origin": "A new crew that glorifies violence as the whole personality. Small numbers are a bar fight. Large numbers are a weather event. They hit Generation Red's clubhouse and learned the kids bite. They did not learn to stop.",
+    "text": "No ideology, no turf pride, just the next broken thing. If your table needs a gang that does not negotiate, put red rippers on them and start the clock.",
+    "hooks": [
+      "Carrion called a 'gathering' in the Glen. NCPD will not show. A landlord will pay.",
+      "A Krasher wants out after the clubhouse raid. Carrion does not do out.",
+      "Someone is arming them. Follow the grenades."
+    ]
+  },
+  {
+    "id": "lightning-cats",
+    "name": "Lightning Cats",
+    "kind": "poser",
+    "era": "2045",
+    "status": "Active",
+    "turf": "The Hot Zone, wreck of the Old Med Center",
+    "look": "Feline exotic bodysculpt, rippers, the choice to live 'wild'",
+    "leader": "Bengal Khan",
+    "origin": "Cat-themed exotics who decided the Old Med Center ruins were a habitat. They talk about not being corporate housepets. They train martial arts and cyberweapons like they mean the metaphor with claws.",
+    "text": "Hot Zone survivalists with a look. They will trade. They will hunt. They will not take kibble for an answer. Useful allies if you can stand the bit. Bad enemies in a vertical ruin.",
+    "hooks": [
+      "Bengal Khan wants a Biotechnica animal vault mapped, not raided. Yet.",
+      "A Cat took a job in the city and did not come back. The pack does not do missing-person quietly.",
+      "Scavvers are stripping the Med Center. The Cats consider that poaching."
+    ]
+  },
+  {
+    "id": "mudang-gumi",
+    "name": "Mudang Gumi",
+    "kind": "net",
+    "era": "2045",
+    "status": "Active, almost unseen",
+    "turf": "Pacifica Playground and the CitiNet",
+    "look": "Unknown on purpose",
+    "leader": "Unknown; possible Tanson link",
+    "origin": "Netrunners and thieves who do not do parades. Espionage, identity theft, CitiNet scams. Motivations classified even to the people writing the street files. If Tanson is in the picture, this is a corp war in a gang costume.",
+    "text": "The anti-Maelstrom. No optics to catch the light. A data thief with Interface 4 and a grapple gun. If your table's netrunner is getting hunted by someone polite, start here.",
+    "hooks": [
+      "A stolen identity is wearing a party member's face on a loan document.",
+      "Tanson denies the Gumi. A dead drop in Pacifica disagrees.",
+      "The Gumi will pay in clean identities for a physical smash-and-grab they cannot do from a chair."
+    ]
+  },
+  {
+    "id": "muses",
+    "name": "The Muses",
+    "kind": "poser",
+    "era": "2045",
+    "status": "Active",
+    "turf": "Woodland Park in North Heywood; Xanadu derby arena / club",
+    "look": "Togas, disco, big hair, roller skates, color-shift eyes",
+    "leader": "Calliope",
+    "origin": "A poser gang that mixed 1980s gloss with a costume-shop Greece and then became an actual roller derby squad in the Wonderland League. They party. They skate. They hit. Xanadu is theirs.",
+    "text": "Do not laugh at the toga in the rink. Combat awareness 4 on skates is a traffic accident with choreography. They will hire muscle to keep Xanadu's door from becoming someone else's.",
+    "hooks": [
+      "A derby grudge against a Street Queen is about to leave the rink.",
+      "Xanadu's night is being taxed by 6th Street. Calliope wants a message that still lets veterans drink.",
+      "A Muse's color-shift eyes were stolen off her face. Scavs. She wants them back in the socket they came from."
+    ]
+  },
+  {
+    "id": "prime-time-players",
+    "name": "Prime-Time Players",
+    "kind": "poser",
+    "era": "2045",
+    "status": "Active",
+    "turf": "New Westbrook, Upper Marina",
+    "look": "Sitcom and old-television bodysculpts, costumes that are a little too accurate",
+    "leader": "Vicktor Vang",
+    "origin": "Posers who pick a show and become it, then split into factions when the fandom does. Extortion, companionship, blackmail, and the occasional laugh-track beating. Night City has always made people into products. These people volunteered.",
+    "text": "Useful as a disguise economy. Dangerous as a blackmail economy. Vang keeps the factions from murdering each other on set by pointing them at civilians instead.",
+    "hooks": [
+      "A 'family sitcom' faction is shaking down a Marina block. The block wants the season cancelled.",
+      "A stolen master tape of a dead show is worth a killing. Vang will pay more than the collector.",
+      "Someone sculpted themselves into a party member's mother. It is not a compliment."
+    ]
+  },
+  {
+    "id": "princesses-of-justice",
+    "name": "Princesses of Justice",
+    "kind": "guardian",
+    "era": "2045",
+    "status": "Active",
+    "turf": "University District; Princessland, an abandoned traveling amusement park",
+    "look": "Magical-girl / animated-heroine sculpt and costume, very heavy melee",
+    "leader": "Adorable",
+    "origin": "A poser gang based on an old animated show that decided the bit should save people. They shelter victims of domestic abuse in a dead amusement park and will cave in a skull to keep the gate shut. Guardian gang in a pastel wrapper.",
+    "text": "Do not mock the costume in Princessland. They have Kevlar and a reason. University cops ignore them. Abusers do not get to.",
+    "hooks": [
+      "Someone followed a client to Princessland. Adorable wants the follower lost, not famous.",
+      "A corp wants to 'redevelop' the park. The Princesses want a delay measured in broken dozers.",
+      "A kid in the colors is a poser tourist. The real crew wants them unmasked before an abuser uses the confusion."
+    ]
+  },
+  {
+    "id": "rat-kings",
+    "name": "Rat Kings",
+    "kind": "booster",
+    "era": "2045",
+    "status": "Active",
+    "turf": "Megabuilding H4, Santo Domingo, still under construction",
+    "look": "Logo on the jacket, the building's dust on everything else",
+    "leader": "Mario \"Corona\" Fernandez",
+    "origin": "A small boostergang using an unfinished megabuilding as a dungeon crawl they live in. They party, steal, mug, vanish into the guts of H4, and let the structure be the alibi.",
+    "text": "If your map is a half-built tower, they are the wandering monsters. Corona thinks that is a strategy. It is. Until the tower opens and NCPD invents a lobby.",
+    "hooks": [
+      "A Fixie's courier disappeared between floors 20 and 40. The Kings know which dark.",
+      "IEC wants the construction site cleared without a massacre headline.",
+      "Corona will sell a route through H4. The route is also an ambush. Both things can be true."
+    ]
+  },
+  {
+    "id": "shroomers",
+    "name": "The Shroomers",
+    "kind": "guardian",
+    "era": "2045",
+    "status": "Active",
+    "turf": "Tunnels under the Old Combat Zone",
+    "look": "Specialized low-light optics, a token you do not fake, dirt that is a farm",
+    "leader": "Pa Saddlefoot and May",
+    "origin": "Part survivalist family, part guerrilla farm. They grow fungi in the dark under the Combat Zone and send eighteen-year-olds up top for a Wander Year to see if the city is worth returning from. Most come back. Some come back wrong. Some do not come back.",
+    "text": "They will trade food that is not kibble. They will not give you a map of the tunnels. A Shroomer token in your pocket is a passport or a death sentence depending on who sees it.",
+    "hooks": [
+      "A Wander Year kid is dying in a Santo clinic and will not talk to NCPD. May will.",
+      "Something is eating the farms from below. It is not a rival gang.",
+      "A corpo wants the strain. Pa would rather burn the beds."
+    ]
+  },
+  {
+    "id": "sinful-adams",
+    "name": "The Sinful Adams",
+    "kind": "poser",
+    "era": "2045",
+    "status": "Active",
+    "turf": "South Night City Boneyard",
+    "look": "Goth fashion, a community that shares food and school with refugees",
+    "leader": "Gomez (day-to-day) and Ophelia (war)",
+    "origin": "A goth poser gang that accidentally became a government for people living in the Boneyard. They share housing, meals, even lessons. Gomez keeps the lights on. Ophelia keeps the lights from being stolen.",
+    "text": "Not a joke if you live there. A mercenary job against the Adams is a job against a neighborhood. Street Queens might get along with them. Toecutters will not.",
+    "hooks": [
+      "Ophelia needs guns for a Toecutter raid that Gomez does not want to admit is coming.",
+      "A Boneyard school is out of filters. A Biotechnica crate would fix it. Stealing it starts a clock.",
+      "A media wants a human-interest piece. Gomez wants the cameras pointed anywhere else."
+    ]
+  },
+  {
+    "id": "steel-vaqueros",
+    "name": "Steel Vaqueros",
+    "kind": "nomad",
+    "era": "2045",
+    "status": "Active",
+    "turf": "New Westbrook, Rancho Coronado, the west-coast road when they are on it",
+    "look": "The pack mark on the jacket, nomad chrome, bikes that have seen Chile and Seattle",
+    "leader": "Ximena Rose",
+    "origin": "A nomad pack that never joined a nation. They run the coast, recruit locals as junior members to hold the fort, and smuggle whatever the road will bear. Unaffiliated means no Aldecaldo court when they screw up. It also means no nation war when they don't.",
+    "text": "Hire them to move a thing. Do not hire them to sit still. DeadWoods think they own the rails. The Vaqueros think rails are a suggestion.",
+    "hooks": [
+      "Ximena needs a local crew to hold a Westbrook safehouse for three weeks while the pack is south.",
+      "A junior member sold a route to Wraiths. The pack is not in town. The party is.",
+      "CHOOH2 cut with water killed an engine on the freeway. The Vaqueros want the station owner."
+    ]
+  },
+  {
+    "id": "street-queens",
+    "name": "The Street Queens",
+    "kind": "guardian",
+    "era": "2045",
+    "status": "Active",
+    "turf": "New Westbrook, Upper Marina, the mainland underground clubs",
+    "look": "Queer iconography as jewelry, club clothes, rippers",
+    "leader": "Maxine Raunch",
+    "origin": "A guardian gang for queer Night City: doors, neighborhoods, the clubs that would not exist if someone else held the door. They also have a hand in the drug and sex economies of those same rooms, because protection that cannot pay rent is a eulogy.",
+    "text": "Allies of the Mox in spirit, older in the 2045 books. They will hire edgerunners who understand the difference between a raid and a rescue. They will not hire tourists.",
+    "hooks": [
+      "A Marina club's door was hit by 6th Street 'vice.' Maxine wants the veterans to feel unwelcome, not martyred.",
+      "A Queen is missing after a Tyger Claw night. Kabuki cameras lie. People do not, if you ask hard.",
+      "Prime-Time Players used a Queen's face as a costume. Maxine wants the sculpt gone."
+    ]
+  },
+  {
+    "id": "toecutters",
+    "name": "The Toecutters",
+    "kind": "nomad",
+    "era": "2045",
+    "status": "Active",
+    "turf": "North Heywood edges, the Outskirts",
+    "look": "Nomad leathers with blood-spatter patterns that are not an accident",
+    "leader": "Unknown",
+    "origin": "A Raffen Shiv clan on Night City's rim. The rumor is they cut toes and make a meal of the lesson. The rumor is the point. Smuggling and violence with a side of folklore that keeps civilians on the freeway.",
+    "text": "Wraiths of an earlier decade's name. If a convoy goes quiet north of Heywood, start here. Do not expect a speech.",
+    "hooks": [
+      "A Nomad kid crawled into Vista del Rey missing pieces. 6th Street wants revenge they are not trained for.",
+      "A smuggler used Toecutter roads without paying. The invoice is a person.",
+      "Someone is wearing blood-spatter leather as fashion in the Glen. That will be corrected."
+    ]
+  },
+  {
+    "id": "tombstone-preservers",
+    "name": "Tombstone Preservers",
+    "kind": "guardian",
+    "era": "2045",
+    "status": "Active",
+    "turf": "Anywhere the dead are washed, prayed over, or planted",
+    "look": "Shaved heads, excellent suits, martial calm",
+    "leader": "Mister Rieper",
+    "origin": "A guardian gang that decided the dead were the last clients who could not pay extra. They keep mortuaries, graves, and body banks from becoming scav buffets. Each member is a fighter. The suit is the uniform and the warning.",
+    "text": "Scavs hate them. Trauma Team respects them. Families hire them. If a funeral in your campaign needs security that is not 6th Street, call Rieper.",
+    "hooks": [
+      "A body bank is buying from scavs again. The Preservers want a door broken and a ledger taken.",
+      "A corpo funeral is a hit waiting to happen. Rieper will hire specialists for the parts that are not solemn.",
+      "Someone buried a data shard in a chest cavity. The Preservers noticed the extra weight."
+    ]
+  },
+  {
+    "id": "undertow",
+    "name": "The Undertow",
+    "kind": "booster",
+    "era": "2045",
+    "status": "Active, bad at strategy",
+    "turf": "Downtown",
+    "look": "1950s greaser fashion, more attitude than tactics",
+    "leader": "Johnny Rydell",
+    "origin": "Hotheads who want Downtown to stay 'real' against the Chamber of Commerce. They have no plan, no patience, and a lot of pomade. Eurotrashers fight them because the boulevard is only so wide.",
+    "text": "Comic relief until someone dies on a zebra crossing. Rydell will hire anyone who looks like they have a plan. He will then ignore the plan.",
+    "hooks": [
+      "The Chamber wants a greaser rally to fail without martyrs. Rydell wants martyrs.",
+      "A corpo restoration of a diner is actually a Night Corp sensor nest. The Undertow smashed the wrong diner.",
+      "Refrain of the Eurotrashers offers a truce. It is a setup. Everyone knows. Someone still has to go."
+    ]
+  },
+  {
+    "id": "wild-things",
+    "name": "Wild Things",
+    "kind": "booster",
+    "era": "2020 · 2045",
+    "status": "Active",
+    "turf": "Watson Development; the Redline bloodsport club",
+    "look": "The mark branded or scarred into the chest, pit-fighter chrome",
+    "leader": "Jenny Nails",
+    "origin": "A boostergang that put its violence in a cage and sold tickets. The Redline in Watson Development is their church. They also do mercenary work and the companionship economy for people who like bruises. They were already in the 2020 lists. They got better at the show.",
+    "text": "Animals without the 2077 mall. If you need a gladiator, a bodyguard who looks like a problem, or a night that ends with a stretcher, Jenny Nails will quote you.",
+    "hooks": [
+      "The Redline's champ was juiced by a corp. Jenny wants the corp intern who signed the vial.",
+      "A fight is fixed. The other fixer is Maelstrom. The Wild Things do not fix fights.",
+      "A branded kid is underage. Jenny wants them out of the building before NCPD invents a conscience."
+    ]
+  },
+  {
+    "id": "willows",
+    "name": "Willows",
+    "kind": "guardian",
+    "era": "2045",
+    "status": "Active (therapy group that can still kill you)",
+    "turf": "From the Ashes clinic, Old Combat Zone, monthly",
+    "look": "A challenge coin. No colors. That is the point.",
+    "leader": "Ingénue",
+    "origin": "Female combat veterans who meet once a month at a Combat Zone clinic. Rogue has been seen. Trace Santiago was told not to call them a gang. They are a support group with a body count in the résumé column. Night City still files them here because the form has no box for 'people who got help and stayed armed.'",
+    "text": "Do not start a fight in From the Ashes. Do not recruit their patients into 6th Street. Do not put their names in a media piece. If they hire you, it is because the job would look like a relapse if they did it themselves.",
+    "hooks": [
+      "Ingénue wants a stalking corpo scared, not killed. Several Willows are famous enough that killing him would make news.",
+      "6th Street is leafleting the clinic. The coin-carriers want the leaflets to stop without a war.",
+      "A Willow missed two meetings. Her stack was tossed. The party is the welfare check with guns."
+    ]
+  },
+  {
+    "id": "yellow-brick-road",
+    "name": "Yellow Brick Road Gang",
+    "kind": "poser",
+    "era": "2045",
+    "status": "Active",
+    "turf": "Night City's fantasy-themed corners and a brick road that is paint",
+    "look": "Oz cosplay taken as far as chrome and cruelty will go",
+    "leader": "Street file incomplete — they prefer the bit to a press kit",
+    "origin": "A poser crew that picked a children's road and walked it into a city that eats children. Wizard, scarecrow, tin — the costumes change, the mugging does not. They are in the 2045 guide because someone kept surviving the encounter.",
+    "text": "Harmless until the flying-monkey chrome. Useful as a parade that is also a pickpocket line. Prime-Time Players consider them competition. Children consider them a warning.",
+    "hooks": [
+      "A 'wizard' sold a kid a real gun. The Queens and the Princesses both want a word.",
+      "The painted road is covering a Night Corp survey line. Someone wants the paint gone. Someone else wants the survey.",
+      "A tin-man sculpt job locked up in the rain. The ripper who did it is hiding."
+    ]
+  },
+  {
+    "id": "zoners",
+    "name": "The Zoners",
+    "kind": "booster",
+    "era": "2045",
+    "status": "Active",
+    "turf": "Old Combat Zone as identity, not just address",
+    "look": "Zone salvage fashion, the pride of people who never left the fire",
+    "leader": "Local captains; ERI would like to be in charge and is not",
+    "origin": "Not every Combat Zone kid joined Generation Red or the Sights. Zoners are the ones who made the ruin itself the colors. They know the rubble. They tax the rubble. They die in the rubble and call it home.",
+    "text": "Guides, ambushes, and a chip on the shoulder aimed at anyone with a clean jacket. If your campaign lives in the Zone, you will pay them or fight them. Often both.",
+    "hooks": [
+      "A Zoner map of the tunnels is for sale. The Shroomers say it is a lie. It might be a trap. It might be both.",
+      "ERI wants a Zoner captain at a table. The captain wants a hostage first.",
+      "Maelstrom is recruiting in the Zone. The Zoners will sell the recruiters out for ammo."
+    ]
+  },
+  {
+    "id": "crawling-cobras",
+    "name": "Crawling Cobras",
+    "kind": "booster",
+    "era": "2045",
+    "status": "Active",
+    "turf": "Night City's wet edges and the kind of club that keeps snakes",
+    "look": "Reptile sculpt, cobra iconography, slow walks that are a threat display",
+    "leader": "Street file thin; they prefer rumor to interviews",
+    "origin": "A 2045 booster/poser hybrid that took the snake as a whole personality: patience, venom, the long wait under a floorboard. They show up in the RED lists because enough bodies turned up with puncture patterns that were not animals.",
+    "text": "Not the Lightning Cats' cousins, though a tourist might think so. Cobras wait. Cats hunt. If a deal feels too quiet, check the ceiling.",
+    "hooks": [
+      "A night market stall is paying a 'snake tax.' The stall wants it to end without a panic.",
+      "A Cobra sculpt went feral in a club. The club is Tyger Claw. Diplomacy is a stretcher.",
+      "Someone is selling fake venom as smash. The Cobras consider that a copyright issue."
+    ]
+  },
+  {
+    "id": "desperados",
+    "name": "Desperados",
+    "kind": "poser",
+    "era": "2045",
+    "status": "Active",
+    "turf": "Overlapping the DeadWoods' cowboy circuit, with less railroad and more wanted posters",
+    "look": "Outlaw western, not guardian western",
+    "leader": "Whoever is still standing after the last toast",
+    "origin": "If DeadWoods are the sheriff show, Desperados are the other channel. Same century, opposite sermon. They rob, run, and pose for cameras that do not exist.",
+    "text": "A posse you hire when you want the crime to look like a story. A problem when they believe the story.",
+    "hooks": [
+      "Hurston of the DeadWoods wants a Desperado crew run off a Glen casino without a shootout on the felt.",
+      "A 'train robbery' is scheduled on a cargo line that has a Night Corp inspector aboard.",
+      "A Desperado left a calling card at a Valentino funeral. Padre is not a film fan."
+    ]
+  },
+  {
+    "id": "fabulous-mayhem",
+    "name": "Fabulous Mayhem",
+    "kind": "party",
+    "era": "2045",
+    "status": "Active",
+    "turf": "Club circuit, wherever a night can be ruined on purpose",
+    "look": "Glam, glitter, and a willingness to make the glitter a weapon",
+    "leader": "A rotating queen of the night",
+    "origin": "A party gang that treated chaos as choreography. They are on the 2045 list because the chaos kept having a body count. Street Queens sometimes share a dance floor with them. Sometimes they share a lawsuit.",
+    "text": "Hire them to crash a corpo party. Do not hire them to be subtle. Mayhem is in the letterhead.",
+    "hooks": [
+      "A corpo launch needs to fail as a meme, not a massacre. Mayhem will need a leash. The leash will fail.",
+      "Glitter turned out to be a tracking dust. The gang wants the supplier.",
+      "Maxine Raunch wants them out of a Queen's club for one weekend. She will pay in a favor that is not cash."
+    ]
+  },
+  {
+    "id": "hells-angels",
+    "name": "Hell's Angels",
+    "kind": "booster",
+    "era": "2020 · 2045",
+    "status": "Active as a 20th-century name that Night City never managed to bury",
+    "turf": "Highway clubs, northern bars, the idea of a run",
+    "look": "The old colors, updated chrome, bikes that predate CHOOH2 and were converted anyway",
+    "leader": "Chapter presidents, as ever",
+    "origin": "The 20th-century club survived into the Time of the Red the way cockroaches and corporations did: by not taking the hint. Night City chapters mixed with local booster culture until the name was both a historical costume and a real engine. Arzin Tynon stole the look. The Angels still have the lawyers, or the memory of lawyers.",
+    "text": "Not a poser gang, they will tell you. The street files still file them next to posers because the century is a costume now. Do not say that on a run.",
+    "hooks": [
+      "A chapter wants a CHOOH2 route that Petrochem 'forgot' to license.",
+      "Arzin Tynon wore a rocker that was not theirs. The Angels want it burned off a jacket, not a person. Maybe.",
+      "A veteran Angel is dying of old chrome. They want a night ride through a district that banned bikes."
+    ]
+  },
+  {
+    "id": "high-class-heist",
+    "name": "High-Class Heist Crew",
+    "kind": "crime",
+    "era": "2045",
+    "status": "Active",
+    "turf": "Wherever the vault is",
+    "look": "Evening wear, no colors, the opposite of a booster parade",
+    "leader": "A planner who does not use a street name twice",
+    "origin": "The 2045 books listed them as a gang because Night City lists anything that repeats a crime. They are a professional theft set: tuxedos, timing, and a getaway that is not a panzer. Maelstrom thinks they are cowards. They think Maelstrom is a noise complaint.",
+    "text": "If your table wants Ocean's-whatever in 2045, this is the file. They will hire specialists. They will burn specialists. Read the contract twice.",
+    "hooks": [
+      "A tower job needs a face the cameras have never seen. That is the party.",
+      "A heist went loud. The crew wants the person who brought a booster into a whisper job.",
+      "Arasaka lost something they will not name. The Heist Crew did not take it. They know who did."
+    ]
+  },
+  {
+    "id": "lost-kids",
+    "name": "Lost Kids",
+    "kind": "party",
+    "era": "2045",
+    "status": "Active",
+    "turf": "Stacks, squats, the edges of yogang maps",
+    "look": "Whatever still fits, a mark they invent every month",
+    "leader": "Whoever can find food this week",
+    "origin": "A yogang in the true sense: kids without houses who clustered so the street would have to eat them in a group. They are not successful. They are not supposed to be. Night City files them so GMs remember the Combat Zone has children in it.",
+    "text": "Do not make them comic relief. Do not make them an army. A Lost Kid gig is a missing-person, a stolen blanket, a corp charity that is a trap.",
+    "hooks": [
+      "A stack landlord is selling 'adoption' to a body bank. The Kids know the van.",
+      "Generation Red wants to take them in. Half the Kids think that is a gang. Half think that is a bed.",
+      "A media wants a documentary. The first camera already got someone killed."
+    ]
+  },
+  {
+    "id": "saturday-night-buttkickers",
+    "name": "Saturday Night Buttkickers",
+    "kind": "party",
+    "era": "2045",
+    "status": "Active",
+    "turf": "Weekend fights, parking lots, the kind of bar that still has a jukebox",
+    "look": "Disco-era fight fashion, bruises as membership cards",
+    "leader": "The last one standing when the song ends",
+    "origin": "A party/combat gang that treated Saturday like a holiday of fists. They are in the RED catalog because the parking-lot wars kept happening after the war that was supposed to end wars.",
+    "text": "Wild Things with a calendar. Hire them for a brawl. Do not hire them for a Tuesday.",
+    "hooks": [
+      "A bar in Santo wants one Saturday without a hospitalization. They will pay for a fake fight that ends early.",
+      "A Buttkicker crossed Animals in a 2077-era pit (if your table jumped decades) and did not walk out.",
+      "Someone is filming the lots for a BD. The gang wants a cut. The filmmaker wants blood."
+    ]
+  },
+  {
+    "id": "western-stars",
+    "name": "Western Stars",
+    "kind": "poser",
+    "era": "2020 · 2045",
+    "status": "Active in pockets",
+    "turf": "The cowboy circuit, media lots, the idea of a horizon",
+    "look": "Cleaner western than DeadWoods, more camera-ready",
+    "leader": "A front-person who can still ride",
+    "origin": "2020 poser royalty: the western as lifestyle brand. Some grew into DeadWoods. Some stayed Stars — the ones who wanted the poster, not the railroad. They still show up at parades and shootouts that were supposed to be pretend.",
+    "text": "A media's idea of a gang. Sometimes that is cover for a real theft. Sometimes it is just a theft of taste.",
+    "hooks": [
+      "A Stars parade is covering a Culper Ring pickup. The Stars do not know. The Ring is counting on that.",
+      "Hurston says they are diluting the bit. A duel was offered. The Stars want a second.",
+      "A stolen stallion is a genetically printed Biotechnica showpiece. It kicked a ganger and ran."
+    ]
+  },
+  {
+    "id": "metal-warriors",
+    "name": "Metal Warriors",
+    "kind": "historical",
+    "era": "2010s · 2020 (destroyed)",
+    "status": "Defunct — remnants became Maelstrom",
+    "turf": "Old Combat Zone (then)",
+    "look": "Early full-borg booster fashion, the prototype of the red-eye look",
+    "leader": "Dead, missing, or wearing a new name",
+    "origin": "The boostergang the Inquisitors almost wiped off the map. They treated chrome as destiny a decade before Maelstrom made it a brand. Survivors, plus Iron Sights and Red Chrome leftovers, welded the whirlpool. If you find Metal Warrior colors in 2045, you have found a relic, a liar, or a Maelstrom history lesson.",
+    "text": "Use them as ghosts. A cache of 2020 chrome. A survivor in a ripper's chair. A kid wearing a jacket they found. Maelstrom does not like museums.",
+    "hooks": [
+      "A Combat Zone crate is stamped with a mark older than Maelstrom. Warlock wants it. An Inquisitor cell wants it burned.",
+      "A ganger claims the old name. Royce (or Warlock) will want a conversation.",
+      "A documentary crew is digging. They will not survive the premiere without help."
+    ]
+  },
+  {
+    "id": "blood-razors",
+    "name": "Blood Razors",
+    "kind": "historical",
+    "era": "2005–2020s (broken)",
+    "status": "Defunct in Night City; a splinter once held East Village in New York",
+    "turf": "Combat Zone of the Mob Rule years; later a feared 2010s name",
+    "look": "Blades, blood as advertising, the confidence of a crew that out-feared the Slaughterhouse",
+    "leader": "Hack Man (2010s). The bounty on the Inquisitor boss was his.",
+    "origin": "They rose during the Mob Rule (2005–2009) and spent the 2010s as one of Night City's most feared combat gangs, rivaled only by the Slaughterhouse. They hated Inquisitors with a personal heat: rumor said the Inquisitor leader killed Hack Man's brother. The 25,000 eb bounty did not end the war. Time, the Fourth Corporate War, and bigger whirlpools did. By RED they are a story you tell to scare boosters.",
+    "text": "A table in 2020 can still step on them. A table in 2045 finds jackets, grudges, and maybe a New York cousin. Do not resurrect them as a joke. They earned the name.",
+    "hooks": [
+      "The bounty chit is still in a safe. The name on it might still be breathing.",
+      "A Razor splinter in another city wants a relic from the Combat Zone. Maelstrom is using the relic as a doorstop.",
+      "An old woman in Heywood says Hack Man was her brother. She wants the Inquisitor story finished."
+    ]
+  },
+  {
+    "id": "slaughterhouse",
+    "name": "The Slaughterhouse",
+    "kind": "historical",
+    "era": "2010s · 2020",
+    "status": "Defunct as a power; the name still empties a bar",
+    "turf": "Combat Zone abattoirs and the blocks that smelled like them",
+    "look": "Butcher chrome, aprons that were not a bit",
+    "leader": "None living that the street will admit",
+    "origin": "The other nightmare of 2010s Night City, matched only by the Blood Razors for sheer reputation. They made violence a workplace. The War and the nuke years finished the factory. 2045 kids use the name as a dare. 2020 tables can still walk into the kill floor.",
+    "text": "Historical file with a smell. If you need a dungeon that used to be a gang, start in a building with drains in the floor.",
+    "hooks": [
+      "A Santo meat plant is using Slaughterhouse marks as 'heritage branding.' Someone surviving from the old crew is not flattered.",
+      "A BD of the old floors is circulating. The people in it were not actors.",
+      "Scavs opened a sealed locker. The tools inside have names engraved."
+    ]
+  },
+  {
+    "id": "steel-slaughter-slammers",
+    "name": "Steel Slaughter Slammers",
+    "kind": "historical",
+    "era": "2020",
+    "status": "Defunct / absorbed into rumor",
+    "turf": "Combat Zone circuits",
+    "look": "Boostergang metal, slam culture, the long name that was a threat",
+    "leader": "Forgotten on purpose",
+    "origin": "A 2020 combat crew whose name was the whole manifesto. They slammed, they steel'd, they did not make the Time of the Red as a going concern. Pieces of them walked into Maelstrom, the Sights, or a grave.",
+    "text": "Use as a jacket in a closet, a tattoo on a 60-year-old drunk, a rivalry that only one person still remembers.",
+    "hooks": [
+      "A Slammer jacket in a Night Market is tagged with a tracker. The buyer is already followed.",
+      "A ripper recognizes a 2020 serial in a 2045 ganger and wants the party to ask why.",
+      "Someone is restarting the name. Maelstrom will not share the letter S."
+    ]
+  },
+  {
+    "id": "djs",
+    "name": "The D.J.'s",
+    "kind": "historical",
+    "era": "2020",
+    "status": "Defunct as a gang; the mix still exists",
+    "turf": "Clubs, pirate towers, the idea of a night",
+    "look": "Deck-first, gun-second, logos on records that scratch like knives",
+    "leader": "Whoever owned the night's signal",
+    "origin": "A 2020 crew that treated the mix as turf. They fought over frequencies the way boosters fought over corners. Radio in 2045 is corporate or pirate. The D.J.'s were the prototype of both and the funeral of neither.",
+    "text": "A historical file for tables that want a club war. G3's Gun-Gal is a grandchild that will not admit parentage.",
+    "hooks": [
+      "A 2020 master disc is worth a killing in Kabuki. Hazumi Ihara will bid. So will a corpo nostalgia imprint.",
+      "A pirate tower still broadcasts a D.J.'s ident. The operator is dead. The automation is not.",
+      "Someone sampled a rival's kill on a track. The family heard it."
+    ]
+  },
+  {
+    "id": "bradi-bunch",
+    "name": "The Bradi Bunch",
+    "kind": "historical",
+    "era": "2020",
+    "status": "Defunct as a headline; family posers persist under other names",
+    "turf": "Suburban ruins, the sitcom as a fortress",
+    "look": "Matching family sculpt, the joke that had guns",
+    "leader": "A 'parent' who was not",
+    "origin": "The textbook family poser gang of 2020: they copied a household, then defended the bit with firearms. The Andersons are what happens when that joke grows up in a Combat Zone and gets a fixer. The Bunch themselves are a 2020 encounter and a 2045 punchline.",
+    "text": "Use in a 2020 game as written. Use in 2045 as the reason Molly Anderson does not smile when you mention sitcoms.",
+    "hooks": [
+      "A Bunch survivor wants the Andersons to acknowledge a lineage. Molly does not.",
+      "A corpo 'family values' ad used their old look. The remaining members can still shoot.",
+      "A matching-sculpt cult in Rancho is not the Bunch. It is doing the Bunch better. That is worse."
+    ]
+  },
+  {
+    "id": "brainiacs",
+    "name": "The Brainiacs",
+    "kind": "historical",
+    "era": "2020",
+    "status": "Defunct / scattered into net crews",
+    "turf": "University edges, proto-NET cafes",
+    "look": "Smartest-person-in-the-room fashion, decks that predate modern ice",
+    "leader": "A sysop who went quiet",
+    "origin": "2020's nerd gang: brains as a weapon, decks as a personality. Some of them died in the Old NET's collapse. Some of them became the reason Mudang Gumi has a reputation. The name did not survive. The habit did.",
+    "text": "A historical netrunner club with street muscle on the payroll. 2045 tables meet their students and do not get the joke.",
+    "hooks": [
+      "A Brainiac icebox from 2020 just pinged. It should not still have power.",
+      "A University ghost story is a real server. The Vampyres want it for a prank. The Gumi want it for theft.",
+      "A dead member's daughter has the old handle. She does not know what it opens."
+    ]
+  },
+  {
+    "id": "sacred-blades",
+    "name": "Sacred Blades",
+    "kind": "historical",
+    "era": "2020",
+    "status": "Defunct as a gang; the draw lives in Claw dojos",
+    "turf": "Japantown of the old map",
+    "look": "Monoedge as religion, less syndicate than sect",
+    "leader": "A sensei whose students joined other flags",
+    "origin": "A 2020 blade cult/gang that treated the sword as a commandment. Tyger Claws out-organized them. Kendachi out-sold them. A few teachers still run rooms where you do not speak until you bow.",
+    "text": "If you need a dojo that is not Claw property, this is the ghost on the lease.",
+    "hooks": [
+      "A Sacred Blade kata is the unlock for a 2020 safe. The last student is dying.",
+      "Claws want the dojo's name erased. The sensei's grandchild will pay for a delay.",
+      "A Kendachi prototype was left as an offering. Both the company and the Claws felt it move."
+    ]
+  },
+  {
+    "id": "gilligans",
+    "name": "The Gilligans",
+    "kind": "historical",
+    "era": "2020",
+    "status": "Defunct",
+    "turf": "Waterfront wrecks, a 'island' that was a pier",
+    "look": "Castaway poser kit, worse ideas",
+    "leader": "A skipper who was not",
+    "origin": "A 2020 poser gang that picked a shipwreck sitcom and moved it onto a toxic pier. They are a joke in the old books and a cautionary tale about picking the wrong bit in a city with tides that burn.",
+    "text": "Use as a 2020 encounter on the docks. 2045: a rusted theme bar and a body in a skipper's hat.",
+    "hooks": [
+      "A pier 'island' is still taxed by someone using the old name. The Piranhas want the dock.",
+      "A Biotechnica barrel washed up in their old lagoon. Do not open it. Someone will.",
+      "A media wants to reboot the bit. The water is still wrong."
+    ]
+  },
+  {
+    "id": "black-queens",
+    "name": "Black Queens",
+    "kind": "historical",
+    "era": "2020",
+    "status": "Defunct as a flag; the work went into Street Queens and later the Mox",
+    "turf": "Club doors of the old city",
+    "look": "Queen iconography before it was jewelry-code",
+    "leader": "A door that would not open",
+    "origin": "A 2020 guardian/poser crew on the queer and club side of the map. The Street Queens of 2045 and the Mox of 2077 are not the same org chart, but the job did not change: hold the door, tax the room, bury your dead in the right clothes.",
+    "text": "Historical sisters. A 2045 Queen might spit if you say they are a reboot. A 2077 Mox might not have heard the name. Both still do the work.",
+    "hooks": [
+      "A Black Queen jacket in a Night Market has a list in the lining. Some names are still alive.",
+      "Maxine wants the list. Lizzie's people would want it too, if your table is in 2077.",
+      "A corpo Pride float used the old mark. The surviving members can still find a float."
+    ]
+  },
+  {
+    "id": "back-alley-brawlers",
+    "name": "Back Alley Brawlers",
+    "kind": "historical",
+    "era": "2020",
+    "status": "Defunct / dissolved into pit culture",
+    "turf": "Alleys, by definition",
+    "look": "Tape, teeth, no theme except the win",
+    "leader": "A promoter with a whistle",
+    "origin": "The 2020 name for people who fought in alleys for money before Wild Things put a cage around it and Animals put a mall around the cage. They did not need a logo. The alley was the logo.",
+    "text": "A historical fight club. Use it to explain why Night City still has a Saturday that sounds like a riot.",
+    "hooks": [
+      "A Brawler champion from 2020 is a ripper's skeleton with a belt. Someone wants the belt.",
+      "Jenny Nails found a Brawler rulebook. She wants a throwback night. The alley does not have insurance.",
+      "A kid is using the old name. The remaining drunks will test them."
+    ]
+  },
+  {
+    "id": "steel-dragons",
+    "name": "Steel Dragons",
+    "kind": "historical",
+    "era": "2020",
+    "status": "Defunct as a headline go-gang",
+    "turf": "Highways, the go-gang map",
+    "look": "Bikes, dragon motifs, speed as theology",
+    "leader": "A rider whose name is a paint job now",
+    "origin": "The typical 2020 go-gang in the old taxonomy: urban speed tribe, not always Japanese, always loud. Tyger Claws took the bikes and the city. Arzin Tynon took the American chopper half. The Dragons are a stripe on a tank that outlived the rider.",
+    "text": "A chase scene with a history teacher. 2045 racers still steal their lines.",
+    "hooks": [
+      "A dragon-painted bike in a Claw garage is a 2020 relic. The Claws do not know. A surviving Dragon does.",
+      "Frankie Sparks wants the old highway route for a hearse race. The route is a grave.",
+      "NCPD found a helmet with a map inside. The map still works. That is a problem."
+    ]
+  },
+  {
+    "id": "water-rats",
+    "name": "Water Rats",
+    "kind": "historical",
+    "era": "2020",
+    "status": "Defunct / reduced to dock scavvers",
+    "turf": "Harbor, storm drains, the toxic surf",
+    "look": "Waders, rebreathers, chrome that rusts anyway",
+    "leader": "A dock boss who learned to swim in acid",
+    "origin": "A 2020 harbor gang: salvage, smuggling, bodies that float. Pacifica's later wrecks ate their map. Scavvers inherited the drains. A few Rats still know which outflow leads to a corp pipe.",
+    "text": "If your table goes underwater in Night City, this is the old name for the people who already did.",
+    "hooks": [
+      "A Rat chart of the drains is the only way into a Night Corp cistern.",
+      "Something in the harbor glows. The docks were not being poetic. A Rat will sell you a look.",
+      "IEC wants a tunnel mapped. The Rats want a reason to care."
+    ]
+  },
+  {
+    "id": "wire-cult",
+    "name": "Wire Cult",
+    "kind": "historical",
+    "era": "2020",
+    "status": "Defunct as a public cult; the theology went into the Enhanced and the Boys",
+    "turf": "Old NET temples, cable basements",
+    "look": "Wires as vestments, decks as altars",
+    "leader": "A prophet who flatlined on purpose",
+    "origin": "A 2020 net-cult that worshipped the connection itself. The collapse of the Old NET killed the church or scattered it into Voodoo Boys, Brainiacs, and the Enhanced. You can still find a basement with a circle of cables and a stain.",
+    "text": "Historical horror. Do not play them as goofy. Play them as people who found a god in a server and it ate them.",
+    "hooks": [
+      "A basement in Watson still answers ping. It should not.",
+      "A Wire Cult veve was painted over a Voodoo Boys mark. Pacifica will not like the plagiarism.",
+      "A party netrunner dreams in a voice that uses 2020 slang. The cult is not as dead as the file says."
+    ]
+  },
+  {
+    "id": "trekkies",
+    "name": "The Trekkies",
+    "kind": "historical",
+    "era": "2020",
+    "status": "Defunct as a gang; fandom went home",
+    "turf": "Convention ruins, University posers",
+    "look": "Future-navy that was already retro in 2020",
+    "leader": "A 'captain' with a stunner",
+    "origin": "A 2020 poser gang that took a 20th-century space opera as law. They are in the old lists. They did not survive contact with a city that had real orbital stations and nothing kind in them.",
+    "text": "Comic until the phaser is a real microwaver. Use as 2020 color or a 2045 convention-murder.",
+    "hooks": [
+      "A convention in the University District is using the old ranks. A real microwaver is in the prop box.",
+      "Orbital Air's marketing wants the look. The last Trekkie wants a lawyer or a gun.",
+      "A 'transporter accident' is a scav cover story."
+    ]
+  },
+  {
+    "id": "elvises",
+    "name": "The Elvises",
+    "kind": "historical",
+    "era": "2020",
+    "status": "Defunct as a unified poser army",
+    "turf": "Nightclubs that still play the King",
+    "look": "Too many jumpsuits, too many sideburns, chrome hips",
+    "leader": "Whoever won the impersonator war",
+    "origin": "A 2020 poser gang of Elvis impersonators who treated the bit as a turf. Night City had the population to support a war of Kings. It did not have the patience. Prime-Time Players stole the method. The jumpsuits went to Night Markets.",
+    "text": "A joke with a pistol in the belt. 2045 karaoke still starts fights that think they are history.",
+    "hooks": [
+      "Two Elvises left. They have scheduled a duel in a Glen chapel. The Valentinos do not want sequins in the aisle.",
+      "A jumpsuit has a soulkiller fragment in the lining. No one knows why.",
+      "A corpo wants a hundred Elvises for a launch. There are not a hundred. There are Bozos who will try."
+    ]
+  },
+  {
+    "id": "kennedys",
+    "name": "The Kennedys",
+    "kind": "historical",
+    "era": "2020",
+    "status": "Defunct",
+    "turf": "Media lots, poser politics",
+    "look": "Dynasty hair, period suits, a smile for the camera and a gun for the alley",
+    "leader": "A 'president' elected by the gang",
+    "origin": "A 2020 poser crew that copied an old American dynasty and then ran protection like a campaign. Culper Ring would later do the politics without the hair. The Kennedys did the hair without the country.",
+    "text": "Use in 2020 as satire that shoots back. Use in 2045 as a costume box in a media warehouse.",
+    "hooks": [
+      "A 'campaign event' in 2020 is a hit. The party is the security or the hit.",
+      "A 2045 media wants the last Kennedy for a reboot. The last Kennedy wants to stay buried.",
+      "A suit in a Night Market has a 2020 bug still transmitting. Someone is still listening."
+    ]
+  },
+  {
+    "id": "silver-slash",
+    "name": "Silver Slash",
+    "kind": "historical",
+    "era": "2020",
+    "status": "Defunct",
+    "turf": "Blade-and-chrome circuits of the old Zone",
+    "look": "Silvered edges, slash marks as a calling card",
+    "leader": "A duelist",
+    "origin": "A 2020 combat gang that signed its work. They dueled, they marked, they lost the long war to bigger names. A slash on a 2045 door is either a copycat or a ghost.",
+    "text": "Historical boosters with a handwriting. Useful as a signature at a crime scene that is older than the suspects.",
+    "hooks": [
+      "A fresh silver slash appeared on a Claw door. The Claws want a name. The name might be a 70-year-old.",
+      "A blade in a Night Market has a Silver Slash serial. Kendachi says it is a fake. It cuts like it isn't.",
+      "A copycat is building a résumé. The remaining Slash, if any, is not flattered."
+    ]
+  },
+  {
+    "id": "spikes",
+    "name": "The Spikes",
+    "kind": "historical",
+    "era": "2020",
+    "status": "Defunct / folded into punk booster leftovers",
+    "turf": "Old Combat Zone punk blocks",
+    "look": "Spikes. On jackets, on chrome, on the problem.",
+    "leader": "A punk who lived",
+    "origin": "A 2020 booster/punk crew that made the fashion the weapon. Iron Sights outlasted them by getting a fixer. The Spikes outlasted themselves by not.",
+    "text": "The missing link between 2013 street punk and 2045 BloodGuts. A jacket in a closet. A trap in an alley that still has a tripwire.",
+    "hooks": [
+      "A Spike trap in the Zone just killed a Zoner. It was set in 2022. Someone re-armed it.",
+      "BloodGuts wants the old colors burned so the Sights are the only mohawk in the file.",
+      "A kid with a spiked jacket thinks it is fashion. The jacket has a tracker from a 2020 war."
+    ]
+  },
+  {
+    "id": "lords-of-discipline",
+    "name": "Lords of Discipline",
+    "kind": "historical",
+    "era": "2020",
+    "status": "Defunct",
+    "turf": "Military-school ruins, 6th Street's older cousin in spirit",
+    "look": "Uniform fetish, real surplus, a hierarchy that saluted itself",
+    "leader": "A 'colonel' with no army",
+    "origin": "A 2020 crew that played military academy in a city that had real veterans. 6th Street later did the veteran thing without the play. The Lords were the play without the war record. It did not save them.",
+    "text": "A historical militia poser file. Use to shade 6th Street: this is what they look like to Valentinos.",
+    "hooks": [
+      "A Lord of Discipline banner showed up at a 6th Street rally. X Wright wants it gone before the block laughs.",
+      "A surplus crate is stenciled with the old name. The guns still fire.",
+      "A 'colonel' is recruiting Lost Kids. The Willows will not allow it."
+    ]
+  },
+  {
+    "id": "fangs-of-justice",
+    "name": "Fangs of Justice",
+    "kind": "historical",
+    "era": "2020",
+    "status": "Defunct",
+    "turf": "Vigilante rooftops of the old map",
+    "look": "Hero costumes, real fangs, a press kit",
+    "leader": "A masked captain",
+    "origin": "A 2020 vigilante poser gang: they wanted to be the Princesses of Justice before that show had a 2045 crew. They had fangs. They had a manifesto. They had a body count that was not always the right people.",
+    "text": "Historical superheroes. The Princesses will not claim them. The Inquisitors might have hunted them for the fangs alone.",
+    "hooks": [
+      "A Fangs mask in a museum heist is a real person's death mask. The museum does not know.",
+      "Adorable of the Princesses found a Fangs manifesto in Princessland. She wants it burned before the kids read the wrong chapter.",
+      "A copycat is 'saving' University students. The students did not ask."
+    ]
+  },
+  {
+    "id": "chrome-angels",
+    "name": "Chrome Angels",
+    "kind": "historical",
+    "era": "2020",
+    "status": "Defunct",
+    "turf": "Full-borg parade routes",
+    "look": "Wings in metal, halos in neon, boosters who thought they were icons",
+    "leader": "A seraph with a linear frame",
+    "origin": "A 2020 poser/booster hybrid: angels as chrome. Maelstrom made the chrome without the wings. Inquisitors made the theology without the glitter. The Angels lost both arguments.",
+    "text": "A beautiful corpse of a gang. Use as a 2020 set piece or a 2045 statue that still has a power lead.",
+    "hooks": [
+      "A Chrome Angel frame is in a body bank. It still tries to fly.",
+      "An Inquisitor cell wants the statue melted. A media wants it in a lobby.",
+      "A kid sculpted wings. Maelstrom offered a real pair. The kid should not take either deal."
+    ]
+  },
+  {
+    "id": "blue-angels",
+    "name": "Blue Angels",
+    "kind": "historical",
+    "era": "2020",
+    "status": "Defunct",
+    "turf": "Aerial poser circuit, rooftop clubs",
+    "look": "Flight suits, cheap jump boosters, a sky they did not own",
+    "leader": "A 'squadron' lead",
+    "origin": "Not the 20th-century navy team. A 2020 gang that stole the name and jumped off buildings. Most of the file is obituaries. Gold Dragons later did jump boosters with a district behind them.",
+    "text": "A warning about names you cannot afford. Eddy Sing will not appreciate the comparison.",
+    "hooks": [
+      "A Blue Angel jump route is still the fastest way off a tower. The last jumper missed.",
+      "Orbital Air wants the name killed in court. The gang is already dead. The merch is not.",
+      "A Gold Dragon was called a Blue Angel as an insult. Someone is in a dumpster."
+    ]
+  },
+  {
+    "id": "golden-knights",
+    "name": "Golden Knights",
+    "kind": "historical",
+    "era": "2020",
+    "status": "Defunct",
+    "turf": "Armor poser blocks",
+    "look": "Gold-painted armorjack, knight bit, real maces",
+    "leader": "A 'king'",
+    "origin": "A 2020 poser combat gang: medieval gold in a city of guns. They lost to firearms, fashion, and time. Gold Dragons later made gold jackets cool without the horse.",
+    "text": "A 2020 joust in a parking structure. 2045: a helmet in a Night Market that still has blood in the lining.",
+    "hooks": [
+      "Eddy Sing is not related. A Knight descendant wants a meeting anyway.",
+      "A corpo renaissance faire hired the look. The maces were real.",
+      "A golden armorjack is milspec under the paint. Militech wants it back."
+    ]
+  },
+  {
+    "id": "morks",
+    "name": "The Morks",
+    "kind": "historical",
+    "era": "2020",
+    "status": "Defunct",
+    "turf": "University posers, alien-bit clubs",
+    "look": "Red jumpsuits, rainbow suspenders as a threat display",
+    "leader": "A visitor who was not",
+    "origin": "A 2020 poser gang that copied an alien sitcom and then committed crimes in the costume. Reckoners later did cult without the laugh track. The Morks are a footnote with a rainbow.",
+    "text": "Use as 2020 weird. Do not use as 2045 comic relief next to Reckoners; the void cult will eat the joke.",
+    "hooks": [
+      "A Mork suit in a University basement is lined with real alien-hunter chrome from a corp skunkworks. No one knows which corp.",
+      "A Reckoner stole the bit's 'nanu' as a hymn. The last Mork is furious and armed.",
+      "A BD of the old crimes is being recut as comedy. The victims' kids are not laughing."
+    ]
+  },
+  {
+    "id": "bay-area-rapid-terror",
+    "name": "Bay Area Rapid Terror",
+    "aka": "B.A.R.T.",
+    "kind": "historical",
+    "era": "2020",
+    "status": "Defunct",
+    "turf": "Transit lines, the joke that was a bombing campaign",
+    "look": "Transit colors, timers, a name that was a threat",
+    "leader": "A cell that liked trains too much",
+    "origin": "A 2020 terror/prank name aimed at the transit map. They made the news. They made the morgues. NCART still has posters that are not about fares. Julliard plays the stations anyway.",
+    "text": "Historical terrorists. Do not play them cute. A 2045 copycat would shut a city.",
+    "hooks": [
+      "An old B.A.R.T. timer was found in an NCART locker. It is still counting.",
+      "A media wants the old name for a thinkpiece. The survivors do not.",
+      "Culper Ring thinks a new cell is using the old playbook to frame NorCal."
+    ]
+  },
+  {
+    "id": "black-death",
+    "name": "Black Death",
+    "kind": "historical",
+    "era": "2020",
+    "status": "Defunct",
+    "turf": "Plague-bit corners, chem-warfare posers who got too real",
+    "look": "Beak masks, black cloth, actual toxins",
+    "leader": "A doctor who was not licensed",
+    "origin": "A 2020 cult/poser gang that played plague doctor and then started using real agents. Biotechnica lawsuits and NCPD body bags closed the file. Inquisitors hated the chrome. Everyone else hated the cough.",
+    "text": "A historical bio-terror crew. Handle like a hazmat scene, not a costume party.",
+    "hooks": [
+      "A beak mask in a Night Market still smells like a lab.",
+      "A 2045 cough in the Zone matches a 2020 strain. Biotechnica will pay. They will also erase.",
+      "Shroomers found a sealed drum in a side tunnel. The mark is a beak."
+    ]
+  },
+  {
+    "id": "blood-and-tears",
+    "name": "Blood & Tears",
+    "kind": "historical",
+    "era": "2020",
+    "status": "Defunct",
+    "turf": "Melodrama clubs, knife poetry",
+    "look": "Goth before the Vampyres owned it, blades, too much eyeliner for the body count",
+    "leader": "A poet with a crew",
+    "origin": "A 2020 goth combat gang that lost the aesthetic war to the Philharmonic Vampyres and the body-count war to everyone with better guns. The name still looks good on a knife.",
+    "text": "Historical goth boosters. The Master of the Vampyres will claim they were never competition. The graves disagree.",
+    "hooks": [
+      "A Blood & Tears manifesto is being reprinted as Vampyre fanfic. Acme wants a prank. The Master wants a lawyer.",
+      "A knife with the old name was used in a 2045 killing. Copycat or cousin.",
+      "A University reading is a recruiting session. The professor does not know."
+    ]
+  },
+  {
+    "id": "citizens-for-decency",
+    "name": "Citizens for Decency",
+    "kind": "historical",
+    "era": "2020",
+    "status": "Defunct as a gang; the sermon went into Inquisitors and 6th Street pamphlets",
+    "turf": "Picket lines, club doors, the moral panic circuit",
+    "look": "Clean clothes, ugly ideas, clubs behind the signs",
+    "leader": "A spokesperson with a hidden holster",
+    "origin": "A 2020 'concerned citizen' gang: they picketed sex work, chrome, and joy, then broke bones after the cameras left. Inquisitors did the theology. 6th Street did the block watch. Decency did the press release.",
+    "text": "Historical culture-war muscle. The Mox and Street Queens are the long reply.",
+    "hooks": [
+      "A 2020 membership list is about to leak. Half the names are 2045 landlords.",
+      "A picket line formed outside Lizzie's in a 2077 table. The Mox do not do pickets.",
+      "An old spokesman is running for a Night City office. The list is the campaign."
+    ]
+  },
+  {
+    "id": "corporate-raiders",
+    "name": "Corporate Raiders",
+    "kind": "historical",
+    "era": "2020",
+    "status": "Defunct as a street name; the job became 'edgerunner'",
+    "turf": "Office parks, the idea of a hostile takeover with guns",
+    "look": "Suits and rifles, a merger as a firefight",
+    "leader": "A 'partner'",
+    "origin": "A 2020 gang that treated corp war as a small-business model. Some grew into real solos. Some died in the Fourth Corporate War they thought they were practicing for. The Afterlife drinks are the sequel.",
+    "text": "Historical proto-edgerunners with a gang structure. Use as a 2020 crew or a 2045 cautionary tale about branding your war.",
+    "hooks": [
+      "A Raiders letterhead is on a 2045 contract. The client thinks it is funny. The surviving partner does not.",
+      "A tower they hit in 2020 still has a backdoor. Night Corp found it. They want it used once.",
+      "Rogue will not talk about them. That is the hook."
+    ]
+  },
+  {
+    "id": "edisons",
+    "name": "Edison's",
+    "kind": "historical",
+    "era": "2020",
+    "status": "Defunct",
+    "turf": "Grid houses, light as a racket",
+    "look": "Lineman gear, stolen IEC jackets, sparks",
+    "leader": "A 'foreman'",
+    "origin": "A 2020 gang that stole power, sold light, and broke the grid for fun and profit. IEC outlived them. The brownouts still feel like a calling card.",
+    "text": "Historical utility thieves. If the lights die in a district, an old Edison might be bragging in a bar.",
+    "hooks": [
+      "IEC wants a 2020 tap mapped. It is still bleeding power into a Combat Zone chapel.",
+      "A brownout matches an Edison pattern. The foreman is 80 and bored.",
+      "A kid gang is using the name. IEC will not distinguish."
+    ]
+  },
+  {
+    "id": "givers-of-pain",
+    "name": "Givers of Pain",
+    "kind": "historical",
+    "era": "2020",
+    "status": "Defunct",
+    "turf": "Torture houses of the old Zone",
+    "look": "No fashion, only tools",
+    "leader": "A specialist",
+    "origin": "A 2020 sadist crew listed because Night City lists everything that repeats. Bozos later industrialised the bit with greasepaint. The Givers did it without a theme. They are gone. The tools are not.",
+    "text": "Do not play them for comedy. A 2045 table finds a basement. A 2020 table can still knock on the door.",
+    "hooks": [
+      "A basement in the Zone has a Givers drain. Something is using it again.",
+      "A Bozo circus claims the old tools. A survivor wants them melted.",
+      "A corpo 'enhanced interrogation' consultant has a Givers tattoo they think is hidden."
+    ]
+  },
+  {
+    "id": "gold-eagles",
+    "name": "Gold Eagles",
+    "kind": "historical",
+    "era": "2020",
+    "status": "Defunct",
+    "turf": "Patriotic poser blocks, the flag as a jacket",
+    "look": "Gold eagles, surplus, a patriotism that was a brand",
+    "leader": "A 'commander'",
+    "origin": "A 2020 patriotic poser gang. 6th Street later did veterans without the parade gold. The Eagles did the parade without the war. The Unification War made the bit look small.",
+    "text": "A historical flag crew. X Wright will not like the comparison. Use it anyway if you want a fight in a briefing room.",
+    "hooks": [
+      "An Eagle banner at a 6th Street memorial. Veterans take it personally.",
+      "A gold eagle pin is a 2020 tracker for a corp loyalty program. It still pings.",
+      "NUSA propaganda recycled their look. The last Eagle wants a lawyer in Night City, which is to say a gun."
+    ]
+  },
+  {
+    "id": "goldenkids",
+    "name": "GoldenKids",
+    "kind": "historical",
+    "era": "2020",
+    "status": "Defunct",
+    "turf": "Rich-kid packs, malls that still existed",
+    "look": "Money, cruelty, chrome their parents paid for",
+    "leader": "A trust fund with a crew",
+    "origin": "A 2020 rich-kid gang: boredom, boosters, and the certainty that Trauma Team would land for them. Some grew into corpos. Some grew into Maelstrom's favorite kind of hostage. The malls died first.",
+    "text": "Historical spoiled boosters. A 2045 table meets their children in Charter Hill and does not get told the old name.",
+    "hooks": [
+      "A GoldenKid yearbook is a blackmail bible. Half the Night City exchange is in it.",
+      "A child of the crew is slumming in Kabuki. The Claws have not decided if they are a client or a lesson.",
+      "Trauma Team still has an unpaid 2020 invoice that is also a hit list."
+    ]
+  },
+  {
+    "id": "hong-kong-musketeers",
+    "name": "Hong Kong Musketeers",
+    "kind": "historical",
+    "era": "2020",
+    "status": "Defunct as a name; the wire-fu went into Gold Dragons",
+    "turf": "Little China of the old map",
+    "look": "Musketeer hats on jump boosters, blades, cinema",
+    "leader": "An 'Athos' who was a fixer",
+    "origin": "A 2020 poser combat gang that mixed Hong Kong action discs with Dumas. Eddy Sing's Gold Dragons are the competent sequel. The Musketeers are the fan film.",
+    "text": "Historical Little China color. Use a 2020 duel or a 2045 costume in a parlor.",
+    "hooks": [
+      "Ling Po has a Musketeer saber on the wall. Someone wants it back. It is also a key.",
+      "A three-person crew is using the old ranks. The Dragons find it cute. Then they do not.",
+      "A disc in a Night Market teaches a kata that opens a 2020 cache."
+    ]
+  },
+  {
+    "id": "icebrothers",
+    "name": "Icebrothers",
+    "kind": "historical",
+    "era": "2020",
+    "status": "Defunct",
+    "turf": "Cold-storage crime, body banks, the pun as a business",
+    "look": "White chrome, freezer burns, brotherhood tattoos",
+    "leader": "A pair of siblings, if the file can be believed",
+    "origin": "A 2020 crew that ran ice: the drug, the NET, the morgue. The name was a joke that stored bodies. Tombstone Preservers later professionalised the respectable end. Scavs took the rest.",
+    "text": "Historical cold-storage gang. A 2045 freezer with their mark is a dungeon.",
+    "hooks": [
+      "A brother is still on ice in a body bank. The other brother is a 2045 ripper.",
+      "Rieper wants an Icebrothers locker opened without a scandal. The locker is a person.",
+      "A smash dealer is using the old name. The smash is cut with freezer fluid."
+    ]
+  },
+  {
+    "id": "jack-the-rippers",
+    "name": "Jack the Rippers",
+    "kind": "historical",
+    "era": "2020",
+    "status": "Defunct",
+    "turf": "Ripperdoc crime, alleys, the name as a dare",
+    "look": "Surgical chrome, a grin, a newspaper cutting",
+    "leader": "A 'Jack' who was several people",
+    "origin": "A 2020 copycat gang that turned a 19th-century murderer into a brand. NCPD used them as a headline. Working people used them as a reason to walk in pairs. Ripperdocs hate the name for obvious reasons.",
+    "text": "Historical slashers. Do not revive as a joke. A 2045 copycat is a campaign villain.",
+    "hooks": [
+      "A new Jack is using 2020 letters. The Mox (or Street Queens) want them found before the press.",
+      "A ripper is being framed with the old mark. They will pay.",
+      "A newspaper cutting in a 2020 time capsule names a corpo family. The family still exists."
+    ]
+  },
+  {
+    "id": "konehedds",
+    "name": "KoneHedds",
+    "kind": "historical",
+    "era": "2020",
+    "status": "Defunct",
+    "turf": "Full-borg clowns of a different joke than the Bozos",
+    "look": "Cone heads, chrome skulls, a 20th-century sketch as a war crime",
+    "leader": "A pointed skull",
+    "origin": "A 2020 poser gang that took a comedy sketch and welded it to booster chrome. Bozos did clowns better and meaner. The KoneHedds are what happens when the bit is a head shape and the ammo is real.",
+    "text": "A 2020 freakshow file. Use next to Bozos to show that Night City had options and chose worse.",
+    "hooks": [
+      "A cone-skulled corpse in the Zone is a 2020 ganger who just thawed. They think it is still 2020.",
+      "A Bozo circus is wearing cones as an insult. A surviving KoneHedd has a rifle.",
+      "A ripper is being asked to sculpt a cone. They would like a bodyguard for the consult."
+    ]
+  },
+  {
+    "id": "satin-dolls",
+    "name": "Satin Dolls",
+    "kind": "historical",
+    "era": "2020",
+    "status": "Defunct as a gang; the door work went elsewhere",
+    "turf": "Cabaret blocks of the old city",
+    "look": "Satin, razors, a smile that is a cover charge",
+    "leader": "A doll who ran the books",
+    "origin": "A 2020 club gang: companionship, protection, and a dress code that hid a blade. Street Queens and the Mox are the longer story. The Dolls are a 2020 room with a velvet rope and a shotgun.",
+    "text": "Historical cabaret muscle. A 2045 table finds a ledger. A 2020 table can still order a drink.",
+    "hooks": [
+      "A Satin Dolls ledger lists corpos who still hold office.",
+      "A velvet rope in Kabuki is using the old knot. Claws think it is theirs. It is not.",
+      "A song in the Forlorn Hope is a Dolls calling card. Marianne wants to know who requested it."
+    ]
+  },
+  {
+    "id": "second-coming",
+    "name": "Second Comming",
+    "aka": "Second Coming (the street corrected the spelling; the 2020 file did not)",
+    "kind": "historical",
+    "era": "2020",
+    "status": "Defunct",
+    "turf": "End-times corners, proto-Reckoners",
+    "look": "Prophet fashion, misspelled banners, real bombs",
+    "leader": "A messiah with a timer",
+    "origin": "A 2020 apocalypse cult-gang. The 2020 sourcebook spelling is part of the stain. Reckoners later professionalised the void with merch. The Comming (sic) professionalised nothing except the blast radius.",
+    "text": "Historical doomsday crew. A 2045 Reckoner will call them amateurs. The craters remain.",
+    "hooks": [
+      "A misspelled banner showed up in the Glen. Reckoners want it gone before it dilutes the brand.",
+      "A 2020 timer in a chapel is still counting. The chapel is now a Night Market.",
+      "A prophet's grandchild wants the file closed. An Inquisitor wants it taught."
+    ]
+  },
+  {
+    "id": "sinners-n-saints",
+    "name": "Sinners N' Saints",
+    "kind": "historical",
+    "era": "2020",
+    "status": "Defunct",
+    "turf": "Church-and-club double life",
+    "look": "Half choir, half knife, matching ink",
+    "leader": "A pair of twins, if the stories are true",
+    "origin": "A 2020 gang that split every night between nave and neon. Valentinos later made faith and family a real government. The Sinners N' Saints made it a costume with a body count.",
+    "text": "Historical church boosters. Padre will not claim them. A Glen priest might still have their candle list.",
+    "hooks": [
+      "A saint's candle in a Heywood church has a chip in the wax. The chip is a 2020 hit list.",
+      "A club using the old name is shaking down a choir. The Valentinos have opinions.",
+      "Twins in 2045 are copying the bit. One of them is a netrunner. One of them is a problem."
+    ]
+  },
+  {
+    "id": "warrior-heart",
+    "name": "Warrior Heart",
+    "kind": "historical",
+    "era": "2020",
+    "status": "Defunct",
+    "turf": "Dojo-and-feelings circuit",
+    "look": "Martial arts, heart motifs, a manifesto about honor that did not stop the bullets",
+    "leader": "A sensei-therapist",
+    "origin": "A 2020 guardian/poser gang that tried to make honor a street brand. Willows later did the therapy without the logo. Sacred Blades did the dojo without the heart. Warrior Heart did both and lost to guns.",
+    "text": "A historical honorable-mention. Ingénue will not like the comparison. A 2020 table can still train in their room.",
+    "hooks": [
+      "A Warrior Heart coin looks like a Willows coin on a bad night. A veteran almost shot a friend.",
+      "A dojo lease is in the old name. Claws want the building. The lease has a clause that needs a lawyer or a solo.",
+      "A manifesto in a Night Market is a recruitment pamphlet with a 2020 address that is now a crater."
+    ]
+  },
+  {
+    "id": "willow-sisterhood",
+    "name": "Willow Sisterhood",
+    "kind": "historical",
+    "era": "2020",
+    "status": "Defunct as a gang name; not the same org as the 2045 Willows",
+    "turf": "Women's crews of the old map",
+    "look": "Sister marks, street chrome, a name that would be reused",
+    "leader": "A sister who did not live to see the clinic",
+    "origin": "A 2020 women's street crew. In 2045 a therapy group of female veterans took a similar name and a completely different charter. Do not collapse them. The Sisterhood fought. The Willows heal and, when needed, fight anyway. Night City reuses names the way it reuses graves.",
+    "text": "Historical file with a naming trap. A 2045 table that confuses them will be corrected, possibly at From the Ashes.",
+    "hooks": [
+      "A Sisterhood mark on a 2020 jacket is in a Night Market. A Willow thinks it is theirs. It is not.",
+      "A surviving Sister wants a meeting with Ingénue. Ingénue has not decided if that is a good idea.",
+      "A corpo diversity campaign used both names. Both groups are armed."
+    ]
+  }
+]

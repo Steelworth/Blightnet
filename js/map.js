@@ -6,6 +6,7 @@ function catalogSrc(kind, ref) {
   if (kind === "npc") return `assets/npcs/${id}.jpg`;
   if (kind === "god") return `assets/gods/${id}.jpg`;
   if (kind === "lore") return `assets/lore/${id}.jpg`;
+  if (kind === "gang") return `assets/gangs/${id}.jpg`;
   return "";
 }
 
@@ -1030,7 +1031,7 @@ export function tokenPayload(el) {
   if (!el) return null;
   let node = el.closest("[data-token-kind]");
   if (!node) {
-    const host = el.closest("[data-god-id], [data-lore-id], [data-beast], [data-shard], [data-npc], .beast-row, .char-chip, .beast-block");
+    const host = el.closest("[data-god-id], [data-lore-id], [data-beast], [data-shard], [data-npc], [data-gang-id], .beast-row, .char-chip, .beast-block");
     node = host?.querySelector("img[data-token-kind]") || host?.querySelector("[data-token-kind]");
   }
   if (!node) return null;

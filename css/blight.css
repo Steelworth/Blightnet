@@ -639,10 +639,12 @@
 .bn-viewport:has(.app.bestiary-open),
 .bn-viewport:has(.app.datashard-open),
 .bn-viewport:has(.app.kit-open),
+.bn-viewport:has(.app.vendor-open),
 .bn-viewport:has(.app.corp-open),
 .bn-viewport:has(.app.npc-open),
 .bn-viewport:has(.app.god-open),
-.bn-viewport:has(.app.lore-open) {
+.bn-viewport:has(.app.lore-open),
+.bn-viewport:has(.app.gang-open) {
   overflow: hidden;
 }
 .bn-viewport .app {
@@ -656,10 +658,12 @@
 .bn-viewport .app.bestiary-open,
 .bn-viewport .app.datashard-open,
 .bn-viewport .app.kit-open,
+.bn-viewport .app.vendor-open,
 .bn-viewport .app.corp-open,
 .bn-viewport .app.npc-open,
 .bn-viewport .app.god-open,
-.bn-viewport .app.lore-open {
+.bn-viewport .app.lore-open,
+.bn-viewport .app.gang-open {
   height: 100%;
   min-height: 0;
   overflow: hidden;
@@ -858,13 +862,23 @@
 }
 .bn-chat .chat-line.media b { display: inline; }
 
+@media (max-width: 1100px) {
+  .net-deck { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .net-index-side { grid-column: 1 / -1; }
+}
 @media (max-width: 900px) {
   .bn-window { margin: 0; clip-path: none; }
   .bn-chat { width: 100%; min-width: 0; min-height: 220px; border-left: 0; border-top: 2px solid #fcee0a; }
   .bn-body { flex-direction: column; }
   .bn-who input { width: 96px; }
-  .net-index-split { grid-template-columns: 1fr; }
+  .net-deck { grid-template-columns: 1fr; }
+  .net-jack { min-height: 240px; }
   .bn-status-fill { display: none; }
+}
+@media (max-width: 720px) {
+  .net-sys-grid { grid-template-columns: 1fr; }
+  .net-sys-grid .launch-bj { grid-column: auto; }
+  .net-jack { min-height: 220px; }
 }
 .boot-kicker {
   font-size: 0.72rem;
@@ -904,8 +918,8 @@
   color: rgba(252, 238, 10, 0.55);
 }
 .net-index {
-  width: min(1080px, calc(100% - 36px));
-  margin: 28px auto 36px;
+  width: min(1240px, calc(100% - 36px));
+  margin: 22px auto 28px;
   padding: 0 0 12px;
 }
 .net-index-head {
@@ -941,26 +955,178 @@
   padding-bottom: 8px;
 }
 .net-index-meta b { color: #fcee0a; font-weight: 700; }
-.net-index-split {
+.net-deck {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(220px, 280px);
-  gap: 22px;
-  align-items: start;
+  grid-template-columns: minmax(260px, 1.15fr) minmax(280px, 1fr) minmax(220px, 280px);
+  gap: 20px;
+  align-items: stretch;
 }
 .net-index-lede {
-  margin: 0 0 8px;
+  margin: 0 0 18px;
   color: #cfc893;
   letter-spacing: 0.04em;
   font-size: 0.88rem;
   line-height: 1.45;
 }
-.net-dir-label {
+.net-kicker {
   font-size: 0.62rem;
   letter-spacing: 0.28em;
   color: #fcee0a;
-  margin: 6px 0 10px;
+  margin: 0 0 10px;
 }
+.net-jack-col,
+.net-sys-col {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.net-jack {
+  position: relative;
+  flex: 1;
+  min-height: 340px;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  text-align: center;
+  padding: 28px 20px;
+  background:
+    radial-gradient(ellipse at 50% 42%, rgba(0, 240, 255, 0.1), transparent 52%),
+    repeating-linear-gradient(-45deg, rgba(252, 238, 10, 0.05) 0 8px, transparent 8px 16px),
+    #0a0a06;
+  border: 2px solid #fcee0a;
+  color: #fcee0a;
+  clip-path: polygon(22px 0, 100% 0, 100% calc(100% - 22px), calc(100% - 22px) 100%, 0 100%, 0 22px);
+  box-shadow: 10px 10px 0 rgba(252, 238, 10, 0.12);
+  font-family: "Rajdhani", "Segoe UI", system-ui, sans-serif;
+}
+.net-jack::before,
+.net-jack::after {
+  content: "";
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  pointer-events: none;
+  border: 2px solid #00f0ff;
+  z-index: 3;
+}
+.net-jack::before {
+  top: 8px;
+  left: 8px;
+  border-right: 0;
+  border-bottom: 0;
+}
+.net-jack::after {
+  right: 8px;
+  bottom: 8px;
+  border-left: 0;
+  border-top: 0;
+}
+.net-jack-scan {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(180deg, transparent 0%, rgba(252, 238, 10, 0.1) 48%, transparent 52%);
+  background-size: 100% 220%;
+  animation: net-jack-scan 5.5s linear infinite;
+  opacity: 0.55;
+}
+.net-jack-rings {
+  position: absolute;
+  inset: 12%;
+  pointer-events: none;
+}
+.net-jack-rings i {
+  position: absolute;
+  inset: 0;
+  border: 1px solid rgba(0, 240, 255, 0.32);
+  clip-path: polygon(10% 0, 90% 0, 100% 10%, 100% 90%, 90% 100%, 10% 100%, 0 90%, 0 10%);
+  animation: net-jack-ring 3.4s linear infinite;
+  animation-delay: calc(var(--i) * -1.12s);
+}
+.net-jack-core {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+.net-jack-core .launch-id {
+  font-size: 1.15rem;
+  letter-spacing: 0.28em;
+  color: #00f0ff;
+}
+.net-jack-core b {
+  font-family: "Oxanium", "Segoe UI", system-ui, sans-serif;
+  font-size: clamp(2.4rem, 6vw, 3.8rem);
+  letter-spacing: 0.2em;
+  line-height: 0.9;
+}
+.net-jack-core small {
+  color: #9a9360;
+  letter-spacing: 0.18em;
+  font-size: 0.72rem;
+}
+.net-jack-go {
+  margin-top: 14px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.28em;
+  padding: 8px 16px;
+  border: 1px solid #fcee0a;
+  background: #fcee0a;
+  color: #111;
+}
+.net-jack:hover {
+  background:
+    radial-gradient(ellipse at 50% 42%, rgba(252, 238, 10, 0.22), transparent 52%),
+    #fcee0a;
+  color: #111;
+}
+.net-jack:hover .launch-id,
+.net-jack:hover small { color: #333; }
+.net-jack:hover .net-jack-go {
+  background: #111;
+  color: #fcee0a;
+}
+.net-jack:hover .net-jack-rings i { border-color: rgba(17, 17, 17, 0.35); }
+.net-jack:disabled {
+  opacity: 0.42;
+  pointer-events: none;
+}
+.net-jack-trace {
+  margin: 10px 0 0;
+  font-size: 0.62rem;
+  letter-spacing: 0.18em;
+  color: #6d6840;
+}
+.net-sys-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.net-sys-grid .launch-app {
+  margin: 0;
+  min-height: 118px;
+  align-content: start;
+  grid-template-columns: 1fr;
+  grid-template-rows: auto 1fr auto;
+  gap: 6px;
+  padding: 14px 14px 12px;
+}
+.net-sys-grid .launch-app .launch-go { justify-self: start; }
+.net-sys-grid .launch-bj { grid-column: 1 / -1; min-height: 88px; }
+.net-hw {
+  margin: 0 0 12px;
+  padding: 12px 12px 10px;
+  border: 1px solid rgba(252, 238, 10, 0.35);
+  background: rgba(252, 238, 10, 0.03);
+  clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px);
+}
+.net-hw .net-kicker { color: #9a9360; }
 .net-index-side {
+  align-self: start;
   border: 1px solid #fcee0a;
   background:
     repeating-linear-gradient(-45deg, rgba(252, 238, 10, 0.05) 0 8px, transparent 8px 16px),
@@ -976,12 +1142,27 @@
 }
 .net-side-steps {
   margin: 0;
-  padding: 0 0 0 18px;
+  padding: 0;
+  list-style: none;
   color: #cfc893;
   font-size: 0.82rem;
   line-height: 1.45;
 }
-.net-side-steps li { margin: 0 0 8px; }
+.net-side-steps li {
+  display: grid;
+  grid-template-columns: 10px 1fr;
+  gap: 10px;
+  align-items: start;
+  margin: 0 0 10px;
+}
+.net-pip {
+  width: 8px;
+  height: 8px;
+  margin-top: 6px;
+  background: #fcee0a;
+  clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
+  box-shadow: 0 0 8px rgba(252, 238, 10, 0.45);
+}
 .net-side-steps b,
 .net-side-hint b { color: #fcee0a; }
 .net-side-hint {
@@ -1026,6 +1207,7 @@
   border-color: #ff003c;
   color: #ff003c;
 }
+.net-sys-col .launch-quit { margin-top: 12px; }
 .launch-app.launch-quit:hover {
   background: #ff003c;
   color: #111;
@@ -1063,23 +1245,13 @@
   padding: 6px 10px 5px;
   border: 1px solid currentColor;
 }
-.launch-screen {
-  margin: 0 0 18px;
-  padding: 10px 0 2px;
-  border-top: 1px solid rgba(252, 238, 10, 0.28);
-}
-.launch-screen-label {
-  font-size: 0.62rem;
-  letter-spacing: 0.28em;
-  color: #fcee0a;
-  margin-bottom: 8px;
-}
 .launch-screen-list {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
 }
 .launch-screen-btn {
+  min-width: 108px;
   border: 1px solid #fcee0a;
   background: rgba(252, 238, 10, 0.05);
   color: #fcee0a;
@@ -1087,9 +1259,19 @@
   font-size: 0.72rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  padding: 8px 10px;
+  padding: 8px 8px 7px;
   text-align: left;
   clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px);
+}
+.net-mon-glass {
+  display: block;
+  height: 34px;
+  margin-bottom: 6px;
+  border: 1px solid rgba(0, 240, 255, 0.35);
+  background:
+    linear-gradient(180deg, rgba(0, 240, 255, 0.16), transparent 42%),
+    #05080c;
+  box-shadow: inset 0 0 10px rgba(0, 240, 255, 0.12);
 }
 .launch-screen-btn small {
   display: block;
@@ -1103,8 +1285,27 @@
   background: #fcee0a;
   color: #111;
 }
+.launch-screen-btn.on .net-mon-glass,
+.launch-screen-btn:hover .net-mon-glass {
+  border-color: #111;
+  background: linear-gradient(180deg, #111, #333);
+  box-shadow: inset 0 0 10px rgba(252, 238, 10, 0.35);
+}
 .launch-screen-btn.on small,
 .launch-screen-btn:hover small { color: #333; }
+@keyframes net-jack-ring {
+  0% { transform: scale(0.52); opacity: 0; }
+  16% { opacity: 0.7; }
+  100% { transform: scale(1.28); opacity: 0; }
+}
+@keyframes net-jack-scan {
+  0% { background-position: 0 -40%; }
+  100% { background-position: 0 140%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .net-jack-rings i,
+  .net-jack-scan { animation: none; }
+}
 
 @keyframes blight-scan {
   0% { background-position: 0 0, 0 -40%; }
@@ -1316,7 +1517,8 @@ html[data-theme="blight"] .modal-card,
 html[data-theme="blight"] .gate-card,
 html[data-theme="blight"] .datashard-board,
 html[data-theme="blight"] .npc-board,
-html[data-theme="blight"] .lore-board {
+html[data-theme="blight"] .lore-board,
+html[data-theme="blight"] .gang-board {
   border-radius: 0;
   box-shadow: 6px 6px 0 rgba(0, 240, 255, 0.12);
 }
@@ -1336,7 +1538,12 @@ html[data-theme="hearthsong"] #corp-board,
 html[data-theme="hearthsong"] #npc-toggle,
 html[data-theme="hearthsong"] #npc-board,
 html[data-theme="hearthsong"] #lore-toggle,
-html[data-theme="hearthsong"] #lore-board {
+html[data-theme="hearthsong"] #lore-board,
+html[data-theme="hearthsong"] #gang-toggle,
+html[data-theme="hearthsong"] #gang-board,
+html[data-theme="hearthsong"] #bj-toggle,
+html[data-theme="hearthsong"] #launch-bj,
+html[data-theme="hearthsong"] #bj-stage {
   display: none !important;
 }
 html[data-theme="blight"] #srdnpc-toggle,
@@ -1400,8 +1607,50 @@ html[data-theme="blight"] .luck-btn.on:hover {
   background: var(--cyan, #00f0ff);
   border-color: var(--cyan, #00f0ff);
 }
+html[data-theme="blight"] .name-roll .ghost {
+  border-radius: 0;
+}
+html[data-theme="blight"] .wallet-bar,
+html[data-theme="blight"] .vendor-stalls .ghost {
+  border-radius: 0;
+}
+html[data-theme="blight"] .wallet-sum,
+html[data-theme="blight"] .vendor-purse,
+html[data-theme="blight"] .vendor-price {
+  color: var(--cyan, #00f0ff);
+}
+html[data-theme="blight"] .game-watch {
+  border-radius: 0;
+  clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px);
+}
+html[data-theme="blight"] .game-watch .watch-face {
+  fill: #05080c;
+  stroke: var(--cyan, #00f0ff);
+}
+html[data-theme="blight"] .game-watch .watch-pip,
+html[data-theme="blight"] .game-watch .watch-cap { fill: var(--cyan, #00f0ff); }
+html[data-theme="blight"] .game-watch .watch-hour { stroke: var(--cyan, #00f0ff); }
+html[data-theme="blight"] .watch-pop { border-radius: 0; }
+
+.launch-app.launch-bj {
+  border-color: #fcee0a;
+  color: #fcee0a;
+}
+html[data-theme="blight"] .launch-app.launch-bj {
+  border-color: #ff2d6a;
+  color: #ff2d6a;
+}
+html[data-theme="blight"] .launch-app.launch-bj:hover {
+  background: #ff2d6a;
+  color: #111;
+}
+html[data-theme="blight"] .launch-app.launch-bj:hover .launch-go {
+  background: #111;
+  color: #ff2d6a;
+}
 html[data-theme="blight"] .death-box,
-html[data-theme="blight"] .char-down-banner {
+html[data-theme="blight"] .char-down-banner,
+html[data-theme="blight"] .rest-bar {
   border-radius: 0;
 }
 html[data-theme="blight"] .death-box.is-down,
@@ -1596,7 +1845,9 @@ html[data-theme="blight"] .pills {
 .app,
 .app *,
 .guide-body,
-.guide-panel {
+.guide-panel,
+.bj-stage,
+.bj-stage * {
   scrollbar-width: none;
   -ms-overflow-style: none;
 }
@@ -1608,7 +1859,9 @@ html[data-theme="blight"] .pills {
 .app::-webkit-scrollbar,
 .app *::-webkit-scrollbar,
 .guide-body::-webkit-scrollbar,
-.guide-panel::-webkit-scrollbar {
+.guide-panel::-webkit-scrollbar,
+.bj-stage::-webkit-scrollbar,
+.bj-stage *::-webkit-scrollbar {
   width: 0 !important;
   height: 0 !important;
   display: none !important;

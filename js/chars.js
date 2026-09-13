@@ -2,6 +2,8 @@ import { worldOf } from "./catalog.js";
 import { mergeCreator, AUGS } from "./portrait.js";
 import { createDice, parseDice } from "./dice.js";
 import { kitThumb, bindKitArt } from "./kit-art.js";
+import { randomPersonName } from "./names.js";
+import { blightMoney, parsePrice, sellPrice, formatMoney, walletText, canAfford, charge, credit } from "./money.js";
 import {
   CLASSES,
   classById,
@@ -200,6 +202,7 @@ function blankChar() {
     hp: 0,
     hpTemp: 0,
     hitDice: "1d8",
+    hdUsed: 0,
     deathSuccess: 0,
     deathFail: 0,
     downed: false,
@@ -218,8 +221,9 @@ function blankChar() {
     cp: 0,
     sp: 0,
     ep: 0,
-    gp: 0,
+    gp: 50,
     pp: 0,
+    eb: 500,
     spellClass: "",
     spellAbility: "",
     cantrips: "",
@@ -283,15 +287,17 @@ function hydrate(raw) {
           qty: Math.max(1, Number(row.qty) || 1),
           detail: String(row.detail || ""),
           dmg: String(row.dmg || ""),
+          cost: String(row.cost || ""),
+          hl: Number(row.hl) || 0,
+          slot: String(row.slot || ""),
         }))
     : [];
   next.dead = Boolean(raw.dead);
   next.deathSuccess = Math.max(0, Math.min(3, Number(raw.deathSuccess) || 0));
   next.deathFail = Math.max(0, Math.min(3, Number(raw.deathFail) || 0));
-  next.downed =
-    !next.dead &&
-    (Boolean(raw.downed) ||
-      ((Number(next.hp) || 0) <= 0 && (Number(next.hpMax) || 0) > 0));
+  const hpNow = Number(next.hp) || 0;
+  const maxNow = Number(next.hpMax) || 0;
+  next.downed = !next.dead && hpNow <= 0 && (Boolean(raw.downed) || maxNow > 0);
   next.programs = String(raw.programs || "");
   next.portrait = typeof raw.portrait === "string" ? raw.portrait : "";
   next.fullbody = typeof raw.fullbody === "string" ? raw.fullbody : "";
@@ -299,6 +305,7 @@ function hydrate(raw) {
   next.classId = String(raw.classId || classByName(next.className)?.id || "");
   next.subclassId = String(raw.subclassId || "");
   next.ip = Number(raw.ip) || 0;
+  next.hdUsed = Math.max(0, Number(raw.hdUsed) || 0);
   return next;
 }
 
@@ -623,6 +630,11 @@ function isFinesseName(s) {
   return /rapier|dagger|scimitar|shortsword|whip|finesse/i.test(String(s || ""));
 }
 
+function redScore(s, key, fallback = 5) {
+  const n = Number(s?.[key]);
+  return Number.isFinite(n) ? n : fallback;
+}
+
 function combatLevel(ch) {
   if (worldOf() === "blight") return Math.max(1, Math.min(10, Number(ch?.roleRank) || 4));
   return Math.max(1, Math.min(20, Number(ch?.level) || 1));
@@ -638,15 +650,15 @@ function abilityForAction(ch, label, opts = {}) {
   if (blight) {
     const s = ch?.statsRed || {};
     if (opts.hack || /hack|quickhack|program|breach|ice/i.test(name)) {
-      return { id: "int", score: Number(s.int) || 5, name: "INT" };
+      return { id: "int", score: redScore(s, "int"), name: "INT" };
     }
     if (opts.heal || isHealLabel(name)) {
-      return { id: "tech", score: Number(s.tech) || 5, name: "TECH" };
+      return { id: "tech", score: redScore(s, "tech"), name: "TECH" };
     }
     if (isRangedName(name)) {
-      return { id: "ref", score: Number(s.ref) || 5, name: "REF" };
+      return { id: "ref", score: redScore(s, "ref"), name: "REF" };
     }
-    return { id: "body", score: Number(s.body) || 5, name: "BODY" };
+    return { id: "body", score: redScore(s, "body"), name: "BODY" };
   }
   if (opts.hack) {
     return { id: "int", score: Number(ch?.abilities?.int) || 10, name: "INT" };
@@ -734,7 +746,7 @@ function unarmedMoves(ch) {
   let punchType = blight ? "" : " bludgeoning";
   let biteType = blight ? "" : " piercing";
   if (blight) {
-    const body = Number(ch?.statsRed?.body) || 5;
+    const body = redScore(ch?.statsRed, "body");
     const dmgBonus = abilityDamageBonus({ score: body });
     punchFormula = formatDice(bodyDiceCount(body, 0) + extra, 6, dmgBonus);
     kickFormula = formatDice(bodyDiceCount(body, 1) + extra, 6, dmgBonus);
@@ -875,6 +887,11 @@ export function createChars() {
       }
     }
     shareSoon();
+    try {
+      document.dispatchEvent(new CustomEvent("blightnet-sheet"));
+    } catch {
+      /* ignore */
+    }
   }
 
   function saveSoon() {
@@ -965,6 +982,146 @@ export function createChars() {
     ch.deathFail = 0;
     ch.hp = max ? Math.min(max, n) : n;
     return ch.hp;
+  }
+
+  function parseHd(ch) {
+    const raw = String(ch?.hitDice || "");
+    const m = raw.match(/(\d+)\s*d\s*(\d+)/i);
+    const dieM = raw.match(/d\s*(\d+)/i);
+    const lv = Math.max(1, Number(ch?.level) || 1);
+    const die = m ? Number(m[2]) : dieM ? Number(dieM[1]) : 8;
+    const max = m ? Math.max(1, Number(m[1]) || lv) : lv;
+    const used = Math.max(0, Math.min(max, Number(ch?.hdUsed) || 0));
+    return { max, die, used, left: Math.max(0, max - used) };
+  }
+
+  function isPactCaster(ch) {
+    const cls = clsOf(ch);
+    return cls?.caster === "pact" || /warlock/i.test(String(ch?.className || ch?.spellClass || ""));
+  }
+
+  function restorePactSlots(ch) {
+    if (!isPactCaster(ch)) return false;
+    const cls = clsOf(ch);
+    const slots = cls ? slotsFor(cls, ch.level || 1) : null;
+    if (slots) {
+      ch.slotsMax = slots;
+      ch.slotsUsed = slots.map(() => 0);
+      return true;
+    }
+    ch.slotsUsed = Array.from({ length: 9 }, () => 0);
+    return true;
+  }
+
+  function restoreAllSlots(ch) {
+    ch.slotsUsed = Array.from({ length: 9 }, () => 0);
+  }
+
+  function blightPatchHp(ch, long) {
+    const s = ch.statsRed || {};
+    const body = redScore(s, "body");
+    const will = redScore(s, "will");
+    return Math.max(1, long ? body + will : body);
+  }
+
+  function spendHitDice(ch) {
+    const rolls = [];
+    let gained = 0;
+    const maxHp = hpMaxOf(ch);
+    const con = modifier(ch.abilities?.con);
+    while ((Number(ch.hp) || 0) < maxHp) {
+      const hd = parseHd(ch);
+      if (hd.left <= 0) break;
+      const roll = 1 + Math.floor(Math.random() * Math.max(1, hd.die));
+      const add = Math.max(1, roll + con);
+      ch.hdUsed = hd.used + 1;
+      const before = Number(ch.hp) || 0;
+      applyHeal(ch, add, "rest");
+      const got = Math.max(0, (Number(ch.hp) || 0) - before);
+      gained += got;
+      rolls.push(roll);
+    }
+    return { gained, rolls, left: parseHd(ch).left, max: parseHd(ch).max };
+  }
+
+  function takeRest(kind) {
+    const ch = active();
+    if (!ch || isRemote(ch)) return;
+    const long = kind === "long";
+    const blight = worldOf() === "blight";
+    const name = whoName(ch);
+    if (isDead(ch)) {
+      dice.note(name, long ? "Long rest" : "Short rest", `${name} is dead. Rest will not raise them.`);
+      flash("Dead");
+      return;
+    }
+    ensureHp(ch);
+    const before = Number(ch.hp) || 0;
+    const bits = [];
+    if (blight) {
+      const add = blightPatchHp(ch, long);
+      const out = applyHeal(ch, add, "rest");
+      if (out?.kind === "revived") {
+        bits.push(`stands with ${out.hp} HP`);
+        announceDeath(ch, out);
+      } else {
+        const got = Math.max(0, (Number(ch.hp) || 0) - before);
+        bits.push(got ? `recovers ${got} HP (${long ? "BODY + WILL" : "BODY"})` : "already at max HP");
+      }
+    } else if (long) {
+      const max = hpMaxOf(ch);
+      if ((Number(ch.hp) || 0) <= 0 && max) reviveAt(ch, max);
+      else if (max) ch.hp = max;
+      ch.hpTemp = 0;
+      const hd = parseHd(ch);
+      const rec = Math.max(1, Math.floor(hd.max / 2));
+      ch.hdUsed = Math.max(0, hd.used - rec);
+      restoreAllSlots(ch);
+      const ex = Math.max(0, (Number(ch.exhaustion) || 0) - 1);
+      if ((Number(ch.exhaustion) || 0) > 0) {
+        ch.exhaustion = ex;
+        bits.push("exhaustion " + (Number(ch.exhaustion) || 0));
+      }
+      if (ch.downed && (Number(ch.hp) || 0) > 0) {
+        ch.downed = false;
+        ch.deathSuccess = 0;
+        ch.deathFail = 0;
+      }
+      bits.push("full HP");
+      bits.push(`hit dice ${parseHd(ch).left}/${parseHd(ch).max}`);
+      bits.push("spell slots");
+    } else {
+      const spent = spendHitDice(ch);
+      if (spent.rolls.length) {
+        const con = modifier(ch.abilities?.con);
+        bits.push(
+          `spent ${spent.rolls.length} HD [${spent.rolls.join(", ")}]${con ? " " + signed(con) + " CON" : ""} for ${spent.gained} HP`
+        );
+      }
+      else if ((Number(ch.hp) || 0) >= hpMaxOf(ch)) bits.push("HP already full");
+      else bits.push("no hit dice left");
+      bits.push(`HD ${spent.left}/${spent.max}`);
+      if (restorePactSlots(ch)) bits.push("pact slots");
+      if ((Number(ch.hp) || 0) > 0 && ch.downed) {
+        ch.downed = false;
+        ch.deathSuccess = 0;
+        ch.deathFail = 0;
+      }
+    }
+    if ((Number(ch.hp) || 0) > 0) {
+      ch.downed = false;
+      if (!ch.dead) {
+        ch.deathSuccess = 0;
+        ch.deathFail = 0;
+      }
+    }
+    persist();
+    render();
+    mapRefresh();
+    const title = long ? "Long rest" : "Short rest";
+    const hours = long ? "about eight hours" : "about an hour";
+    dice.note(name, title, `${name} takes a ${long ? "long" : "short"} rest (${hours}). ${bits.join(". ")}.`);
+    flash(title);
   }
 
   function markDead(ch) {
@@ -1184,10 +1341,11 @@ export function createChars() {
     });
   }
 
-  function applyTargetHp(row, { announce = false } = {}) {
+  function applyTargetHp(row, { announce = false, mineOnly = false } = {}) {
     if (row?.deathSave) {
       const ch = findChar(row.targetId, row.targetOwner);
       if (!ch) return;
+      if (mineOnly && !isMyChar(ch)) return;
       const out = applyDeathSave(ch, row.grade);
       if (isMyChar(ch)) persist();
       render();
@@ -1199,6 +1357,7 @@ export function createChars() {
     if (!hit || !row.damage || !row.targetId) return;
     const ch = findChar(row.targetId, row.targetOwner);
     if (!ch) return;
+    if (mineOnly && !isMyChar(ch)) return;
     const out = row.heal ? applyHeal(ch, row.damage, row.action) : applySelfDamage(ch, row.damage, row.grade);
     if (isMyChar(ch)) persist();
     render();
@@ -1218,10 +1377,11 @@ export function createChars() {
     mapProject(from?.id || "", row.tokenId, kind);
   }
 
-  function applyTaken(row, { announce = false } = {}) {
+  function applyTaken(row, { announce = false, mineOnly = false } = {}) {
     if (!row?.taken || !row.damage) return;
     const ch = findChar(row.sheetId, row.sheetOwner) || (!row.sheetId ? active() : null);
     if (!ch) return;
+    if (mineOnly && !isMyChar(ch)) return;
     const out = applySelfDamage(ch, row.damage, row.grade);
     if (isMyChar(ch)) persist();
     render();
@@ -1241,8 +1401,8 @@ export function createChars() {
     if (!row) return;
     if (row.from && row.from === netSelf()) return;
     dice.ingest(row);
-    applyTargetHp(row, { announce: false });
-    applyTaken(row, { announce: false });
+    applyTargetHp(row, { announce: false, mineOnly: true });
+    applyTaken(row, { announce: false, mineOnly: true });
     beamFor(row);
     const hit = row.grade === "success" || row.grade === "critical success";
     if (row.hack && hit) {
@@ -1412,10 +1572,10 @@ export function createChars() {
 
   function redComputed(ch) {
     const s = ch.statsRed || {};
-    const body = Number(s.body) || 5;
-    const will = Number(s.will) || 5;
-    const emp = Number(s.emp) || 5;
-    const ref = Number(s.ref) || 5;
+    const body = redScore(s, "body");
+    const will = redScore(s, "will");
+    const emp = redScore(s, "emp");
+    const ref = redScore(s, "ref");
     const hp = 10 + 5 * Math.floor((body + will) / 2);
     return {
       hp,
@@ -1424,6 +1584,36 @@ export function createChars() {
       humanity: emp * 10,
       init: ref,
     };
+  }
+
+  function applyRedStatChange(ch, key, next) {
+    if (!ch || !key) return;
+    ch.statsRed = ch.statsRed || {};
+    const prev = redScore(ch.statsRed, key);
+    const n = Number(next);
+    const value = Number.isFinite(n) ? n : 0;
+    const oldHp = redComputed(ch).hp;
+    ch.statsRed[key] = value;
+    if (key === "emp") {
+      ch.humanity = Math.max(0, (Number(ch.humanity) || 0) + (value - prev) * 10);
+    }
+    if (key !== "body" && key !== "will") return;
+    const delta = redComputed(ch).hp - oldHp;
+    if (!delta) return;
+    const prevMax = Number(ch.hpMax) || oldHp;
+    ch.hpMax = Math.max(1, prevMax + delta);
+    if (ch.dead) return;
+    if ((Number(ch.hp) || 0) <= 0) return;
+    ch.hp = Math.max(0, (Number(ch.hp) || 0) + delta);
+    if (ch.hp > ch.hpMax) ch.hp = ch.hpMax;
+    if (ch.hp <= 0) {
+      ch.hp = 0;
+      if (hpMaxOf(ch) > 0) {
+        ch.downed = true;
+        ch.deathSuccess = 0;
+        ch.deathFail = 0;
+      }
+    }
   }
 
   let advance = null;
@@ -1713,12 +1903,12 @@ export function createChars() {
     }
     if (kind === "stat" && target) {
       ch.statsRed = ch.statsRed || {};
-      const now = Number(ch.statsRed[target]) || 5;
+      const now = redScore(ch.statsRed, target);
       if (now >= 8) return false;
       const cost = statIpCost(now + 1);
       if (!gm && ip < cost) return false;
       ch.ip = Math.max(0, ip - cost);
-      ch.statsRed[target] = now + 1;
+      applyRedStatChange(ch, target, now + 1);
       return true;
     }
     return false;
@@ -1802,6 +1992,22 @@ export function createChars() {
     const ch = active();
     el.hidden = !ch;
     if (del) del.hidden = !ch || isRemote(ch);
+    const blight = worldOf() === "blight";
+    const shortBtn = $("char-short-rest");
+    const longBtn = $("char-long-rest");
+    const canRest = Boolean(ch && !isRemote(ch));
+    if (shortBtn) {
+      shortBtn.hidden = !canRest;
+      shortBtn.title = blight
+        ? "About an hour. Recover BODY hit points. Dead sheets stay dead."
+        : "About an hour. Spend hit dice (die + CON) until full or the dice run out. Warlock pact slots refill.";
+    }
+    if (longBtn) {
+      longBtn.hidden = !canRest;
+      longBtn.title = blight
+        ? "A night. Recover BODY + WILL hit points. Dead sheets stay dead."
+        : "About eight hours. Full HP, half your hit dice back, all spell slots, one less exhaustion.";
+    }
     if (!ch) {
       el.innerHTML = "";
       return;
@@ -1812,6 +2018,34 @@ export function createChars() {
       ([id, label]) =>
         `<button type="button" class="char-tab${tab === id ? " on" : ""}" data-char-tab="${id}">${label}</button>`
     ).join("");
+  }
+
+  function nameRollHtml(ch) {
+    if (isRemote(ch)) return "";
+    return `<p class="char-hint name-roll">Need a name?
+      <button type="button" class="ghost" data-name-roll="male">Male</button>
+      <button type="button" class="ghost" data-name-roll="female">Female</button>
+    </p>`;
+  }
+
+  async function applyRolledName(gender) {
+    const ch = active();
+    if (!ch || isRemote(ch)) return;
+    const rolled = await randomPersonName(gender === "female" ? "female" : "male");
+    if (!rolled) {
+      flash("Name list missing");
+      return;
+    }
+    const others = store.list.filter((c) => c.id !== ch.id);
+    ch.name = uniqueSheetName(others, rolled);
+    if (worldOf() === "blight") {
+      const first = ch.name.split(/\s+/)[0] || ch.name;
+      if (!ch.handle || ch.handle === "New character") ch.handle = first.slice(0, 48);
+    }
+    persist();
+    render();
+    flash(ch.name);
+    $("char-body")?.querySelector("input[data-f='name']")?.focus();
   }
 
   function renderBio(ch) {
@@ -1832,7 +2066,8 @@ export function createChars() {
         </div>
         <div class="char-bio-fields">
           ${field("Handle", textInput("handle", ch.handle || ch.name, 'maxlength="48"'))}
-          ${field("Name", textInput("name", ch.name, 'maxlength="48"'))}
+          ${field("Name", textInput("name", ch.name, 'maxlength="64" placeholder="First Last"'))}
+          ${nameRollHtml(ch)}
           ${field("Role", `<select data-f="role">${roleOpts}</select>`)}
           ${field("Role rank", numInput("roleRank", ch.roleRank || 4, 'min="1" max="10"'))}
           ${field("Improvement points", numInput("ip", ch.ip || 0, 'min="0"'))}
@@ -1865,7 +2100,8 @@ export function createChars() {
           </button>
         </div>
         <div class="char-bio-fields">
-          ${field("Name", textInput("name", ch.name, 'maxlength="48"'))}
+          ${field("Name", textInput("name", ch.name, 'maxlength="64" placeholder="First Last"'))}
+          ${nameRollHtml(ch)}
           ${field("Player", textInput("player", ch.player, 'maxlength="32"'))}
           ${field("Class", `<select data-f="classId">${classOpts}</select>`)}
           ${cls ? field("Subclass", `<select data-f="subclassId"><option value="">Choose at level ${cls.subclassLv}…</option>${subOpts}</select>`) : field("Class name", textInput("className", ch.className, 'placeholder="Custom class"'))}
@@ -1982,6 +2218,21 @@ export function createChars() {
       </div>`;
   }
 
+  function renderRestBar(ch, blight) {
+    if (isRemote(ch)) return "";
+    const hd = blight ? null : parseHd(ch);
+    const hint = blight
+      ? "Short rest is about an hour: recover BODY HP. Long rest is a night: recover BODY + WILL HP. Dead sheets stay dead. Set the watch if you want the sky to match."
+      : "Short rest is about an hour: spend hit dice (each die + CON, minimum 1 HP) until you are full or the dice run out. Warlock pact slots refill. Long rest is about eight hours: full HP, half your hit dice back, all spell slots, one less exhaustion. Dead sheets stay dead.";
+    return `
+      <div class="rest-bar">
+        <button type="button" class="ghost" data-rest="short">Short rest</button>
+        <button type="button" class="ghost" data-rest="long">Long rest</button>
+        ${hd ? `<span class="stat-pill">Hit dice <b>${hd.left}/${hd.max}d${hd.die}</b></span>` : ""}
+        <p class="char-hint">${hint}</p>
+      </div>`;
+  }
+
   function renderCombat(ch) {
     const c = computed(ch);
     const attacks = (ch.attacks || []).map((row, i) => attackRowHtml(ch, row, i, false)).join("");
@@ -1996,6 +2247,7 @@ export function createChars() {
         ${field("Hit dice", textInput("hitDice", ch.hitDice, 'placeholder="1d8"'))}
         ${field("Exhaustion", numInput("exhaustion", ch.exhaustion, 'min="0" max="6"'))}
       </div>
+      ${renderRestBar(ch, false)}
       ${renderDeathSaves(ch)}
       ${renderUnarmed(ch)}
       <div class="char-section-label">Attacks</div>
@@ -2087,23 +2339,52 @@ export function createChars() {
       <div class="kit-owned-list">${rows || `<p class="char-hint">${empty}</p>`}</div>`;
   }
 
-  function renderGear(ch) {
-    return `
-      ${renderKitList(ch, "Open Armory and drag weapons, armor, gear, magic, or spells onto this sheet.")}
-      <div class="coin-row">
+  function walletHtml(ch) {
+    const blight = blightMoney();
+    const award = isRemote(ch)
+      ? ""
+      : blight
+        ? `<button type="button" class="ghost" data-wallet-award="100">+100 eb</button>
+           <button type="button" class="ghost" data-wallet-award="500">+500 eb</button>`
+        : `<button type="button" class="ghost" data-wallet-award="1000">+10 gp</button>
+           <button type="button" class="ghost" data-wallet-award="10000">+100 gp</button>`;
+    const coins = blight
+      ? field("Eddies", numInput("eb", ch.eb || 0, 'min="0"'))
+      : `<div class="coin-row">
         ${field("CP", numInput("cp", ch.cp, 'min="0"'))}
         ${field("SP", numInput("sp", ch.sp, 'min="0"'))}
         ${field("EP", numInput("ep", ch.ep, 'min="0"'))}
         ${field("GP", numInput("gp", ch.gp, 'min="0"'))}
         ${field("PP", numInput("pp", ch.pp, 'min="0"'))}
+      </div>`;
+    return `
+      <div class="wallet-bar">
+        <div>
+          <div class="char-section-label">${blight ? "Account" : "Purse"}</div>
+          <strong class="wallet-sum">${escapeHtml(walletText(ch))}</strong>
+        </div>
+        <p class="char-hint">${
+          blight
+            ? "Night City eurodollars. Buy and sell at Vendors. Half price when you sell."
+            : "Copper, silver, electrum, gold, platinum. The stall prices in gold. Sell at half."
+        }</p>
+        ${isRemote(ch) ? "" : `<div class="wallet-award">${award}</div>`}
       </div>
+      ${coins}`;
+  }
+
+  function renderGear(ch) {
+    return `
+      ${walletHtml(ch)}
+      ${renderKitList(ch, "Open Armory and drag gear, or buy it from Vendors.")}
       ${field("Notes", area("equipment", ch.equipment, 'rows="5" placeholder="Anything that is not in the list…"'))}
       ${field("Treasure", area("treasure", ch.treasure, 'rows="3"'))}`;
   }
 
   function renderRedGear(ch) {
     return `
-      ${renderKitList(ch, "Open Night Market and drag weapons, armor, gear, chrome, or quickhacks onto this sheet.")}
+      ${walletHtml(ch)}
+      ${renderKitList(ch, "Open Night Market and drag gear, or buy it from Vendors.")}
       ${field("Notes", area("equipment", ch.equipment, 'rows="5" placeholder="Anything that is not in the list…"'))}
       ${field("Programs / quickhacks", area("programs", ch.programs, 'rows="4" placeholder="One per line. Drag from Night Market to add."'))}
       <div class="skill-list">${String(ch.programs || "")
@@ -2125,10 +2406,10 @@ export function createChars() {
       </div>`).join("");
     return `
       <div class="char-meta-row">
-        <div class="stat-pill">HP <b data-computed="rhp">${Number(ch.hp) || 0}/${c.hp}</b></div>
+        <div class="stat-pill">HP <b data-computed="rhp">${Number(ch.hp) || 0}/${hpMaxOf(ch) || c.hp}</b></div>
         <div class="stat-pill">Seriously <b data-computed="rsw">${c.seriously}</b></div>
         <div class="stat-pill" title="Cyberpunk RED death save target number (BODY). Combat uses the three-pip death saves.">Death TN <b data-computed="rds">${c.death}</b></div>
-        <div class="stat-pill">Humanity <b data-computed="rhum">${c.humanity}</b></div>
+        <div class="stat-pill">Humanity <b data-computed="rhum">${Number(ch.humanity) || 0}/${c.humanity}</b></div>
         <div class="stat-pill">Init <b data-computed="rinit">${c.init}</b></div>
       </div>
       <div class="abil-grid">${cards}</div>
@@ -2145,6 +2426,7 @@ export function createChars() {
         ${field("Armor SP", numInput("ac", ch.ac, 'min="0"'))}
         ${field("Move", textInput("speed", ch.speed || (ch.statsRed?.move || 5) + " m"))}
       </div>
+      ${renderRestBar(ch, true)}
       ${renderDeathSaves(ch)}
       ${renderUnarmed(ch)}
       <div class="char-section-label">Weapons</div>
@@ -2158,7 +2440,7 @@ export function createChars() {
     const s = ch.statsRed || {};
     const rows = CP_SKILLS.map(([id, name, abil]) => {
       const rank = Number(ch.redSkills?.[id]) || 0;
-      const tot = rank + (Number(s[abil]) || 0);
+      const tot = rank + redScore(s, abil);
       return `<div class="skill-row" style="grid-template-columns: minmax(0,1fr) 3.2rem 2.2rem auto">
         <span ${showBits(ch, name, `${name} (${abil.toUpperCase()}). Rank ${rank}. Total ${tot}.`)}>${name} <em>${abil.toUpperCase()}</em></span>
         <input data-red-skill="${id}" type="number" min="0" max="10" value="${rank}" />
@@ -2272,15 +2554,15 @@ export function createChars() {
     const init = document.querySelector('#char-body input[data-f="initiative"]');
     if (init && !init.value) init.placeholder = signed(c.init);
     const rc = redComputed(ch);
-    set("rhp", `${Number(ch.hp) || 0}/${rc.hp}`);
+    set("rhp", `${Number(ch.hp) || 0}/${hpMaxOf(ch) || rc.hp}`);
     set("rsw", String(rc.seriously));
     set("rds", String(rc.death));
-    set("rhum", String(rc.humanity));
+    set("rhum", `${Number(ch.humanity) || 0}/${rc.humanity}`);
     set("rinit", String(rc.init));
     const s = ch.statsRed || {};
     for (const [id, , abil] of CP_SKILLS) {
       const rank = Number(ch.redSkills?.[id]) || 0;
-      set("rsk-" + id, String(rank + (Number(s[abil]) || 0)));
+      set("rsk-" + id, String(rank + redScore(s, abil)));
     }
     paintCombatScale(ch);
   }
@@ -2349,6 +2631,26 @@ export function createChars() {
     if (f === "level") {
       const n = Number(ch.level) || 1;
       ch.level = Math.min(20, Math.max(1, n));
+      const cls = clsOf(ch);
+      if (cls?.hd) {
+        ch.hitDice = `${ch.level}d${cls.hd}`;
+        ch.hdUsed = Math.min(Math.max(0, Number(ch.hdUsed) || 0), ch.level);
+      }
+      const slots = cls ? slotsFor(cls, ch.level) : null;
+      if (slots) {
+        ch.slotsMax = slots;
+        ch.slotsUsed = Array.from({ length: 9 }, (_, i) =>
+          Math.min(Number(ch.slotsUsed?.[i]) || 0, slots[i] || 0)
+        );
+      }
+    }
+    if (f === "roleRank") {
+      ch.roleRank = Math.min(10, Math.max(1, Number(ch.roleRank) || 1));
+    }
+    if (f === "hpMax") {
+      const max = Math.max(0, Number(ch.hpMax) || 0);
+      ch.hpMax = max;
+      if ((Number(ch.hp) || 0) > max) ch.hp = max;
     }
     if (f === "classId") {
       applyChosenClass(ch, ch.classId, { fresh: !(Number(ch.hpMax) || 0) });
@@ -2415,8 +2717,10 @@ export function createChars() {
       const row = ch.attacks[Number(t.dataset.attack)];
       if (row && t.dataset.ak) row[t.dataset.ak] = t.value;
     } else if (t.dataset.redStat) {
-      ch.statsRed = ch.statsRed || {};
-      ch.statsRed[t.dataset.redStat] = t.value === "" ? 0 : Number(t.value);
+      if (t.value === "") return;
+      const n = Number(t.value);
+      if (!Number.isFinite(n)) return;
+      applyRedStatChange(ch, t.dataset.redStat, n);
     } else if (t.dataset.redSkill) {
       ch.redSkills = ch.redSkills || {};
       ch.redSkills[t.dataset.redSkill] = Number(t.value) || 0;
@@ -2429,9 +2733,13 @@ export function createChars() {
     saveSoon();
     updateComputed();
     if (dirtyRoster) renderRoster();
-    if (t.dataset.f === "hp") {
+    if (t.dataset.f === "hp" || t.dataset.f === "hpMax") {
       renderRoster();
-      renderBody();
+      if (e.type === "change") renderBody();
+    }
+    if (["cp", "sp", "ep", "gp", "pp", "eb"].includes(t.dataset.f)) {
+      const sum = document.querySelector(".wallet-sum");
+      if (sum) sum.textContent = walletText(ch);
     }
     if (
       e.type === "change" &&
@@ -2520,6 +2828,21 @@ export function createChars() {
         renderBody();
         return;
       }
+      const award = e.target.closest("[data-wallet-award]");
+      if (award) {
+        const sheet = active();
+        if (!sheet || isRemote(sheet)) return;
+        credit(sheet, Number(award.dataset.walletAward) || 0);
+        persist();
+        renderBody();
+        flash(walletText(sheet));
+        return;
+      }
+      const nameRoll = e.target.closest("[data-name-roll]");
+      if (nameRoll) {
+        applyRolledName(nameRoll.dataset.nameRoll);
+        return;
+      }
       if (e.target.closest("#char-portrait-btn")) {
         if (isRemote(active())) return;
         $("char-portrait-file")?.click();
@@ -2544,6 +2867,9 @@ export function createChars() {
         if (!ch || isRemote(ch)) return;
         const i = Number(delKit.dataset.kitDel);
         if (!Number.isFinite(i) || !ch.kit) return;
+        const row = ch.kit[i];
+        if (!row) return;
+        stripKitRow(ch, row);
         ch.kit.splice(i, 1);
         persist();
         renderBody();
@@ -2578,6 +2904,12 @@ export function createChars() {
         persist();
         render();
         mapRefresh();
+        return;
+      }
+      const restBtn = e.target.closest("[data-rest], #char-short-rest, #char-long-rest");
+      if (restBtn) {
+        const kind = restBtn.id === "char-long-rest" || restBtn.dataset.rest === "long" ? "long" : "short";
+        takeRest(kind);
         return;
       }
       if (e.target.closest("#char-advance-btn") || e.target.closest("[data-advance-open]")) {
@@ -2739,11 +3071,39 @@ export function createChars() {
   }
 
   function looksLikeWeapon(item) {
-    if (item.kind === "weapon") return true;
-    if (item.dmg) return true;
-    return /sword|axe|bow|mace|hammer|dagger|staff|spear|crossbow|javelin|trident|flail|glaive|halberd|lance|pike|rapier|scimitar|whip|morningstar|pistol|rifle|shotgun|smg/.test(
-      String(item.name || "").toLowerCase()
+    const kind = String(item?.kind || "");
+    if (kind === "quickhack" || kind === "spell" || kind === "gear") return false;
+    if (kind === "weapon") return true;
+    if (item?.dmg) return true;
+    return /\b(?:swords?|axes?|longbows?|shortbows?|crossbows?|oathbows?|bows?|maces?|hammers?|daggers?|staves|staffs?|spears?|javelins?|tridents?|flails?|glaives?|halberds?|lances?|pikes?|rapiers?|scimitars?|whips?|morningstars?|pistols?|rifles?|shotguns?|smgs?)\b/.test(
+      String(item?.name || "").toLowerCase()
     );
+  }
+
+  function dropAttackNamed(ch, name) {
+    if (!ch || !name || !Array.isArray(ch.attacks)) return;
+    const i = ch.attacks.findIndex((a) => a.name === name);
+    if (i < 0) return;
+    ch.attacks.splice(i, 1);
+    if (!ch.attacks.length) ch.attacks.push({ name: "", bonus: "", damage: "" });
+  }
+
+  function stripKitRow(ch, row) {
+    if (!ch || !row) return;
+    const copies = Math.max(1, Number(row.qty) || 1);
+    if (looksLikeWeapon(row) || row.dmg) {
+      for (let n = 0; n < copies; n += 1) dropAttackNamed(ch, row.name);
+    }
+    if (row.kind === "chrome") {
+      const hl = Number(row.hl) || 0;
+      if (hl) ch.humanity = (Number(ch.humanity) || 0) + hl;
+      if (row.slot && ch.chrome) ch.chrome[row.slot] = false;
+      const needle = hl ? `${row.name} (HL ${hl})` : row.name;
+      ch.cyberware = String(ch.cyberware || "")
+        .split("\n")
+        .filter((l) => l.trim() && l.trim() !== needle)
+        .join("\n");
+    }
   }
 
   function applyArmor(ch, item) {
@@ -2771,7 +3131,7 @@ export function createChars() {
     ch.ac = ac;
   }
 
-  function receiveKit(item, charId) {
+  function receiveKit(item, charId, opts = {}) {
     if (!item || !item.name) return false;
     let ch = charId
       ? store.list.find((c) => c.id === charId) || allChars().find((c) => c.id === charId)
@@ -2783,62 +3143,63 @@ export function createChars() {
     if (!ch || isRemote(ch)) return false;
     store.activeId = ch.id;
     if (!Array.isArray(ch.kit)) ch.kit = [];
-    const stack = ch.kit.find((k) => k.catalogId && k.catalogId === item.id && item.kind !== "chrome");
+    const kind = item.kind || "gear";
+    const stack = ch.kit.find((k) => k.catalogId && k.catalogId === item.id && kind !== "chrome");
     if (stack) stack.qty += 1;
     else {
       ch.kit.push({
         id: "k_" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
         catalogId: item.id || "",
         name: item.name,
-        kind: item.kind || "gear",
+        kind,
         qty: 1,
         detail: item.text || item.props || "",
         dmg: item.dmg || (looksLikeWeapon(item) ? weaponDamage(item) : ""),
+        cost: item.cost || "",
+        hl: Number(item.hl) || 0,
+        slot: item.slot || "",
       });
-    }
-    const kind = item.kind || "gear";
-    if (looksLikeWeapon(item)) {
-      const empty = (ch.attacks || []).length === 1 && !ch.attacks[0].name;
-      if (empty) ch.attacks = [];
-      ch.attacks.push({
-        name: item.name,
-        bonus: weaponBonus(ch, item),
-        damage: weaponDamage(item),
-      });
-    }
-    if (kind === "armor" || /armor|mail|plate|leather|shield/i.test(item.name) && kind === "magic") {
-      applyArmor(ch, item);
-    }
-    if (kind === "spell") {
-      const lv = Number(item.lv);
-      if (item.world === "blight" || !Number.isFinite(lv)) {
-        ch.programs = appendLine(ch.programs, item.name);
-      } else if (!lv) {
-        ch.cantrips = appendLine(ch.cantrips, item.name);
-      } else if (lv >= 1 && lv <= 9) {
-        if (!Array.isArray(ch.spells) || ch.spells.length < 9) ch.spells = Array.from({ length: 9 }, (_, i) => ch.spells?.[i] || "");
-        ch.spells[lv - 1] = appendLine(ch.spells[lv - 1], item.name);
+      if (looksLikeWeapon(item)) {
+        const empty = (ch.attacks || []).length === 1 && !ch.attacks[0].name;
+        if (empty) ch.attacks = [];
+        ch.attacks.push({
+          name: item.name,
+          bonus: weaponBonus(ch, item),
+          damage: weaponDamage(item),
+        });
       }
-    }
-    if (kind === "chrome") {
-      ch.cyberware = appendLine(ch.cyberware, item.hl ? `${item.name} (HL ${item.hl})` : item.name);
-      if (item.slot) {
-        ch.chrome = ch.chrome || {};
-        ch.chrome[item.slot] = true;
+      if (kind === "armor" || (/armor|mail|plate|leather|shield/i.test(item.name) && kind === "magic")) {
+        applyArmor(ch, item);
       }
-      if (item.hl) {
+      if (kind === "spell") {
+        const lv = Number(item.lv);
+        if (item.world === "blight" || !Number.isFinite(lv)) {
+          ch.programs = appendLine(ch.programs, item.name);
+        } else if (!lv) {
+          ch.cantrips = appendLine(ch.cantrips, item.name);
+        } else if (lv >= 1 && lv <= 9) {
+          if (!Array.isArray(ch.spells) || ch.spells.length < 9) ch.spells = Array.from({ length: 9 }, (_, i) => ch.spells?.[i] || "");
+          ch.spells[lv - 1] = appendLine(ch.spells[lv - 1], item.name);
+        }
+      }
+      if (kind === "chrome") {
+        ch.cyberware = appendLine(ch.cyberware, item.hl ? `${item.name} (HL ${item.hl})` : item.name);
+        if (item.slot) {
+          ch.chrome = ch.chrome || {};
+          ch.chrome[item.slot] = true;
+        }
         const hl = Number(item.hl) || 0;
         if (hl) ch.humanity = Math.max(0, Number(ch.humanity || 0) - hl);
       }
-    }
-    if (kind === "quickhack") {
-      ch.programs = appendLine(ch.programs, item.name);
-    }
-    if (kind === "gear" || kind === "magic") {
-      const line = [item.name, item.rarity, item.dmg ? `dmg ${item.dmg}` : "", item.text ? "" : item.props]
-        .filter(Boolean)
-        .join(" · ");
-      ch.equipment = appendLine(ch.equipment, line || item.name);
+      if (kind === "quickhack") {
+        ch.programs = appendLine(ch.programs, item.name);
+      }
+      if (kind === "gear" || kind === "magic") {
+        const line = [item.name, item.rarity, item.dmg ? `dmg ${item.dmg}` : "", item.text ? "" : item.props]
+          .filter(Boolean)
+          .join(" · ");
+        ch.equipment = appendLine(ch.equipment, line || item.name);
+      }
     }
     if (kind === "spell" && Number(item.lv) >= 0 && item.world !== "blight") {
       tab = "magic";
@@ -2859,7 +3220,7 @@ export function createChars() {
       document.getElementById("chars-toggle")?.classList.add("on");
     }
     render();
-    flash("Added " + item.name);
+    if (!opts.quiet) flash("Added " + item.name);
     return true;
   }
 
@@ -2971,6 +3332,46 @@ export function createChars() {
     setGM,
     fromToken,
     receiveDeity,
+    buyItem(item) {
+      const sheet = active();
+      if (!sheet || isRemote(sheet)) return { error: "Open your own sheet first." };
+      if (!item?.name) return { error: "Nothing to buy." };
+      const price = parsePrice(item.cost);
+      if (price <= 0) {
+        receiveKit(item);
+        return { ok: true };
+      }
+      if (!canAfford(sheet, price)) return { error: "Not enough " + (blightMoney() ? "eddies" : "coin") + " (" + formatMoney(price) + ")." };
+      if (!charge(sheet, price)) return { error: "Not enough coin." };
+      receiveKit(item, null, { quiet: true });
+      flash("Bought " + item.name + " for " + formatMoney(price));
+      return { ok: true };
+    },
+    sellItem(index) {
+      const sheet = active();
+      if (!sheet || isRemote(sheet)) return { error: "Open your own sheet first." };
+      const i = Number(index);
+      const row = (sheet.kit || [])[i];
+      if (!row) return { error: "Nothing to sell." };
+      const pay = sellPrice(row.cost);
+      if (pay <= 0) return { error: "That has no price." };
+      if ((row.qty || 1) > 1) row.qty -= 1;
+      else {
+        stripKitRow(sheet, row);
+        sheet.kit.splice(i, 1);
+      }
+      credit(sheet, pay);
+      persist();
+      render();
+      flash("Sold " + row.name + " for " + formatMoney(pay));
+      return { ok: true };
+    },
+    canPay: canAfford,
+    flash,
+    persistMoney() {
+      persist();
+      render();
+    },
     cancelAim,
     tokenStatus(t) {
       const ch = findChar(t?.sheetId || t?.ref || "", t?.ownerId || "");
