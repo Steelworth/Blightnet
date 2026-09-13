@@ -1,6 +1,6 @@
 # Blightnet
 
-A **local** table for D&D and Cyberpunk RED: mix music and weather, drop maps, run character sheets, and host a LAN session. Nothing is sent to the cloud except the explicit “join this table” connection on your own network.
+A **local** table for D&D 5e and Cyberpunk RED. Mix music and weather, drop maps, run character sheets, buy and sell, and host friends — same house or another city.
 
 You do **not** open `index.html` as a file. Download the folder, start it, then use the Blightnet window (or **http://127.0.0.1:8765**).
 
@@ -23,7 +23,7 @@ Pick **one** method. Keep the whole folder together (`Blightnet.exe` or `start.s
 
 Later, open Blightnet and click **02 UPDATE** on INDEX. That pulls new or changed files from GitHub onto this machine.
 
-### 2. Git clone (best if you already use Git)
+### 2. Git clone (if you already use Git)
 
 ```bash
 git clone https://github.com/Steelworth/Blightnet.git
@@ -92,23 +92,33 @@ Same flags as Linux: `--system-browser`, `--no-open`. Use **http://127.0.0.1:876
 On INDEX (the yellow NET menu):
 
 - **01 TABLE** — the mixer
-- **02 UPDATE** — check GitHub and patch this copy (hacking-style trace while it downloads)
+- **02 UPDATE** — check GitHub and patch this copy
 - **03 TUTORIAL** — in-app field manual
+- **04 BLACKJACK** — Blight house game of 21 (hidden on Hearthsong)
+- **00 DISCONNECT** — quit. Closes the window and the local server
 
 Type a **Handle**, pick a **DISPLAY**, then open TABLE and **Light the hearth**.
+
+Switch **Hearthsong** / **Blight** in the top-right. The choice is remembered on that computer.
 
 ---
 
 ## What you get
 
-- **Hearthsong** — tavern gold, fantasy places, 5e sheets, SRD bestiary, Armory, gods, NPCs
-- **Blight** — Night City HUD, RED sheets, Datashard, Faces, Corps, Lore, Night Market + Black Chrome
-- **Mixer** — scenes, moods, shuffle, weather, animals, uploaded tracks
-- **Maps** — VTT: pan, wheel-zoom, tokens, drawings, live for the table
-- **Characters** — 5e and Cyberpunk RED, unarmed combat, advantage/disadvantage, death saves, level-up / IP
-- **LAN table** — named host/join, chat, whispers, P2P files, voice, shared mix and combat log
+**Hearthsong** (fantasy) — tavern gold, 5e sheets, SRD bestiary (334 creatures), NPCs, gods, Armory, market stalls.
 
-Switch **Hearthsong** / **Blight** in the top-right. The choice is remembered on that computer.
+**Blight** (Night City) — HUD chrome, Cyberpunk RED sheets, Datashard, Faces, Corps, Lore, **Gangs** (101 crews with portraits), Night Market + Black Chrome, radio, blackjack.
+
+Both worlds:
+
+- Mixer — scenes, moods, shuffle, weather, animals, uploaded tracks
+- Maps — pan, wheel-zoom, tokens, drawings, live for the table
+- Characters — Face + full body, name roll, purse / eddies, unarmed combat, advantage / disadvantage, death saves, short rest and long rest
+- Vendors — buy and sell against the open sheet (stalls watch that character’s level or rank)
+- Watch — in-game clock you set. Rest does **not** move it
+- Table — Host / Join, chat, whispers, pictures, voice, shared mix and combat log
+
+Bestiary and 5e NPCs never appear on Blight. Datashard, Faces, Corps, Gangs, and blackjack never appear on Hearthsong.
 
 ---
 
@@ -116,7 +126,7 @@ Switch **Hearthsong** / **Blight** in the top-right. The choice is remembered on
 
 Each computer runs Blightnet and sets a **Handle** in the top bar. Friends do **not** need to be on your Wi-Fi.
 
-1. Skip the wake sequence if you want. You are in Blightnet.
+1. Skip the wake sequence if you want. You land on INDEX.
 2. Type a name. On the host click **Host**. Wait a few seconds. Status becomes **Hosting · Gamemaster** plus an address.
 3. Click **Copy address**. Same house: a LAN IP like `192.168.1.20:8765`. Other city: an `https://…` link (Blightnet opens an outbound tunnel so their router does not need a port forward).
 4. Send that address. They click **Join** and paste it, or open the https link in a browser.
@@ -132,9 +142,9 @@ If the https link never appears, the host machine needs OpenSSH (`ssh` on the PA
 2. Set your **Handle**. **Host** or **Join**, and open **Chat**, from the top bar.
 3. Optional: **02 UPDATE** on INDEX to pull the newest files from GitHub.
 4. Click **01 TABLE** when you want the mixer.
-5. The table unrolls in the Blightnet window. INDEX tab returns to the menu without dropping the table.
+5. Click **Light the hearth** once. That unlocks sound.
 
-Opening TABLE is also what lets the browser play sound.
+The INDEX tab returns to the menu without dropping the table.
 
 ---
 
@@ -142,12 +152,12 @@ Opening TABLE is also what lets the browser play sound.
 
 On the left is **Scenes**. Each one is a ready-made mix with its own picture. Type in **Find a scene** to shrink the list.
 
-- Click **Quiet Tavern** for an inn.
-- Click **Battles** for the fight playlist — every war track, one after another.
-- Click **Dungeon Crawl** for a dungeon.
-- Click **Raging Storm** for weather.
-- Click **The Strand** for a beach, **Moonlit Shore** for night on the sand.
-- Click **Below the Waves** to go underwater, **The Wreck** for a drowned ruin.
+- **Quiet Tavern** — an inn
+- **Battles** — the fight playlist
+- **Dungeon Crawl** — a dungeon
+- **Raging Storm** — weather
+- **The Strand** / **Moonlit Shore** — beach
+- **Below the Waves** / **The Wreck** — underwater
 
 Gold on the left means that scene is the one you last pressed. Sound starts. The painting at the top changes to match.
 
@@ -167,13 +177,27 @@ Tabs: **All / Playing / Music / Weather / Animals / Ambience**. **Playing** show
 
 **Add sound** (table bar) picks a file from this computer. If you are hosting, the others receive it.
 
-**Maps** — import a picture, pan, scroll to zoom, **Grid**, **Fit**. Host map is live for guests.
-
-**Characters** — 5e or RED sheets on this machine, plus everyone else’s sheets at a joined table (read-only). Combat uses a 0–100 roll, not a d20. **Adv** / **Dis** on the combat log roll twice (higher / lower).
-
-**Update** checks GitHub (`Steelworth/Blightnet`) for new or changed files, downloads them onto this machine, then reloads sounds and maps the host shared. If `serve.py` or the Windows exe changed, close Blightnet and start it again.
-
 **Find a sound** — press `/` to jump there. Escape clears it (or silences the table if you are not typing).
+
+---
+
+## Maps and characters
+
+**Maps** — import a picture, pan, scroll to zoom, **Grid**, **Fit**. Drag a portrait from Characters, Bestiary, Datashard, Faces, Gods, Lore, or Gangs onto the map for a token. Host map is live for guests.
+
+**Characters** — 5e or RED sheets on this machine, plus everyone else’s sheets at a joined table (dashed chips are view-only; they can still roll). Combat is a **0–100** roll, not a d20.
+
+- **Adv** / **Dis** on the combat log roll twice (higher / lower). Shift+Roll is advantage, Alt+Roll is disadvantage.
+- Every sheet has unarmed **Punch / Kick / Headbutt / Bite**. Damage grows with Strength or BODY and with level or rank.
+- At 0 HP the sheet is **Downed**. Three death-save successes: stand with 1 HP. Three failures: dead. A heal stands them.
+- **Short rest** and **Long rest** are on the sheet. Hearthsong spends hit dice (or fills HP and slots on a long rest). Blight recovers BODY, or BODY + WILL. Dead stays dead. Rest does not move the watch.
+- Bio: **Male** / **Female** rolls a first and last name. Gear holds the purse (gold) or account (eddies).
+
+**Vendors** — buy from stalls, sell at half price. Stock follows the open sheet’s level (Hearthsong) or role rank (Blight). Armory / Night Market still shows the full catalog.
+
+**Blackjack** — Blight only. INDEX **04**, or **21** on the table bar. Bets come from the open sheet. No sheet: house chips. Hit, stand, double. Blackjack pays 3:2. Dealer stands on 17.
+
+**Update** (INDEX **02**) checks GitHub (`Steelworth/Blightnet`) for new or changed files, downloads them onto this machine, then reloads sounds and maps the host shared. If `serve.py` or `Blightnet.exe` changed, close Blightnet and start it again (on Windows, `start.bat` applies a waiting launcher).
 
 ---
 
@@ -183,7 +207,9 @@ The picture stays on screen even if you scroll.
 
 **Place** (top bar) opens taverns and wilds on Hearthsong, Night City districts plus the Moon and a casino on Blight. The camera does not pan when you pick a plate.
 
-**Morning / Day / Evening / Night** crossfade the sky.
+**Watch** (next to the hour buttons) is in-game time. Click it to type a time, use − / +, or drag the slider. Guests see the host’s clock and cannot set it.
+
+**Morning / Day / Evening / Night** snap the clock (7:00, 13:00, 18:30, 23:00) and crossfade the sky.
 
 **Outside / Inside** is where your ear sits, not the picture. Outside: weather is close. Inside: rooms are close, rain is through the walls.
 
@@ -212,9 +238,9 @@ The **i** button is credits, not a second mixer.
 
 ## What this computer remembers
 
-In the browser on this machine: master volume, outside/inside, hour, last place, saved mixes, theme, handle, contacts, character sheets.
+In the browser on this machine: master volume, outside/inside, clock, last place, saved mixes, theme, handle, contacts, character sheets.
 
-No account. No internet after you have the folder, except joining a table on your LAN.
+No account. After you have the folder, the only network use is **02 UPDATE** (GitHub), **Host** (optional tunnel so distant friends can Join), and the table connection you chose.
 
 ---
 
@@ -228,8 +254,9 @@ No account. No internet after you have the folder, except joining a table on you
 | No sound after Light the hearth | Click the page once. Unmute the tab. |
 | Sound stopped | Click the page. Some browsers pause when you leave the tab. |
 | Port 8765 is busy | The starter picks another port and prints it. |
-| Page looks old after an update | Refresh (Ctrl+R or Cmd+R). |
+| Page looks old after an update | Refresh (Ctrl+R or Cmd+R). If the launcher changed, quit and start again. |
 | Mic refused on `http://192.168…` | Voice needs a secure context. `http://127.0.0.1` works. Plain LAN HTTP may block `getUserMedia`. |
+| Friends cannot Join | They need **Copy address** from the host. Same house: LAN IP. Other city: the https link. Both keep Blightnet open. |
 
 Keep the terminal (or the black Windows console) open the whole session.
 
