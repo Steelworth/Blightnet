@@ -128,8 +128,8 @@ Each computer runs Blightnet and sets a **Handle** in the top bar. Friends do **
 
 1. Skip the wake sequence if you want. You land on INDEX.
 2. Type a name. On the host click **Host**. Wait a few seconds. Status becomes **Hosting · Gamemaster** plus an address.
-3. Click **Copy address**. Same house: a LAN IP like `192.168.1.20:8765`. Other city: an `https://…` link (Blightnet opens an outbound tunnel so their router does not need a port forward).
-4. Send that address. They click **Join** and paste it, or open the https link in a browser.
+3. Wait a few seconds. **Copy address** becomes a join link (and copies itself). Same house: a LAN IP. Other city: an `https://…` link so their router does not need a port forward.
+4. Send that link. They click **Join** and paste it, or open the https link in a browser.
 5. **Chat** is in the yellow bar. `/w Name text` is a whisper.
 
 If the https link never appears, the host machine needs OpenSSH (`ssh` on the PATH). LAN play still works. **Leave** disconnects. See [SECURITY.md](SECURITY.md).

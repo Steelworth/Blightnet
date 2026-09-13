@@ -1627,14 +1627,12 @@ function tableShareFromInfo(info) {
   const wan6 = info.wan6 || (info.ip6 && info.ip6[0]) || "";
   const lan = (info.ips && info.ips[0]) || "";
   const relay = String(info.relay || "").replace(/\/+$/, "");
-  const reachableWan = wan && info.upnp ? `${wan}:${port}` : "";
-  const net = relay
-    ? relay.replace(/^https?:\/\//i, "")
-    : lan
-      ? `${lan}:${port}`
-      : reachableWan || (wan6 ? `[${wan6}]:${port}` : wan ? `${wan}:${port}` : `127.0.0.1:${port}`);
-  const copy = relay || (lan ? `${lan}:${port}` : net);
-  return { port, wan, wan6, lan, relay, net, copy, upnp: Boolean(info.upnp) };
+  const reachableWan = wan && info.upnp ? `http://${wan}:${port}` : "";
+  const publicUrl = relay || reachableWan || (wan6 ? `http://[${wan6}]:${port}` : "");
+  const lanUrl = lan ? `http://${lan}:${port}` : `http://127.0.0.1:${port}`;
+  const copy = publicUrl || lanUrl;
+  const net = String(copy).replace(/^https?:\/\//i, "");
+  return { port, wan, wan6, lan, relay, net, copy, publicUrl, lanUrl, upnp: Boolean(info.upnp) };
 }
 
 async function copyJoinAddress(share) {
@@ -1660,47 +1658,85 @@ async function copyJoinAddress(share) {
 
 function applyHostShare(info) {
   if (table.state.role !== "host") return;
-  const { net, lan, wan, wan6, port, relay, copy } = tableShareFromInfo(info || {});
-  tableStatus("Hosting · Gamemaster · " + net, { hosting: true, share: copy || net });
+  const row = tableShareFromInfo(info || {});
+  tableStatus("Hosting · Gamemaster · " + row.net, { hosting: true, share: row.copy });
   const copyBtn = $("#table-copy");
   if (copyBtn) {
     copyBtn.hidden = false;
-    copyBtn.dataset.share = copy || net;
+    copyBtn.dataset.share = row.copy;
+    copyBtn.title = row.publicUrl
+      ? "Copy the internet join link for friends on other networks"
+      : "Copy the LAN address (same house only until an internet path opens)";
   }
-  return { net, lan, wan, wan6, port, relay, copy };
+  return row;
+}
+
+let hostShareWatch = 0;
+let lastPublicPaste = "";
+
+function stopHostShareWatch() {
+  window.clearInterval(hostShareWatch);
+  hostShareWatch = 0;
+}
+
+function announceJoinPaste(paste, copied) {
+  lastPublicPaste = paste;
+  pushChat({
+    sys: true,
+    text: (copied ? "Copied. " : "") + "Friends on any network paste this into Join:\n" + paste,
+  });
+}
+
+async function refreshHostShare({ announce = false } = {}) {
+  if (table.state.role !== "host") return null;
+  let info = {};
+  try {
+    info = await fetchInfo(location.origin);
+  } catch {
+    info = {};
+  }
+  const share = applyHostShare(info);
+  const paste = share?.publicUrl || "";
+  if (announce && paste && paste !== lastPublicPaste) {
+    const ok = await copyJoinAddress(paste);
+    announceJoinPaste(paste, ok);
+  }
+  return share;
+}
+
+function watchHostShare() {
+  stopHostShareWatch();
+  hostShareWatch = window.setInterval(() => {
+    if (table.state.role !== "host") {
+      stopHostShareWatch();
+      return;
+    }
+    refreshHostShare({ announce: true });
+  }, 2000);
 }
 
 async function hostTable() {
+  lastPublicPaste = "";
   table.connect(location.origin, "host");
   loadHostMaps();
-  pushChat({ sys: true, text: "Table open. You are the Gamemaster. Opening a path for friends on other networks…" });
-  let info = {};
+  pushChat({ sys: true, text: "Table open. You are the Gamemaster. Opening a join link for other networks…" });
   let share = null;
-  for (let i = 0; i < 24; i++) {
-    try {
-      info = await fetchInfo(location.origin);
-    } catch {
-      info = {};
-    }
-    share = applyHostShare(info);
-    if (info.relay || (info.upnp && info.wan && i >= 4)) break;
+  for (let i = 0; i < 40; i++) {
+    share = await refreshHostShare({ announce: true });
+    if (share?.publicUrl) break;
     await new Promise((r) => window.setTimeout(r, 500));
   }
   if (table.state.role !== "host") return;
-  const { net, lan, wan, wan6, port, relay } = share || tableShareFromInfo(info);
-  const bits = [];
-  if (lan) bits.push("LAN " + lan + ":" + port);
-  if (relay) bits.push("Internet " + relay);
-  else if (wan) bits.push("Internet " + wan + ":" + port);
-  else if (wan6) bits.push("Internet [" + wan6 + "]:" + port);
-  pushChat({ sys: true, text: bits.join(" · ") || net });
+  watchHostShare();
+  if (share?.publicUrl) return;
+  const { net, lan, wan, wan6, port, lanUrl } = share || tableShareFromInfo({});
+  if (lan) pushChat({ sys: true, text: "Same house can Join with " + (lanUrl || lan + ":" + port) });
   pushChat({
     sys: true,
-    text: relay
-      ? "Friends anywhere: click Copy address and send that link. They Join with it, or open it in a browser."
-      : wan || wan6
-        ? "Friends on other networks Join with " + net + ". If that fails, their network cannot reach your router — try again, or open port " + port + "."
-        : "No public path yet. Same-house friends use the LAN address. Across the internet, open port " + port + " on your router or install OpenSSH (ssh) so Blightnet can open a tunnel.",
+    text:
+      wan || wan6
+        ? "Still waiting on a public link. If Join from another city fails, open TCP port " + port + " on the router."
+        : "No internet join link yet. Same-house friends use Copy address. Across cities, leave this running — a public link will copy itself when it opens.",
   });
 }
 
@@ -3062,6 +3098,8 @@ function bind() {
     pushChat({ sys: true, text: ok ? "Join address copied." : "Could not copy. The address is in the bar." });
   });
   $("#table-leave")?.addEventListener("click", () => {
+    stopHostShareWatch();
+    lastPublicPaste = "";
     table.disconnect();
     const copyBtn = $("#table-copy");
     if (copyBtn) copyBtn.hidden = true;

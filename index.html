@@ -123,7 +123,7 @@
             <button type="button" class="bn-btn" id="table-host" title="Open a table on this machine. Others join with your address.">Host</button>
             <button type="button" class="bn-btn" id="table-join" title="Join a table on this network or over the internet.">Join</button>
             <button type="button" class="bn-btn" id="table-leave" hidden>Leave</button>
-            <button type="button" class="bn-btn" id="table-copy" hidden title="Copy the address friends use to join from anywhere">Copy address</button>
+            <button type="button" class="bn-btn" id="table-copy" hidden title="Copy the join link. Friends on any network paste it into Join.">Copy address</button>
           </div>
           <div class="table-status" id="table-status">Offline</div>
           <button type="button" class="bn-btn" id="chat-toggle" title="Chat with online instances">Chat</button>
@@ -973,8 +973,8 @@
             <ol>
               <li>Type your name in <b>Handle</b>. Optional: click the circle for a contact picture.</li>
               <li>Click <b>Host</b> in the yellow bar. Status should change from Offline to <b>Hosting · Gamemaster</b>. You are the GM for this table. Guests see <b>(GM)</b> on your name.</li>
-              <li>Click <b>Copy address</b>. That is what friends paste into Join. Same house gets a LAN IP. Other cities get an https link once the internet path is open (a few seconds).</li>
-              <li>Send that address. They click <b>Join</b> and paste it, or open the https link in a browser. They do not need to be on your Wi-Fi.</li>
+              <li>Wait a few seconds. <b>Copy address</b> fills with a join link (it also copies itself). Same house can use a LAN IP; another city gets an https link.</li>
+              <li>Send that link. They click <b>Join</b> and paste it, or open the https link in a browser. They do not need to be on your Wi-Fi.</li>
               <li>You are the source of truth. Your mix and your map are what guests see. Guests can still draw and chat.</li>
             </ol>
           </section>
@@ -1134,7 +1134,7 @@
             <h2>19 · If something feels broken</h2>
             <ul>
               <li><b>No sound</b> — did you press Light the hearth? Is Master up? Is Silence / Escape latched? Speakers unmuted?</li>
-              <li><b>Friends cannot join</b> — they need Copy address from the host. Same house: LAN IP. Other city: the https link. Both people keep Blightnet open. If the https link never appears, the host’s PC needs OpenSSH (<code>ssh</code>) so a tunnel can open.</li>
+              <li><b>Friends cannot join</b> — they need the host’s Copy address (one paste). Same house: LAN IP. Other city: the https link. Both keep Blightnet open. If the https link never appears, wait a few seconds after Host; it copies itself when the internet path opens.</li>
               <li><b>Wrong monitor</b> — INDEX → DISPLAY ARRAY → click the other monitor tile.</li>
               <li><b>Lost the mixer</b> — you are on INDEX. Click the TABLE tab.</li>
               <li><b>Cannot find Bestiary, NPCs, or Gods</b> — switch the top-bar skin to Hearthsong. Datashard, Faces, Corps, and Lore are Blight only.</li>
@@ -1149,7 +1149,7 @@
     <div class="modal hidden" id="join-modal">
       <div class="modal-card">
         <h1>Join a table</h1>
-        <p>Paste the host’s Copy address. Same house: an IP like 192.168.1.20:8765. Other city: an https link they sent you.</p>
+        <p>Paste the host’s Copy address. That is one link. Same house or another city — they Host, they copy, you paste.</p>
         <input id="join-addr" type="text" maxlength="240" placeholder="https://… or 192.168.1.20:8765" />
         <div class="modal-actions">
           <button class="ghost" id="join-cancel">Cancel</button>

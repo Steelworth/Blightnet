@@ -397,8 +397,13 @@ def _spawn_relay(cmd: list[str], port: int) -> str:
             cmd,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
-            stdin=subprocess.DEVNULL,
+            stdin=subprocess.PIPE,
         )
+        try:
+            proc.stdin.write(b"\n")
+            proc.stdin.flush()
+        except Exception:
+            pass
     except Exception:
         return ""
     buf = []
@@ -445,10 +450,24 @@ def _spawn_relay(cmd: list[str], port: int) -> str:
     return ""
 
 
+def _ssh_bin() -> str:
+    for p in (
+        shutil.which("ssh"),
+        "/usr/bin/ssh",
+        "/usr/local/bin/ssh",
+        r"C:\Windows\System32\OpenSSH\ssh.exe",
+        r"C:\Program Files\Git\usr\bin\ssh.exe",
+        r"C:\Program Files\Git\bin\ssh.exe",
+    ):
+        if p and os.path.isfile(p):
+            return p
+    return ""
+
+
 def start_relay(port: int) -> None:
     if NET.get("relay"):
         return
-    ssh = shutil.which("ssh")
+    ssh = _ssh_bin()
     cloud = shutil.which("cloudflared")
     local = f"127.0.0.1:{port}"
     attempts: list[list[str]] = []
@@ -467,6 +486,7 @@ def start_relay(port: int) -> None:
             "-o",
             "ExitOnForwardFailure=yes",
         ]
+        attempts.append(ssh_base + ["-p", "443", "-R", f"0:{local}", "free@a.pinggy.io"])
         attempts.append(ssh_base + ["-p", "443", "-R", f"0:{local}", "a.pinggy.io"])
         attempts.append(ssh_base + ["-R", f"80:{local}", "nokey@localhost.run"])
         attempts.append(ssh_base + ["-R", f"80:{local}", "serveo.net"])

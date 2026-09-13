@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"os/exec"
 	"regexp"
 	"strings"
@@ -107,13 +108,46 @@ func pickRelayURL(text string) string {
 	return ""
 }
 
+func sshBins() []string {
+	out := []string{}
+	seen := map[string]bool{}
+	add := func(p string) {
+		if p == "" || seen[p] {
+			return
+		}
+		if st, err := os.Stat(p); err == nil && !st.IsDir() {
+			seen[p] = true
+			out = append(out, p)
+		}
+	}
+	if p, err := exec.LookPath("ssh"); err == nil {
+		add(p)
+	}
+	for _, p := range []string{
+		`C:\Windows\System32\OpenSSH\ssh.exe`,
+		`C:\Program Files\Git\usr\bin\ssh.exe`,
+		`C:\Program Files\Git\bin\ssh.exe`,
+		"/usr/bin/ssh",
+		"/usr/local/bin/ssh",
+	} {
+		add(p)
+	}
+	return out
+}
+
 func startRelay(port int) {
+	if _, relay, _ := netSnapshot(); relay != "" {
+		return
+	}
+	if startNativeSSH(port) {
+		return
+	}
 	local := fmt.Sprintf("127.0.0.1:%d", port)
 	attempts := [][]string{}
 	if path, err := exec.LookPath("cloudflared"); err == nil {
 		attempts = append(attempts, []string{path, "tunnel", "--no-autoupdate", "--url", "http://" + local})
 	}
-	if path, err := exec.LookPath("ssh"); err == nil {
+	for _, path := range sshBins() {
 		base := []string{
 			path,
 			"-T",
@@ -121,6 +155,7 @@ func startRelay(port int) {
 			"-o", "ServerAliveInterval=30",
 			"-o", "ExitOnForwardFailure=yes",
 		}
+		attempts = append(attempts, append(append([]string{}, base...), "-p", "443", "-R", "0:"+local, "free@a.pinggy.io"))
 		attempts = append(attempts, append(append([]string{}, base...), "-p", "443", "-R", "0:"+local, "a.pinggy.io"))
 		attempts = append(attempts, append(append([]string{}, base...), "-R", "80:"+local, "nokey@localhost.run"))
 		attempts = append(attempts, append(append([]string{}, base...), "-R", "80:"+local, "serveo.net"))
@@ -141,6 +176,7 @@ func spawnRelay(args []string) bool {
 	pr, pw := io.Pipe()
 	cmd.Stdout = pw
 	cmd.Stderr = pw
+	cmd.Stdin = strings.NewReader("\n")
 	if err := cmd.Start(); err != nil {
 		_ = pw.Close()
 		return false
@@ -188,14 +224,26 @@ func spawnRelay(args []string) bool {
 }
 
 func punchInternet(port int) {
+	if upnpMap(port) {
+		setUPnP(true)
+		fmt.Println("Internet table: router opened port", port)
+	}
 	wan := httpWANIP()
 	if wan != "" && isCGNAT(wan) {
 		fmt.Printf("Public IPv4 %s is carrier NAT — friends cannot dial it directly.\n", wan)
 		wan = ""
+		setUPnP(false)
 	}
 	if wan != "" {
 		setWan(wan)
-		fmt.Printf("Internet table (IPv4) → http://%s:%d/\n", wan, port)
+		mapped := ""
+		if _, _, up := netSnapshot(); up {
+			mapped = " (router opened)"
+		}
+		fmt.Printf("Internet table (IPv4) → http://%s:%d/%s\n", wan, port, mapped)
 	}
 	startRelay(port)
+	if _, relay, upnp := netSnapshot(); relay == "" && !(upnp && wan != "") {
+		fmt.Println("Internet table: no public address yet. Join still works on the LAN.")
+	}
 }
