@@ -3,6 +3,26 @@ uploads/*
 !uploads/.gitkeep
 uploads/manifest.json
 
+/target/
+/blightnet
+/blightnet.exe
+/cloudflared
+/cloudflared.exe
+
+# Local deck state (per machine)
+data/peer-id.txt
+data/characters.json
+data/devices.json
+data/notes.json
+data/combat-log.json
+data/chat.json
+data/crews.json
+data/saved-mixes.json
+data/deck-library.json
+data/deck-vol.txt
+data/nethooks/
+data/inbox/
+
 # Python
 __pycache__/
 *.py[cod]
@@ -12,6 +32,9 @@ __pycache__/
 *.egg-info/
 .venv/
 venv/
+
+# Downloaded free tunnel helper (Cloudflare quick tunnels)
+tools/bin/
 
 # Go toolchain and Windows rebuild cache
 tools/_go/

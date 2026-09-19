@@ -1,36 +1,35 @@
 @echo off
 setlocal EnableExtensions
 cd /d "%~dp0"
+set PATH=%USERPROFILE%\.cargo\bin;%PATH%
 
-powershell -NoProfile -ExecutionPolicy Bypass -Command "try { Unblock-File -LiteralPath '%~dp0Blightnet.exe' -ErrorAction SilentlyContinue } catch {}" >nul 2>nul
-
-if exist "Blightnet.exe.new" (
-  if exist "Blightnet.exe" move /Y "Blightnet.exe" "Blightnet.exe.bak" >nul 2>nul
-  move /Y "Blightnet.exe.new" "Blightnet.exe" >nul 2>nul
+where cargo >nul 2>nul
+if errorlevel 1 (
+  if exist "target\release\blightnet.exe" goto run
+  echo Rust/cargo is missing. Install it from https://rustup.rs then run start.bat again.
+  pause
+  exit /b 1
 )
 
-if exist "Blightnet.exe" (
-  "Blightnet.exe"
-  exit /b %ERRORLEVEL%
-)
-if exist "Hearthsong.exe" (
-  "Hearthsong.exe"
-  exit /b %ERRORLEVEL%
-)
-
-where py >nul 2>nul
-if %ERRORLEVEL%==0 (
-  py -3 "serve.py"
-  exit /b %ERRORLEVEL%
-)
-where python >nul 2>nul
-if %ERRORLEVEL%==0 (
-  python "serve.py"
-  exit /b %ERRORLEVEL%
+echo Building native Blightnet...
+cargo build --release
+if errorlevel 1 (
+  echo Build failed.
+  pause
+  exit /b 1
 )
 
-echo Blightnet.exe is missing, and Python was not found.
-echo Keep the whole unzipped folder together: Blightnet.exe next to index.html.
-echo If you just downloaded from GitHub, do not open index.html from the folder.
-pause
-exit /b 1
+:run
+if exist "target\release\blightnet.exe" copy /Y "target\release\blightnet.exe" "blightnet.exe" >nul
+echo Starting Blightnet...
+"target\release\blightnet.exe" %*
+if errorlevel 1 (
+  echo Blightnet exited with an error.
+  if exist blightnet.log (
+    echo Last lines of blightnet.log:
+    powershell -NoProfile -Command "Get-Content -Tail 40 blightnet.log"
+  )
+  pause
+  exit /b 1
+)
+exit /b 0
