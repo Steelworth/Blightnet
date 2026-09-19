@@ -2,7 +2,7 @@ use eframe::egui::{
     self, Color32, ColorImage, FontId, Pos2, Rect, Sense, TextureHandle, TextureOptions, Ui, Vec2,
 };
 use std::collections::{HashMap, VecDeque};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 const CAP: usize = 64;
 const MAX_SIDE: u32 = 2048;
@@ -257,6 +257,118 @@ mod tests {
         assert!(w >= 256);
         let _ = kit_art(&root, "longsword", "Longsword");
     }
+
+    #[test]
+    fn portable_paths_survive_windows_separators() {
+        let root = PathBuf::from("/home/runner/blightnet");
+        assert_eq!(
+            portable_rel(&root, "assets/bestiary/goblin.jpg"),
+            "assets/bestiary/goblin.jpg"
+        );
+        assert_eq!(
+            portable_rel(&root, r"C:\Users\Ada\blightnet\assets\bestiary\goblin.jpg"),
+            "assets/bestiary/goblin.jpg"
+        );
+        assert_eq!(
+            portable_rel(&root, "/home/runner/blightnet/data/chars/x-portrait.jpg"),
+            "data/chars/x-portrait.jpg"
+        );
+        let p = resolve_rel(&root, r"C:\game\assets\places\tavern-day.jpg");
+        assert!(p.ends_with("assets/places/tavern-day.jpg") || p.ends_with("assets\\places\\tavern-day.jpg"));
+    }
+}
+
+/// Forward-slash relative path so Windows and Linux seats resolve the same asset.
+pub fn portable_rel(root: &Path, raw: &str) -> String {
+    if raw.is_empty() {
+        return String::new();
+    }
+    let n = raw.replace('\\', "/");
+    let p = Path::new(&n);
+    if let Ok(rel) = p.strip_prefix(root) {
+        return rel.to_string_lossy().replace('\\', "/");
+    }
+    let root_s = root.to_string_lossy().replace('\\', "/");
+    if let Some(rest) = n.strip_prefix(&root_s) {
+        return rest.trim_start_matches('/').to_string();
+    }
+    for needle in ["assets/", "data/"] {
+        if let Some(i) = n.find(needle) {
+            return n[i..].to_string();
+        }
+    }
+    n
+}
+
+pub fn resolve_rel(root: &Path, raw: &str) -> PathBuf {
+    if raw.is_empty() {
+        return PathBuf::new();
+    }
+    let n = portable_rel(root, raw);
+    let p = Path::new(&n);
+    if p.is_absolute() {
+        if p.is_file() {
+            return p.to_path_buf();
+        }
+        for needle in ["assets/", "data/"] {
+            if let Some(i) = n.find(needle) {
+                let cand = root.join(&n[i..]);
+                if cand.is_file() {
+                    return cand;
+                }
+            }
+        }
+        return p.to_path_buf();
+    }
+    root.join(n.trim_start_matches('/'))
+}
+
+pub fn stash_bytes(root: &Path, dir: &str, bytes: &[u8], ext: &str) -> Option<String> {
+    if bytes.is_empty() {
+        return None;
+    }
+    let mut h = bytes.len() as u64;
+    let take = bytes.len().min(4096);
+    for (i, b) in bytes[..take].iter().enumerate() {
+        h = h.wrapping_mul(16777619) ^ (*b as u64).wrapping_add(i as u64);
+    }
+    if bytes.len() > 64 {
+        let tail = &bytes[bytes.len() - 64..];
+        for b in tail {
+            h = h.wrapping_mul(16777619) ^ (*b as u64);
+        }
+    }
+    let ext = match ext.to_lowercase().as_str() {
+        "jpeg" => "jpg",
+        "png" | "webp" | "jpg" | "gif" => ext,
+        _ => "jpg",
+    };
+    let rel = format!("{dir}/{h:016x}.{ext}");
+    let dest = root.join(&rel);
+    if let Some(parent) = dest.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    if !dest.is_file() {
+        std::fs::write(&dest, bytes).ok()?;
+    }
+    Some(rel)
+}
+
+pub fn stash_file(root: &Path, dir: &str, src: &Path) -> Option<String> {
+    if !src.is_file() {
+        return None;
+    }
+    let rel = portable_rel(root, &src.to_string_lossy());
+    let cand = root.join(&rel);
+    if !Path::new(&rel).is_absolute() && cand.is_file() {
+        return Some(rel);
+    }
+    let bytes = std::fs::read(src).ok()?;
+    let ext = src
+        .extension()
+        .and_then(|s| s.to_str())
+        .unwrap_or("jpg");
+    stash_bytes(root, dir, &bytes, ext)
 }
 
 pub fn kit_art(root: &Path, id: &str, name: &str) -> Option<std::path::PathBuf> {

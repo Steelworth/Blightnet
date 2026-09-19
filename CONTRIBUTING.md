@@ -23,3 +23,5 @@ Keep `audio/`, `assets/`, and `data/` next to the binary.
 ## Notes
 
 Keep table copy original. Do not paste copyrighted book flavor (D&D or Cyberpunk) into JSON or UI strings.
+
+`data/changelog.md` is the INDEX DECK LOG. Update it only when a build is about to be pushed to GitHub. One heading per calendar day (`## YYYY-MM-DD`), then every add / change / fix for that day as bullets. Do not split one day into multiple titled entries.

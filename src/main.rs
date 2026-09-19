@@ -2,9 +2,12 @@ mod app;
 mod audio;
 mod catalog;
 mod chars;
+mod crypt;
+mod daemon;
 mod dice;
 mod images;
 mod maps;
+mod mesh;
 mod names;
 mod net;
 mod nethook;
@@ -43,8 +46,42 @@ fn root_dir() -> PathBuf {
     PathBuf::from(".")
 }
 
+fn root_from_args() -> Option<PathBuf> {
+    let args: Vec<String> = std::env::args().collect();
+    args.windows(2).find_map(|w| {
+        if w[0] == "--root" {
+            Some(PathBuf::from(&w[1]))
+        } else {
+            None
+        }
+    })
+}
+
 fn main() -> eframe::Result<()> {
-    let root = root_dir();
+    let root = root_from_args().unwrap_or_else(root_dir);
+    let args: Vec<String> = std::env::args().collect();
+    let cmd = args.get(1).map(|s| s.as_str()).unwrap_or("");
+    match cmd {
+        "daemon" => {
+            std::process::exit(crate::daemon::run(root));
+        }
+        "daemon-status" | "node-status" => {
+            std::process::exit(crate::daemon::print_status(&root));
+        }
+        "daemon-stop" | "node-stop" => {
+            std::process::exit(crate::daemon::stop(&root));
+        }
+        "help" | "-h" | "--help" => {
+            eprintln!(
+                "blightnet                 UI (starts the node if needed)\n\
+                 blightnet daemon          background node — table, invite, reconnect\n\
+                 blightnet daemon-status   is the node up\n\
+                 blightnet daemon-stop     stop the node"
+            );
+            std::process::exit(0);
+        }
+        _ => {}
+    }
     let native = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size([1440.0, 900.0])

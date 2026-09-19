@@ -42,11 +42,11 @@ You need [Rust](https://rustup.rs) once, so `start.bat` can build the native win
 2. Double-click **`start.bat`**. The first run compiles; later runs just launch.
 3. A **Blightnet** window opens. There is no browser and no `http://127.0.0.1`.
 
-Closing the console (or INDEX **00 DISCONNECT**) stops the table. You do not need the `tools` folder on Windows.
+Closing the window does not stop the node. Press **Online** again to take it offline, or INDEX **00 DISCONNECT**, or `blightnet daemon-stop`. You do not need the `tools` folder on Windows.
 
 If Windows SmartScreen warns about an unknown app: **More info** → **Run anyway**. That is the local launcher, not a Store download.
 
-If Windows Firewall asks, allow **Blightnet** on a private network so friends on the same house Wi-Fi can Join.
+If Windows Firewall asks, allow **Blightnet** on a private network for TCP and UDP **8766** so friends can Join.
 
 Video call and screen share on Windows need [FFmpeg](https://ffmpeg.org) on PATH (camera uses DirectShow, screen uses gdigrab). Mic, speakers, chat, maps, and Host/Join work without it.
 
@@ -83,7 +83,7 @@ If macOS blocks the binary: System Settings → Privacy & Security → **Open An
 
 INDEX (neon orange deck):
 
-- **01 TABLE** — mixer
+- **01 BLIGHTNEXUS** — opens TABLE (mixer). Status bar NODE is ACTIVE or OFFLINE. **Online** starts or stops the node.
 - **02 CHARS** — sheets and the 0–100 die
 - **03 TUTORIAL** — field manual
 - **04 BLACKJACK** — house 21

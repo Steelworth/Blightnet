@@ -15,7 +15,7 @@ pub struct TokenSpec {
     pub src: String,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct MapTok {
     pub id: String,
     pub name: String,
@@ -54,6 +54,7 @@ pub enum MapOp {
     Add(Mark),
     Del(String),
     Clear,
+    Image,
 }
 
 pub struct MapBoard {
@@ -133,6 +134,7 @@ pub fn ui(
                 board.zoom = 1.0;
                 board.pan = Vec2::ZERO;
                 ops.push(MapOp::Clear);
+                ops.push(MapOp::Image);
             }
         }
         if theme::neon_btn_color(ui, "Grid", ORANGE, board.grid).clicked() {
@@ -203,16 +205,19 @@ pub fn ui(
         if matches!(ext.as_str(), "jpg" | "jpeg" | "png" | "webp") {
             if board.image.is_none() {
                 board.image = Some(path);
+                ops.push(MapOp::Image);
             } else {
                 let name = path
                     .file_stem()
                     .and_then(|s| s.to_str())
                     .unwrap_or("Token")
                     .to_string();
+                let image = crate::images::stash_file(root, "data/map-cache", &path)
+                    .unwrap_or_else(|| crate::images::portable_rel(root, &path.to_string_lossy()));
                 board.drop_token(
                     TokenSpec {
                         name,
-                        image: path.to_string_lossy().into(),
+                        image,
                         sheet: String::new(),
                         cat: String::new(),
                         src: String::new(),
@@ -234,7 +239,9 @@ pub fn ui(
         if let Some(pos) = resp.hover_pos() {
             let nx = ((pos.x - rect.left()) / rect.width()).clamp(0.0, 1.0);
             let ny = ((pos.y - rect.top()) / rect.height()).clamp(0.0, 1.0);
-            let spec = (*spec).clone();
+            let mut spec = (*spec).clone();
+            spec.image = crate::images::stash_file(root, "data/map-cache", Path::new(&spec.image))
+                .unwrap_or_else(|| crate::images::portable_rel(root, &spec.image));
             board.drop_token(spec.clone(), nx, ny);
             dropped.push(spec);
         }
@@ -253,11 +260,7 @@ pub fn ui(
             let s = tok.size * inner.width().min(inner.height());
             let tr = Rect::from_center_size(c, Vec2::splat(s.max(18.0)));
             if !tok.image.is_empty() {
-                let p = if Path::new(&tok.image).is_absolute() {
-                    PathBuf::from(&tok.image)
-                } else {
-                    root.join(&tok.image)
-                };
+                let p = crate::images::resolve_rel(root, &tok.image);
                 crate::images::paint_cover(ui, tex, &p, tr);
             } else {
                 ui.painter().circle_filled(c, s * 0.45, ORANGE);

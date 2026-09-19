@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::io::{BufRead, BufReader, Write};
+use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{TcpListener, TcpStream, ToSocketAddrs, UdpSocket};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Receiver, Sender, SyncSender, TryRecvError};
@@ -10,7 +10,7 @@ use std::time::Duration;
 
 pub const DEFAULT_PORT: u16 = 8766;
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Role {
     Idle,
     Host,
@@ -151,6 +151,19 @@ pub enum Wire {
     MapMarksClear,
     #[serde(rename = "map-marks-ask")]
     MapMarksAsk,
+    #[serde(rename = "map-tokens")]
+    MapTokens { tokens: Vec<crate::maps::MapTok> },
+    #[serde(rename = "map-tokens-ask")]
+    MapTokensAsk,
+    #[serde(rename = "sheet")]
+    Sheet {
+        from: String,
+        chars: Vec<crate::chars::Character>,
+    },
+    #[serde(rename = "sheet-ask")]
+    SheetAsk,
+    #[serde(rename = "map-image-ask")]
+    MapImageAsk,
 }
 
 pub enum NetEvent {
@@ -159,6 +172,7 @@ pub enum NetEvent {
         port: u16,
         addrs: Vec<String>,
         internet: bool,
+        key: Vec<u8>,
     },
     Relay { url: String },
     Joined { addr: String },
@@ -231,15 +245,25 @@ pub enum NetEvent {
     MapMarks { marks: Vec<crate::maps::Mark> },
     MapMarksClear,
     MapMarksAsk,
+    MapTokens { tokens: Vec<crate::maps::MapTok> },
+    MapTokensAsk,
+    Sheet {
+        from: String,
+        chars: Vec<crate::chars::Character>,
+    },
+    SheetAsk,
+    MapImageAsk,
 }
 
-enum Cmd {
+pub(crate) enum Cmd {
     Host { internet: bool, root: std::path::PathBuf },
     Join(String),
     Leave,
     Send(Wire),
     Online,
     Dial(String),
+    SetHandle(String),
+    RefreshInvite,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -262,6 +286,8 @@ pub struct NetHub {
     pub internet: bool,
     pub presence: bool,
     pub seen: HashMap<String, String>,
+    pub table_key: Vec<u8>,
+    pub daemon: bool,
     tx: Sender<Cmd>,
     rx: Receiver<NetEvent>,
     alive: Arc<AtomicBool>,
@@ -292,6 +318,45 @@ impl NetHub {
             internet: false,
             presence: false,
             seen: HashMap::new(),
+            table_key: vec![],
+            daemon: false,
+            tx: cmd_tx,
+            rx: ev_rx,
+            alive,
+        }
+    }
+
+    pub fn attach(handle: String, root: &std::path::Path) -> Self {
+        match crate::daemon::connect_or_spawn(root, &handle) {
+            Ok(stream) => Self::from_ipc(handle, root, stream),
+            Err(_) => Self::new(handle, root),
+        }
+    }
+
+    fn from_ipc(handle: String, root: &std::path::Path, stream: TcpStream) -> Self {
+        let (cmd_tx, cmd_rx) = mpsc::channel::<Cmd>();
+        let (ev_tx, ev_rx) = mpsc::channel::<NetEvent>();
+        let alive = Arc::new(AtomicBool::new(true));
+        let self_id = load_peer_id(root);
+        let flag = alive.clone();
+        thread::Builder::new()
+            .name("blightnet-ipc".into())
+            .spawn(move || crate::daemon::run_client(stream, cmd_rx, ev_tx, flag))
+            .ok();
+        Self {
+            role: Role::Idle,
+            self_id,
+            handle,
+            peers: vec![],
+            addrs: vec![],
+            public_url: String::new(),
+            port: DEFAULT_PORT,
+            join_addr: String::new(),
+            internet: false,
+            presence: false,
+            seen: HashMap::new(),
+            table_key: vec![],
+            daemon: true,
             tx: cmd_tx,
             rx: ev_rx,
             alive,
@@ -299,6 +364,9 @@ impl NetHub {
     }
 
     pub fn set_handle(&mut self, name: String) {
+        if self.handle != name {
+            let _ = self.tx.send(Cmd::SetHandle(name.clone()));
+        }
         self.handle = name;
     }
 
@@ -396,6 +464,29 @@ impl NetHub {
         let _ = self.tx.send(Cmd::Send(Wire::MapMarksAsk));
     }
 
+    pub fn send_map_tokens(&self, tokens: Vec<crate::maps::MapTok>) {
+        let _ = self.tx.send(Cmd::Send(Wire::MapTokens { tokens }));
+    }
+
+    pub fn send_map_tokens_ask(&self) {
+        let _ = self.tx.send(Cmd::Send(Wire::MapTokensAsk));
+    }
+
+    pub fn send_sheet(&self, chars: Vec<crate::chars::Character>) {
+        let _ = self.tx.send(Cmd::Send(Wire::Sheet {
+            from: self.self_id.clone(),
+            chars,
+        }));
+    }
+
+    pub fn send_sheet_ask(&self) {
+        let _ = self.tx.send(Cmd::Send(Wire::SheetAsk));
+    }
+
+    pub fn send_map_image_ask(&self) {
+        let _ = self.tx.send(Cmd::Send(Wire::MapImageAsk));
+    }
+
     pub fn send_image(&self, to: Option<String>, crew: Option<String>, mime: &str, bytes: &[u8]) {
         let _ = self.tx.send(Cmd::Send(Wire::Image {
             from: self.self_id.clone(),
@@ -484,9 +575,6 @@ impl NetHub {
         time: String,
         inside: bool,
     ) {
-        if self.role != Role::Host {
-            return;
-        }
         let _ = self.tx.send(Cmd::Send(Wire::Mix {
             layers,
             blight,
@@ -506,14 +594,16 @@ impl NetHub {
                             port,
                             addrs,
                             internet,
+                            key,
                         } => {
                             self.role = Role::Host;
                             self.presence = true;
                             self.port = *port;
                             self.addrs = addrs.clone();
                             self.internet = *internet;
+                            self.table_key = key.clone();
                             if !internet {
-                                self.public_url.clear();
+                                self.public_url = crate::crypt::encode_invite(key, addrs);
                             }
                         }
                         NetEvent::Relay { url } => {
@@ -533,6 +623,7 @@ impl NetHub {
                             self.public_url.clear();
                             self.internet = false;
                             self.seen.clear();
+                            self.table_key.clear();
                         }
                         NetEvent::Online { port, addrs } => {
                             self.presence = true;
@@ -570,32 +661,35 @@ impl NetHub {
         if !self.public_url.is_empty() {
             return self.public_url.clone();
         }
-        let host = self
-            .addrs
-            .iter()
-            .find(|a| !a.starts_with("127.") && !a.starts_with("[::"))
-            .or_else(|| self.addrs.first())
-            .cloned()
-            .unwrap_or_else(|| format!("127.0.0.1:{}", self.port));
-        format!("blightnet://{host}")
+        crate::crypt::encode_invite(&self.table_key, &self.invite_addrs())
     }
 
     pub fn lan_link(&self) -> String {
-        let host = self
+        crate::crypt::encode_invite(&self.table_key, &self.invite_addrs())
+    }
+
+    fn invite_addrs(&self) -> Vec<String> {
+        let mut v: Vec<String> = self
             .addrs
             .iter()
-            .find(|a| !a.starts_with("127.") && !a.starts_with("[::"))
-            .or_else(|| self.addrs.first())
+            .filter(|a| !a.starts_with("127.") && !a.starts_with("[::"))
             .cloned()
-            .unwrap_or_else(|| format!("127.0.0.1:{}", self.port));
-        format!("blightnet://{host}")
+            .collect();
+        if v.is_empty() {
+            v.push(format!("127.0.0.1:{}", self.port));
+        }
+        v
     }
 }
 
 impl Drop for NetHub {
     fn drop(&mut self) {
         self.alive.store(false, Ordering::SeqCst);
-        let _ = self.tx.send(Cmd::Leave);
+        // The node keeps the table when the window closes. Only an in-process
+        // hub (tests, fallback) should tear the link down here.
+        if !self.daemon {
+            let _ = self.tx.send(Cmd::Leave);
+        }
     }
 }
 
@@ -616,29 +710,37 @@ fn advertised_addrs(port: u16) -> Vec<String> {
     out
 }
 
-pub fn looks_web(raw: &str) -> bool {
-    let s = raw.trim().to_lowercase();
-    s.starts_with("http://")
-        || s.starts_with("https://")
-        || s.starts_with("ws://")
-        || s.starts_with("wss://")
-        || s.contains("trycloudflare.com")
-}
-
 pub fn parse_addr(raw: &str) -> Option<String> {
-    let s = raw.trim().trim_end_matches('/');
+    let s = raw
+        .trim()
+        .trim_start_matches('\u{feff}')
+        .trim_end_matches(|c: char| c == '/' || c == '\r' || c.is_whitespace());
     if s.is_empty() {
         return None;
     }
-    if looks_web(s) {
-        return Some(s.to_string());
+    let lower = s.to_lowercase();
+    if lower.starts_with("http://") || lower.starts_with("https://") || lower.starts_with("ws://") {
+        return None;
     }
     let s = s
         .trim_start_matches("blightnet://")
-        .trim_start_matches("BLIGHTNET://");
+        .trim_start_matches("BLIGHTNET://")
+        .trim_start_matches("blightnet:/")
+        .trim_start_matches("blightnet:");
+    let s = s.trim();
     if s.is_empty() {
         return None;
     }
+    let s = if let Some((k, rest)) = s.split_once('@') {
+        if crate::crypt::decode_key(k).is_some() {
+            rest.split(',').next().unwrap_or(rest)
+        } else {
+            s
+        }
+    } else {
+        s.split(',').next().unwrap_or(s)
+    };
+    let s = s.trim();
     if s.contains(':') {
         Some(s.to_string())
     } else {
@@ -646,27 +748,12 @@ pub fn parse_addr(raw: &str) -> Option<String> {
     }
 }
 
-fn to_ws_url(raw: &str) -> String {
-    let s = raw.trim().trim_end_matches('/');
-    if let Some(rest) = s.strip_prefix("https://") {
-        format!("wss://{rest}")
-    } else if let Some(rest) = s.strip_prefix("http://") {
-        format!("ws://{rest}")
-    } else if s.starts_with("wss://") || s.starts_with("ws://") {
-        s.to_string()
-    } else if s.contains("trycloudflare.com") {
-        format!("wss://{s}")
-    } else {
-        format!("ws://{s}")
-    }
-}
-
-fn write_line(stream: &mut TcpStream, msg: &Wire) -> bool {
-    let Ok(mut s) = serde_json::to_string(msg) else {
-        return false;
-    };
-    s.push('\n');
-    stream.write_all(s.as_bytes()).is_ok() && stream.flush().is_ok()
+fn write_line(
+    stream: &mut TcpStream,
+    msg: &Wire,
+    cipher: &crate::crypt::Cipher,
+) -> bool {
+    crate::crypt::write_sealed(stream, cipher, msg)
 }
 
 fn decode_pcm(b64: &str) -> Vec<f32> {
@@ -679,11 +766,11 @@ fn decode_pcm(b64: &str) -> Vec<f32> {
         .collect()
 }
 
-type ClientMap = Arc<Mutex<HashMap<String, SyncSender<Wire>>>>;
+pub(crate) type ClientMap = Arc<Mutex<HashMap<String, SyncSender<Wire>>>>;
 
 const WIRE_CAP: usize = 16;
 
-fn wire_chan() -> (SyncSender<Wire>, Receiver<Wire>) {
+pub(crate) fn wire_chan() -> (SyncSender<Wire>, Receiver<Wire>) {
     mpsc::sync_channel(WIRE_CAP)
 }
 
@@ -706,6 +793,12 @@ fn wire_hold(msg: &Wire) -> bool {
             | Wire::MapMarks { .. }
             | Wire::MapMarksClear
             | Wire::MapMarksAsk
+            | Wire::MapTokens { .. }
+            | Wire::MapTokensAsk
+            | Wire::Sheet { .. }
+            | Wire::SheetAsk
+            | Wire::MapImageAsk
+            | Wire::Mix { .. }
     )
 }
 
@@ -740,7 +833,7 @@ fn take_wires(wrx: &Receiver<Wire>) -> Vec<Wire> {
     coalesce_video(batch)
 }
 
-fn recv_batch(wrx: &Receiver<Wire>) -> Option<Vec<Wire>> {
+pub(crate) fn recv_batch(wrx: &Receiver<Wire>) -> Option<Vec<Wire>> {
     let first = wrx.recv().ok()?;
     let mut batch = vec![first];
     while let Ok(m) = wrx.try_recv() {
@@ -772,13 +865,14 @@ fn coalesce_video(batch: Vec<Wire>) -> Vec<Wire> {
         .collect()
 }
 
-fn run_hub(
+pub(crate) fn run_hub(
     self_id: String,
     handle: String,
     cmd_rx: Receiver<Cmd>,
     ev_tx: Sender<NetEvent>,
     alive: Arc<AtomicBool>,
 ) {
+    let mut handle = handle;
     let mut stop = Arc::new(AtomicBool::new(false));
     let mut clients: ClientMap = Arc::new(Mutex::new(HashMap::new()));
     let mut guest_tx: Option<SyncSender<Wire>> = None;
@@ -787,6 +881,9 @@ fn run_hub(
     let mut relay_child: Option<std::process::Child> = None;
     let mut listening = false;
     let mut listen_port = DEFAULT_PORT;
+    let mut table_key: std::sync::Arc<Vec<u8>> = std::sync::Arc::new(Vec::new());
+    let mut internet_on = false;
+    let mut mesh_slot: Option<String> = None;
 
     while alive.load(Ordering::SeqCst) {
         let cmd = match cmd_rx.recv_timeout(Duration::from_millis(40)) {
@@ -795,7 +892,7 @@ fn run_hub(
             Err(_) => break,
         };
         match cmd {
-            Cmd::Host { internet, root } => {
+            Cmd::Host { internet, root: _ } => {
                 stop.store(true, Ordering::SeqCst);
                 stop = Arc::new(AtomicBool::new(false));
                 clients = Arc::new(Mutex::new(HashMap::new()));
@@ -811,35 +908,72 @@ fn run_hub(
                         let port = listener.local_addr().map(|a| a.port()).unwrap_or(DEFAULT_PORT);
                         listen_port = port;
                         listening = true;
-                        let addrs = advertised_addrs(port);
+                        let key = crate::crypt::mint_key();
+                        table_key = std::sync::Arc::new(key.clone());
+                        let mut addrs = advertised_addrs(port);
+                        let roster = Arc::new(Mutex::new(vec![PeerInfo {
+                            id: self_id.clone(),
+                            name: handle.clone(),
+                        }]));
                         spawn_beacon(
                             self_id.clone(),
                             handle.clone(),
                             port,
                             stop.clone(),
                             ev_tx.clone(),
+                            table_key.clone(),
                         );
+                        mesh_slot = None;
+                        if let Some(udp) = crate::mesh::bind_mesh(port) {
+                            if let Some((ip, mapped)) = crate::mesh::stun_mapped(&udp) {
+                                let slot = format!("udp:{ip}:{mapped}");
+                                if !addrs.iter().any(|a| a == &slot) {
+                                    addrs.push(slot.clone());
+                                }
+                                mesh_slot = Some(slot);
+                            }
+                            crate::mesh::spawn_host(
+                                udp,
+                                clients.clone(),
+                                roster.clone(),
+                                ev_tx.clone(),
+                                self_id.clone(),
+                                handle.clone(),
+                                stop.clone(),
+                                table_key.clone(),
+                            );
+                        }
                         let _ = ev_tx.send(NetEvent::Hosting {
                             port,
                             addrs: addrs.clone(),
                             internet,
+                            key: key.clone(),
                         });
                         let _ = ev_tx.send(NetEvent::Status(if internet {
-                            "Hosting · opening internet link…".into()
+                            "Hosting · node opening internet path…".into()
                         } else {
                             "Hosting · local network".into()
                         }));
                         spawn_accept(
                             listener,
                             clients.clone(),
+                            roster,
                             ev_tx.clone(),
                             self_id.clone(),
                             handle.clone(),
                             stop.clone(),
                             names.clone(),
+                            table_key.clone(),
                         );
+                        internet_on = internet;
                         if internet {
-                            relay_child = spawn_cloudflare(port, &root, ev_tx.clone(), stop.clone());
+                            let ev = ev_tx.clone();
+                            let halt = stop.clone();
+                            let k = key.clone();
+                            let extra = mesh_slot.clone();
+                            thread::spawn(move || {
+                                open_internet_invite(port, &k, addrs, extra, ev, halt);
+                            });
                         }
                     }
                     Err(e) => {
@@ -854,12 +988,13 @@ fn run_hub(
                 if let Some(mut c) = relay_child.take() {
                     let _ = c.kill();
                 }
-                let Some(target) = parse_addr(&addr) else {
+                let Some(inv) = crate::crypt::parse_invite(&addr) else {
                     let _ = ev_tx.send(NetEvent::Error(
-                        "Paste a blightnet:// address or an https invite link.".into(),
+                        "Paste a blightnet:// invite from the host.".into(),
                     ));
                     continue;
                 };
+                table_key = std::sync::Arc::new(inv.key.clone());
                 let (wtx, wrx) = wire_chan();
                 guest_tx = Some(wtx.clone());
                 let hello = Wire::Hello {
@@ -867,58 +1002,62 @@ fn run_hub(
                     name: handle.clone(),
                     role: "guest".into(),
                 };
-                if looks_web(&target) {
-                    let ws_url = to_ws_url(&target);
-                    match tungstenite::connect(&ws_url) {
-                        Ok((mut ws, _)) => {
-                            set_ws_timeout(&mut ws);
-                            if ws_send(&mut ws, &hello) {
-                                spawn_guest_ws(ws, wrx, ev_tx.clone(), stop.clone(), self_id.clone());
-                                let _ = ev_tx.send(NetEvent::Joined { addr: target });
-                                let _ = ev_tx.send(NetEvent::Status("Joined".into()));
-                            } else {
-                                let _ = ev_tx.send(NetEvent::Error(
-                                    "Connected but could not say hello.".into(),
-                                ));
-                            }
-                        }
-                        Err(e) => {
-                            let _ = ev_tx.send(NetEvent::Error(format!(
-                                "Could not reach the table. {e}"
-                            )));
-                        }
-                    }
-                    continue;
-                }
-                let sock = target
-                    .to_socket_addrs()
-                    .ok()
-                    .and_then(|mut it| it.next());
-                let Some(sock) = sock else {
-                    let _ = ev_tx.send(NetEvent::Error(format!("Bad address: {target}")));
-                    continue;
-                };
-                match TcpStream::connect_timeout(&sock, Duration::from_secs(4)) {
-                    Ok(stream) => {
-                        let _ = stream.set_nodelay(true);
-                        let mut s = stream.try_clone().ok();
-                        if let Some(ref mut w) = s {
-                            let _ = write_line(w, &hello);
+                match connect_invite(&crate::mesh::tcp_slots(&inv.addrs)) {
+                    Some(stream) => {
+                        let Ok(reader_stream) = stream.try_clone() else {
+                            let _ = ev_tx.send(NetEvent::Error("Could not clone the socket.".into()));
+                            continue;
+                        };
+                        let mut writer = stream.try_clone().ok();
+                        let mut reader = BufReader::new(reader_stream);
+                        let Some(ref mut w) = writer else {
+                            let _ = ev_tx.send(NetEvent::Error("Could not write the socket.".into()));
+                            continue;
+                        };
+                        let Some(cipher) =
+                            crate::crypt::handshake_client(&mut reader, w, &inv.key)
+                        else {
+                            let _ = ev_tx.send(NetEvent::Error(
+                                "That table did not complete a Blightnet handshake. Use a fresh invite from Host.".into(),
+                            ));
+                            continue;
+                        };
+                        if !write_line(w, &hello, &cipher) {
+                            let _ = ev_tx.send(NetEvent::Error("Connected but could not say hello.".into()));
+                            continue;
                         }
                         spawn_guest(
-                            stream,
+                            reader,
+                            writer.take().unwrap_or_else(|| stream),
                             wrx,
                             ev_tx.clone(),
                             stop.clone(),
                             self_id.clone(),
+                            cipher,
                         );
-                        let _ = ev_tx.send(NetEvent::Joined { addr: target });
+                        let shown = crate::crypt::encode_invite(&inv.key, &inv.addrs);
+                        let _ = ev_tx.send(NetEvent::Joined { addr: shown });
                         let _ = ev_tx.send(NetEvent::Status("Joined".into()));
                     }
-                    Err(e) => {
-                        let _ = ev_tx.send(NetEvent::Error(format!(
-                            "Could not reach the table. {e}"
-                        )));
+                    None => {
+                        let targets = crate::mesh::udp_targets(&inv.addrs);
+                        if crate::mesh::join_guest(
+                            &targets,
+                            &inv.key,
+                            hello,
+                            wrx,
+                            ev_tx.clone(),
+                            stop.clone(),
+                            self_id.clone(),
+                        ) {
+                            let shown = crate::crypt::encode_invite(&inv.key, &inv.addrs);
+                            let _ = ev_tx.send(NetEvent::Joined { addr: shown });
+                            let _ = ev_tx.send(NetEvent::Status("Joined · node mesh".into()));
+                        } else {
+                            let _ = ev_tx.send(NetEvent::Error(
+                                "Could not reach the host node. Both sides must run Blightnet. Try the same network, or wait for the host invite to list a udp: address.".into(),
+                            ));
+                        }
                     }
                 }
             }
@@ -935,14 +1074,20 @@ fn run_hub(
                             listen_port = port;
                             listening = true;
                             let addrs = advertised_addrs(port);
+                            let roster = Arc::new(Mutex::new(vec![PeerInfo {
+                                id: self_id.clone(),
+                                name: handle.clone(),
+                            }]));
                             spawn_accept(
                                 listener,
                                 clients.clone(),
+                                roster,
                                 ev_tx.clone(),
                                 self_id.clone(),
                                 handle.clone(),
                                 stop.clone(),
                                 names.clone(),
+                                table_key.clone(),
                             );
                             spawn_beacon(
                                 self_id.clone(),
@@ -950,6 +1095,7 @@ fn run_hub(
                                 port,
                                 stop.clone(),
                                 ev_tx.clone(),
+                                table_key.clone(),
                             );
                             let _ = ev_tx.send(NetEvent::Online { port, addrs });
                             let _ = ev_tx.send(NetEvent::Status("Online".into()));
@@ -965,6 +1111,7 @@ fn run_hub(
                         listen_port,
                         stop.clone(),
                         ev_tx.clone(),
+                        table_key.clone(),
                     );
                     let _ = ev_tx.send(NetEvent::Online {
                         port: listen_port,
@@ -986,6 +1133,8 @@ fn run_hub(
             Cmd::Leave => {
                 stop.store(true, Ordering::SeqCst);
                 listening = false;
+                internet_on = false;
+                mesh_slot = None;
                 if let Some(mut c) = relay_child.take() {
                     let _ = c.kill();
                 }
@@ -993,8 +1142,31 @@ fn run_hub(
                     map.clear();
                 }
                 guest_tx = None;
+                table_key = std::sync::Arc::new(Vec::new());
                 let _ = ev_tx.send(NetEvent::Left);
                 let _ = ev_tx.send(NetEvent::Status("Offline".into()));
+            }
+            Cmd::SetHandle(name) => {
+                handle = name;
+                names.insert(self_id.clone(), handle.clone());
+            }
+            Cmd::RefreshInvite => {
+                if listening && internet_on {
+                    let ev = ev_tx.clone();
+                    let halt = stop.clone();
+                    let k = (*table_key).clone();
+                    let port = listen_port;
+                    let mut addrs = advertised_addrs(port);
+                    if let Some(s) = &mesh_slot {
+                        if !addrs.iter().any(|a| a == s) {
+                            addrs.push(s.clone());
+                        }
+                    }
+                    let extra = mesh_slot.clone();
+                    thread::spawn(move || {
+                        open_internet_invite(port, &k, addrs, extra, ev, halt);
+                    });
+                }
             }
             Cmd::Send(msg) => {
                 match &msg {
@@ -1035,17 +1207,15 @@ fn run_hub(
 fn spawn_accept(
     listener: TcpListener,
     clients: ClientMap,
+    roster: Arc<Mutex<Vec<PeerInfo>>>,
     ev_tx: Sender<NetEvent>,
     host_id: String,
     host_name: String,
     stop: Arc<AtomicBool>,
     _names: HashMap<String, String>,
+    table_key: Arc<Vec<u8>>,
 ) {
     thread::spawn(move || {
-        let roster = Arc::new(Mutex::new(vec![PeerInfo {
-            id: host_id.clone(),
-            name: host_name.clone(),
-        }]));
         while !stop.load(Ordering::SeqCst) {
             match listener.accept() {
                 Ok((stream, _)) => {
@@ -1057,18 +1227,12 @@ fn spawn_accept(
                     let host_id_c = host_id.clone();
                     let host_name_c = host_name.clone();
                     let stop_c = stop.clone();
+                    let key_c = table_key.clone();
                     thread::spawn(move || {
-                        if peek_http(&stream) {
-                            handle_ws_client(
-                                stream, wtx, wrx, clients_c, roster_c, ev, host_id_c, host_name_c,
-                                stop_c,
-                            );
-                        } else {
-                            handle_client(
-                                stream, wtx, wrx, clients_c, roster_c, ev, host_id_c, host_name_c,
-                                stop_c,
-                            );
-                        }
+                        handle_client(
+                            stream, wtx, wrx, clients_c, roster_c, ev, host_id_c, host_name_c,
+                            stop_c, key_c,
+                        );
                     });
                 }
                 Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
@@ -1090,19 +1254,24 @@ fn handle_client(
     host_id: String,
     host_name: String,
     stop: Arc<AtomicBool>,
+    table_key: Arc<Vec<u8>>,
 ) {
     let Ok(reader_stream) = stream.try_clone() else {
         return;
     };
     let mut writer = stream;
     let mut reader = BufReader::new(reader_stream);
+    let Some(cipher) = crate::crypt::handshake_server(&mut reader, &mut writer, &table_key) else {
+        return;
+    };
+    let cipher = Arc::new(cipher);
     let mut line = String::new();
     if reader.read_line(&mut line).is_err() {
         return;
     }
-    let hello: Wire = match serde_json::from_str(line.trim()) {
-        Ok(w) => w,
-        Err(_) => return,
+    let hello: Wire = match cipher.open_line(line.trim()) {
+        Some(w) => w,
+        None => return,
     };
     let (cid, cname) = match hello {
         Wire::Hello { id, name, .. } => (id, name),
@@ -1129,6 +1298,7 @@ fn handle_client(
             role: "guest".into(),
             peers: peers.clone(),
         },
+        &cipher,
     );
     let _ = ev_tx.send(NetEvent::Peers(peers.clone()));
     let _ = ev_tx.send(NetEvent::Status(format!("{cname} jacked in")));
@@ -1141,12 +1311,13 @@ fn handle_client(
     );
 
     let mut writer2 = writer.try_clone().ok();
+    let cipher_w = cipher.clone();
     thread::spawn(move || {
         while let Some(batch) = recv_batch(&wrx) {
             let mut dead = false;
             if let Some(ref mut w) = writer2 {
                 for msg in &batch {
-                    if !write_line(w, msg) {
+                    if !write_line(w, msg, &cipher_w) {
                         dead = true;
                         break;
                     }
@@ -1168,9 +1339,87 @@ fn handle_client(
         match reader.read_line(&mut line) {
             Ok(0) => break,
             Ok(_) => {
-                let Ok(msg) = serde_json::from_str::<Wire>(line.trim()) else {
+                let Some(msg) = cipher.open_line::<Wire>(line.trim()) else {
                     continue;
                 };
+                host_incoming(msg, &cid, &host_id, &clients, &ev_tx);
+                let _ = (host_name.clone(),);
+            }
+            Err(_) => break,
+        }
+    }
+    {
+        let mut map = clients.lock().unwrap();
+        map.remove(&cid);
+    }
+    {
+        let mut r = roster.lock().unwrap();
+        r.retain(|p| p.id != cid);
+        let peers = r.clone();
+        drop(r);
+        let _ = ev_tx.send(NetEvent::Peers(peers.clone()));
+        broadcast(&clients, &Wire::Peers { peers }, None);
+    }
+}
+
+fn spawn_guest(
+    mut reader: BufReader<TcpStream>,
+    writer: TcpStream,
+    wrx: Receiver<Wire>,
+    ev_tx: Sender<NetEvent>,
+    stop: Arc<AtomicBool>,
+    self_id: String,
+    cipher: crate::crypt::Cipher,
+) {
+    let cipher = Arc::new(cipher);
+    let mut writer_out = writer.try_clone().ok();
+    let cipher_w = cipher.clone();
+    thread::spawn(move || {
+        while let Some(batch) = recv_batch(&wrx) {
+            let mut dead = false;
+            if let Some(ref mut w) = writer_out {
+                for msg in &batch {
+                    if !write_line(w, msg, &cipher_w) {
+                        dead = true;
+                        break;
+                    }
+                }
+            } else {
+                break;
+            }
+            if dead {
+                break;
+            }
+        }
+        let _ = writer;
+    });
+    thread::spawn(move || {
+        let mut line = String::new();
+        while !stop.load(Ordering::SeqCst) {
+            line.clear();
+            match reader.read_line(&mut line) {
+                Ok(0) => break,
+                Ok(_) => {
+                    let Some(msg) = cipher.open_line::<Wire>(line.trim()) else {
+                        continue;
+                    };
+                    guest_incoming(msg, &self_id, &ev_tx);
+                }
+                Err(_) => break,
+            }
+        }
+        let _ = ev_tx.send(NetEvent::Left);
+        let _ = ev_tx.send(NetEvent::Status("Offline".into()));
+    });
+}
+
+pub(crate) fn host_incoming(
+    msg: Wire,
+    cid: &str,
+    host_id: &str,
+    clients: &ClientMap,
+    ev_tx: &Sender<NetEvent>,
+) {
                 match &msg {
                     Wire::Chat {
                         from,
@@ -1222,9 +1471,28 @@ fn handle_client(
                         });
                         broadcast(&clients, &msg, Some(&cid));
                     }
-                    Wire::Mix { .. } => broadcast(&clients, &msg, Some(&cid)),
+                    Wire::Mix {
+                        layers,
+                        blight,
+                        place,
+                        time,
+                        inside,
+                    } => {
+                        let _ = ev_tx.send(NetEvent::Mix {
+                            layers: layers.clone(),
+                            blight: *blight,
+                            place: place.clone(),
+                            time: time.clone(),
+                            inside: *inside,
+                        });
+                        broadcast(&clients, &msg, Some(&cid));
+                    }
                     Wire::Ping => {
-                        let _ = write_line(&mut writer, &Wire::Pong);
+                        if let Ok(map) = clients.lock() {
+                            if let Some(tx) = map.get(cid) {
+                                push_wire(tx, Wire::Pong);
+                            }
+                        }
                     }
                     Wire::Image {
                         from,
@@ -1373,386 +1641,36 @@ fn handle_client(
                         let _ = ev_tx.send(NetEvent::MapMarksAsk);
                         broadcast_hold(&clients, &msg, Some(&cid));
                     }
+                    Wire::MapTokens { tokens } => {
+                        let _ = ev_tx.send(NetEvent::MapTokens {
+                            tokens: tokens.clone(),
+                        });
+                        broadcast_hold(&clients, &msg, Some(&cid));
+                    }
+                    Wire::MapTokensAsk => {
+                        let _ = ev_tx.send(NetEvent::MapTokensAsk);
+                        broadcast_hold(&clients, &msg, Some(&cid));
+                    }
+                    Wire::Sheet { from, chars } => {
+                        let _ = ev_tx.send(NetEvent::Sheet {
+                            from: from.clone(),
+                            chars: chars.clone(),
+                        });
+                        broadcast_hold(&clients, &msg, Some(&cid));
+                    }
+                    Wire::SheetAsk => {
+                        let _ = ev_tx.send(NetEvent::SheetAsk);
+                        broadcast_hold(&clients, &msg, Some(&cid));
+                    }
+                    Wire::MapImageAsk => {
+                        let _ = ev_tx.send(NetEvent::MapImageAsk);
+                        broadcast_hold(&clients, &msg, Some(&cid));
+                    }
                     _ => {}
                 }
-                let _ = (host_name.clone(),);
-            }
-            Err(_) => break,
-        }
-    }
-    {
-        let mut map = clients.lock().unwrap();
-        map.remove(&cid);
-    }
-    {
-        let mut r = roster.lock().unwrap();
-        r.retain(|p| p.id != cid);
-        let peers = r.clone();
-        drop(r);
-        let _ = ev_tx.send(NetEvent::Peers(peers.clone()));
-        broadcast(&clients, &Wire::Peers { peers }, None);
-    }
 }
 
-fn spawn_guest(
-    stream: TcpStream,
-    wrx: Receiver<Wire>,
-    ev_tx: Sender<NetEvent>,
-    stop: Arc<AtomicBool>,
-    self_id: String,
-) {
-    let Ok(reader_stream) = stream.try_clone() else {
-        return;
-    };
-    let mut writer = stream;
-    thread::spawn(move || {
-        while let Some(batch) = recv_batch(&wrx) {
-            let mut dead = false;
-            for msg in &batch {
-                if !write_line(&mut writer, msg) {
-                    dead = true;
-                    break;
-                }
-            }
-            if dead {
-                break;
-            }
-        }
-    });
-    thread::spawn(move || {
-        let mut reader = BufReader::new(reader_stream);
-        let mut line = String::new();
-        while !stop.load(Ordering::SeqCst) {
-            line.clear();
-            match reader.read_line(&mut line) {
-                Ok(0) => break,
-                Ok(_) => {
-                    let Ok(msg) = serde_json::from_str::<Wire>(line.trim()) else {
-                        continue;
-                    };
-                    guest_incoming(msg, &self_id, &ev_tx);
-                }
-                Err(_) => break,
-            }
-        }
-        let _ = ev_tx.send(NetEvent::Left);
-        let _ = ev_tx.send(NetEvent::Status("Offline".into()));
-    });
-}
-
-fn broadcast(clients: &ClientMap, msg: &Wire, skip: Option<&str>) {
-    if let Ok(map) = clients.lock() {
-        for (id, tx) in map.iter() {
-            if skip.map(|s| s == id).unwrap_or(false) {
-                continue;
-            }
-            push_wire(tx, msg.clone());
-        }
-    }
-}
-
-fn broadcast_hold(clients: &ClientMap, msg: &Wire, skip: Option<&str>) {
-    if let Ok(map) = clients.lock() {
-        for (id, tx) in map.iter() {
-            if skip.map(|s| s == id).unwrap_or(false) {
-                continue;
-            }
-            push_wire_hold(tx, msg.clone());
-        }
-    }
-}
-
-pub fn load_contacts(root: &std::path::Path) -> Vec<Contact> {
-    std::fs::read_to_string(root.join("data/contacts.json"))
-        .ok()
-        .and_then(|s| serde_json::from_str(&s).ok())
-        .unwrap_or_default()
-}
-
-pub fn save_contacts(root: &std::path::Path, rows: &[Contact]) {
-    if let Ok(s) = serde_json::to_string_pretty(rows) {
-        let _ = std::fs::write(root.join("data/contacts.json"), s);
-    }
-}
-
-fn load_peer_id(root: &std::path::Path) -> String {
-    let path = root.join("data/peer-id.txt");
-    if let Ok(s) = std::fs::read_to_string(&path) {
-        let t = s.trim().to_string();
-        if t.starts_with("p-") && t.len() > 5 {
-            return t;
-        }
-    }
-    let id = format!(
-        "p-{}{:04}",
-        rand::random::<u32>(),
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|d| d.as_millis() % 10000)
-            .unwrap_or(1)
-    );
-    let _ = std::fs::create_dir_all(root.join("data"));
-    let _ = std::fs::write(path, &id);
-    id
-}
-
-const UDP_PORT: u16 = 8768;
-
-fn spawn_beacon(
-    self_id: String,
-    handle: String,
-    tcp_port: u16,
-    stop: Arc<AtomicBool>,
-    ev_tx: Sender<NetEvent>,
-) {
-    thread::spawn(move || {
-        let sock = UdpSocket::bind(("0.0.0.0", UDP_PORT))
-            .or_else(|_| UdpSocket::bind("0.0.0.0:0"));
-        let Ok(sock) = sock else {
-            return;
-        };
-        let _ = sock.set_broadcast(true);
-        let _ = sock.set_read_timeout(Some(Duration::from_millis(400)));
-        let pkt = format!("BN|{self_id}|{handle}|{tcp_port}");
-        let mut buf = [0u8; 512];
-        while !stop.load(Ordering::SeqCst) {
-            let _ = sock.send_to(pkt.as_bytes(), ("255.255.255.255", UDP_PORT));
-            if let Ok((n, from)) = sock.recv_from(&mut buf) {
-                if let Ok(text) = std::str::from_utf8(&buf[..n]) {
-                    if let Some((id, name, port)) = parse_beacon(text) {
-                        if id != self_id {
-                            let addr = format!("{}:{port}", from.ip());
-                            let _ = ev_tx.send(NetEvent::PeerSeen { id, name, addr });
-                        }
-                    }
-                }
-            }
-        }
-    });
-}
-
-fn parse_beacon(text: &str) -> Option<(String, String, u16)> {
-    let mut parts = text.trim().split('|');
-    if parts.next()? != "BN" {
-        return None;
-    }
-    let id = parts.next()?.to_string();
-    let name = parts.next()?.to_string();
-    let port = parts.next()?.parse().ok()?;
-    Some((id, name, port))
-}
-
-fn dial_peer(
-    addr: &str,
-    self_id: String,
-    handle: String,
-    clients: ClientMap,
-    ev_tx: Sender<NetEvent>,
-    stop: Arc<AtomicBool>,
-) {
-    let Some(target) = parse_addr(addr) else {
-        return;
-    };
-    let hello = Wire::Hello {
-        id: self_id.clone(),
-        name: handle,
-        role: "presence".into(),
-    };
-    if looks_web(&target) {
-        if let Ok((mut ws, _)) = tungstenite::connect(to_ws_url(&target)) {
-            set_ws_timeout(&mut ws);
-            if !ws_send(&mut ws, &hello) {
-                return;
-            }
-            let (wtx, wrx) = wire_chan();
-            loop {
-                if stop.load(Ordering::SeqCst) {
-                    break;
-                }
-                for msg in take_wires(&wrx) {
-                    let _ = ws_send(&mut ws, &msg);
-                }
-                match ws_recv(&mut ws) {
-                    Ok(Some(Wire::Welcome { id, .. })) => {
-                        if let Ok(mut map) = clients.lock() {
-                            map.insert(id.clone(), wtx.clone());
-                        }
-                        let _ = ev_tx.send(NetEvent::PeerSeen {
-                            id,
-                            name: String::new(),
-                            addr: target.clone(),
-                        });
-                    }
-                    Ok(Some(msg)) => guest_incoming(msg, &self_id, &ev_tx),
-                    Ok(None) => {}
-                    Err(()) => break,
-                }
-            }
-        }
-        return;
-    }
-    let Some(sock) = target.to_socket_addrs().ok().and_then(|mut it| it.next()) else {
-        return;
-    };
-    let Ok(stream) = TcpStream::connect_timeout(&sock, Duration::from_secs(3)) else {
-        return;
-    };
-    let _ = stream.set_nodelay(true);
-    let Ok(mut writer) = stream.try_clone() else {
-        return;
-    };
-    if !write_line(&mut writer, &hello) {
-        return;
-    };
-    let (wtx, wrx) = wire_chan();
-    let mut w2 = writer.try_clone().ok();
-    thread::spawn(move || {
-        while let Some(batch) = recv_batch(&wrx) {
-            let mut dead = false;
-            if let Some(ref mut w) = w2 {
-                for msg in &batch {
-                    if !write_line(w, msg) {
-                        dead = true;
-                        break;
-                    }
-                }
-            } else {
-                break;
-            }
-            if dead {
-                break;
-            }
-        }
-    });
-    let mut reader = BufReader::new(stream);
-    let mut line = String::new();
-    while !stop.load(Ordering::SeqCst) {
-        line.clear();
-        match reader.read_line(&mut line) {
-            Ok(0) => break,
-            Ok(_) => {
-                let Ok(msg) = serde_json::from_str::<Wire>(line.trim()) else {
-                    continue;
-                };
-                if let Wire::Welcome { id, .. } = &msg {
-                    if let Ok(mut map) = clients.lock() {
-                        map.insert(id.clone(), wtx.clone());
-                    }
-                    let _ = ev_tx.send(NetEvent::PeerSeen {
-                        id: id.clone(),
-                        name: String::new(),
-                        addr: target.clone(),
-                    });
-                }
-                guest_incoming(msg, &self_id, &ev_tx);
-            }
-            Err(_) => break,
-        }
-    }
-}
-
-fn set_ws_timeout(
-    ws: &mut tungstenite::WebSocket<tungstenite::stream::MaybeTlsStream<TcpStream>>,
-) {
-    match ws.get_mut() {
-        tungstenite::stream::MaybeTlsStream::NativeTls(t) => {
-            let _ = t
-                .get_mut()
-                .set_read_timeout(Some(Duration::from_millis(80)));
-        }
-        tungstenite::stream::MaybeTlsStream::Plain(t) => {
-            let _ = t.set_read_timeout(Some(Duration::from_millis(80)));
-        }
-        _ => {}
-    }
-}
-
-fn peek_http(stream: &TcpStream) -> bool {
-    let mut buf = [0u8; 4];
-    matches!(stream.peek(&mut buf), Ok(n) if n >= 3 && buf.starts_with(b"GET"))
-}
-
-fn ws_send<S: std::io::Read + std::io::Write>(
-    ws: &mut tungstenite::WebSocket<S>,
-    msg: &Wire,
-) -> bool {
-    let Ok(s) = serde_json::to_string(msg) else {
-        return false;
-    };
-    ws.send(tungstenite::Message::Text(s.into())).is_ok()
-}
-
-fn ws_recv<S: std::io::Read + std::io::Write>(
-    ws: &mut tungstenite::WebSocket<S>,
-) -> Result<Option<Wire>, ()> {
-    match ws.read() {
-        Ok(tungstenite::Message::Text(t)) => Ok(serde_json::from_str(t.as_str()).ok()),
-        Ok(tungstenite::Message::Ping(p)) => {
-            let _ = ws.send(tungstenite::Message::Pong(p));
-            Ok(None)
-        }
-        Ok(tungstenite::Message::Close(_)) => Err(()),
-        Ok(_) => Ok(None),
-        Err(tungstenite::Error::Io(e))
-            if e.kind() == std::io::ErrorKind::WouldBlock
-                || e.kind() == std::io::ErrorKind::TimedOut =>
-        {
-            Ok(None)
-        }
-        Err(_) => Err(()),
-    }
-}
-
-fn handle_ws_client(
-    stream: TcpStream,
-    wtx: SyncSender<Wire>,
-    wrx: Receiver<Wire>,
-    clients: ClientMap,
-    roster: Arc<Mutex<Vec<PeerInfo>>>,
-    ev_tx: Sender<NetEvent>,
-    host_id: String,
-    host_name: String,
-    stop: Arc<AtomicBool>,
-) {
-    let _ = stream.set_read_timeout(Some(Duration::from_millis(80)));
-    let Ok(mut ws) = tungstenite::accept(stream) else {
-        return;
-    };
-    let hello = loop {
-        if stop.load(Ordering::SeqCst) {
-            return;
-        }
-        match ws_recv(&mut ws) {
-            Ok(Some(Wire::Hello { id, name, .. })) => break (id, name),
-            Ok(_) => continue,
-            Err(()) => return,
-        }
-    };
-    let (cid, cname) = hello;
-    let cid_keep = cid.clone();
-    finish_join(
-        cid,
-        cname,
-        wtx,
-        &clients,
-        &roster,
-        &ev_tx,
-        &host_id,
-        &host_name,
-    );
-    pump_ws_host(
-        &mut ws,
-        wrx,
-        &clients,
-        &roster,
-        &ev_tx,
-        &host_id,
-        &cid_keep,
-        &stop,
-    );
-}
-
-fn finish_join(
+pub(crate) fn finish_join(
     cid: String,
     cname: String,
     wtx: SyncSender<Wire>,
@@ -1793,240 +1711,6 @@ fn finish_join(
     }
 }
 
-fn pump_ws_host<S: std::io::Read + std::io::Write>(
-    ws: &mut tungstenite::WebSocket<S>,
-    wrx: Receiver<Wire>,
-    clients: &ClientMap,
-    roster: &Arc<Mutex<Vec<PeerInfo>>>,
-    ev_tx: &Sender<NetEvent>,
-    host_id: &str,
-    cid: &str,
-    stop: &AtomicBool,
-) {
-    loop {
-        if stop.load(Ordering::SeqCst) {
-            break;
-        }
-        for msg in take_wires(&wrx) {
-            if !ws_send(ws, &msg) {
-                drop_peer(cid, clients, roster, ev_tx);
-                return;
-            }
-        }
-        match ws_recv(ws) {
-            Ok(Some(msg)) => host_incoming(msg, cid, host_id, clients, ev_tx, ws),
-            Ok(None) => {}
-            Err(()) => break,
-        }
-    }
-    drop_peer(cid, clients, roster, ev_tx);
-}
-
-fn host_incoming<S: std::io::Read + std::io::Write>(
-    msg: Wire,
-    cid: &str,
-    host_id: &str,
-    clients: &ClientMap,
-    ev_tx: &Sender<NetEvent>,
-    ws: &mut tungstenite::WebSocket<S>,
-) {
-    match &msg {
-        Wire::Chat {
-            from,
-            name,
-            text,
-            whisper,
-            to,
-        } => {
-            let _ = ev_tx.send(NetEvent::Chat {
-                from: from.clone(),
-                name: name.clone(),
-                text: text.clone(),
-                whisper: *whisper,
-            });
-            if *whisper {
-                if let Some(tid) = to {
-                    if tid != host_id {
-                        if let Ok(map) = clients.lock() {
-                            if let Some(tx) = map.get(tid) {
-                                push_wire(tx, msg.clone());
-                            }
-                        }
-                    }
-                }
-            } else {
-                broadcast(clients, &msg, Some(cid));
-            }
-        }
-        Wire::Voice {
-            from,
-            name,
-            action,
-            to,
-            crew,
-        } => {
-            let _ = ev_tx.send(NetEvent::Voice {
-                from: from.clone(),
-                name: name.clone(),
-                action: action.clone(),
-                to: to.clone(),
-                crew: crew.clone(),
-            });
-            relay_to(clients, host_id, to, Some(cid), &msg);
-        }
-        Wire::VoicePcm { from, pcm } => {
-            let _ = ev_tx.send(NetEvent::VoicePcm {
-                from: from.clone(),
-                samples: decode_pcm(pcm),
-            });
-            broadcast(clients, &msg, Some(cid));
-        }
-        Wire::Mix { .. } => broadcast(clients, &msg, Some(cid)),
-        Wire::Ping => {
-            let _ = ws_send(ws, &Wire::Pong);
-        }
-        Wire::Image {
-            from,
-            name,
-            to,
-            crew,
-            mime,
-            data,
-        } => {
-            let bytes = base64::Engine::decode(&base64::engine::general_purpose::STANDARD, data)
-                .unwrap_or_default();
-            let _ = ev_tx.send(NetEvent::Image {
-                from: from.clone(),
-                name: name.clone(),
-                to: to.clone(),
-                crew: crew.clone(),
-                mime: mime.clone(),
-                data: bytes,
-            });
-            if let Some(tid) = to {
-                if tid != host_id {
-                    if let Ok(map) = clients.lock() {
-                        if let Some(tx) = map.get(tid) {
-                            push_wire(tx, msg.clone());
-                        }
-                    }
-                }
-            } else {
-                broadcast(clients, &msg, Some(cid));
-            }
-        }
-        Wire::Video {
-            from,
-            name,
-            action,
-            to,
-            crew,
-        } => {
-            let _ = ev_tx.send(NetEvent::Video {
-                from: from.clone(),
-                name: name.clone(),
-                action: action.clone(),
-                to: to.clone(),
-                crew: crew.clone(),
-            });
-            relay_to(clients, host_id, to, Some(cid), &msg);
-        }
-        Wire::VideoFrame {
-            from,
-            name,
-            kind,
-            to,
-            crew,
-            data,
-        } => {
-            let bytes = base64::Engine::decode(&base64::engine::general_purpose::STANDARD, data)
-                .unwrap_or_default();
-            let _ = ev_tx.send(NetEvent::VideoFrame {
-                from: from.clone(),
-                name: name.clone(),
-                kind: kind.clone(),
-                to: to.clone(),
-                crew: crew.clone(),
-                data: bytes,
-            });
-            relay_to(clients, host_id, to, Some(cid), &msg);
-        }
-        Wire::NethookPut { hook } => {
-            let _ = ev_tx.send(NetEvent::NethookPut { hook: hook.clone() });
-            broadcast(clients, &msg, Some(cid));
-        }
-        Wire::NethookDel { id, owner_id } => {
-            let _ = ev_tx.send(NetEvent::NethookDel {
-                id: id.clone(),
-                owner_id: owner_id.clone(),
-            });
-            broadcast(clients, &msg, Some(cid));
-        }
-        Wire::NethookAsk => {
-            let _ = ev_tx.send(NetEvent::NethookAsk);
-            broadcast(clients, &msg, Some(cid));
-        }
-        Wire::FileStart {
-            from,
-            name,
-            to,
-            crew,
-            mime,
-            filename,
-            id,
-            size,
-        } => {
-            let _ = ev_tx.send(NetEvent::FileStart {
-                from: from.clone(),
-                name: name.clone(),
-                to: to.clone(),
-                crew: crew.clone(),
-                mime: mime.clone(),
-                filename: filename.clone(),
-                id: id.clone(),
-                size: *size,
-            });
-            relay_like_image(clients, host_id, to, Some(cid), &msg);
-        }
-        Wire::FileChunk { id, to, data } => {
-            let bytes = base64::Engine::decode(&base64::engine::general_purpose::STANDARD, data)
-                .unwrap_or_default();
-            let _ = ev_tx.send(NetEvent::FileChunk {
-                id: id.clone(),
-                data: bytes,
-            });
-            relay_like_image(clients, host_id, to, Some(cid), &msg);
-        }
-        Wire::FileDone { id, to } => {
-            let _ = ev_tx.send(NetEvent::FileDone { id: id.clone() });
-            relay_like_image(clients, host_id, to, Some(cid), &msg);
-        }
-        Wire::MapMark { mark } => {
-            let _ = ev_tx.send(NetEvent::MapMark { mark: mark.clone() });
-            broadcast_hold(clients, &msg, Some(cid));
-        }
-        Wire::MapMarkDel { id } => {
-            let _ = ev_tx.send(NetEvent::MapMarkDel { id: id.clone() });
-            broadcast_hold(clients, &msg, Some(cid));
-        }
-        Wire::MapMarks { marks } => {
-            let _ = ev_tx.send(NetEvent::MapMarks {
-                marks: marks.clone(),
-            });
-            broadcast_hold(clients, &msg, Some(cid));
-        }
-        Wire::MapMarksClear => {
-            let _ = ev_tx.send(NetEvent::MapMarksClear);
-            broadcast_hold(clients, &msg, Some(cid));
-        }
-        Wire::MapMarksAsk => {
-            let _ = ev_tx.send(NetEvent::MapMarksAsk);
-            broadcast_hold(clients, &msg, Some(cid));
-        }
-        _ => {}
-    }
-}
-
 fn relay_to(clients: &ClientMap, host_id: &str, to: &Option<String>, skip: Option<&str>, msg: &Wire) {
     if let Some(tid) = to {
         if tid != host_id {
@@ -2041,56 +1725,224 @@ fn relay_to(clients: &ClientMap, host_id: &str, to: &Option<String>, skip: Optio
     }
 }
 
-fn drop_peer(
-    cid: &str,
-    clients: &ClientMap,
-    roster: &Arc<Mutex<Vec<PeerInfo>>>,
-    ev_tx: &Sender<NetEvent>,
-) {
-    if let Ok(mut map) = clients.lock() {
-        map.remove(cid);
-    }
-    if let Ok(mut r) = roster.lock() {
-        r.retain(|p| p.id != cid);
-        let peers = r.clone();
-        drop(r);
-        let _ = ev_tx.send(NetEvent::Peers(peers.clone()));
-        broadcast(clients, &Wire::Peers { peers }, None);
+fn broadcast(clients: &ClientMap, msg: &Wire, skip: Option<&str>) {
+    if let Ok(map) = clients.lock() {
+        for (id, tx) in map.iter() {
+            if skip.map(|s| s == id).unwrap_or(false) {
+                continue;
+            }
+            push_wire(tx, msg.clone());
+        }
     }
 }
 
-fn spawn_guest_ws<S>(
-    mut ws: tungstenite::WebSocket<S>,
-    wrx: Receiver<Wire>,
-    ev_tx: Sender<NetEvent>,
-    stop: Arc<AtomicBool>,
-    self_id: String,
-) where
-    S: std::io::Read + std::io::Write + Send + 'static,
-{
-    thread::spawn(move || {
-        loop {
-            if stop.load(Ordering::SeqCst) {
-                break;
+fn broadcast_hold(clients: &ClientMap, msg: &Wire, skip: Option<&str>) {
+    if let Ok(map) = clients.lock() {
+        for (id, tx) in map.iter() {
+            if skip.map(|s| s == id).unwrap_or(false) {
+                continue;
             }
-            for msg in take_wires(&wrx) {
-                if !ws_send(&mut ws, &msg) {
-                    let _ = ev_tx.send(NetEvent::Left);
-                    return;
+            push_wire_hold(tx, msg.clone());
+        }
+    }
+}
+
+pub fn load_contacts(root: &std::path::Path) -> Vec<Contact> {
+    std::fs::read_to_string(root.join("data/contacts.json"))
+        .ok()
+        .and_then(|s| serde_json::from_str(&s).ok())
+        .unwrap_or_default()
+}
+
+pub fn save_contacts(root: &std::path::Path, rows: &[Contact]) {
+    if let Ok(s) = serde_json::to_string_pretty(rows) {
+        let _ = std::fs::write(root.join("data/contacts.json"), s);
+    }
+}
+
+pub(crate) fn load_peer_id(root: &std::path::Path) -> String {
+    let path = root.join("data/peer-id.txt");
+    if let Ok(s) = std::fs::read_to_string(&path) {
+        let t = s.trim().to_string();
+        if t.starts_with("p-") && t.len() > 5 {
+            return t;
+        }
+    }
+    let id = format!(
+        "p-{}{:04}",
+        rand::random::<u32>(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_millis() % 10000)
+            .unwrap_or(1)
+    );
+    let _ = std::fs::create_dir_all(root.join("data"));
+    let _ = std::fs::write(path, &id);
+    id
+}
+
+const UDP_PORT: u16 = 8768;
+
+fn spawn_beacon(
+    self_id: String,
+    handle: String,
+    tcp_port: u16,
+    stop: Arc<AtomicBool>,
+    ev_tx: Sender<NetEvent>,
+    table_key: Arc<Vec<u8>>,
+) {
+    thread::spawn(move || {
+        let sock = UdpSocket::bind(("0.0.0.0", UDP_PORT))
+            .or_else(|_| UdpSocket::bind("0.0.0.0:0"));
+        let Ok(sock) = sock else {
+            return;
+        };
+        let _ = sock.set_broadcast(true);
+        let _ = sock.set_read_timeout(Some(Duration::from_millis(400)));
+        let pkt = if table_key.len() == crate::crypt::KEY_LEN {
+            format!(
+                "BN|{self_id}|{handle}|{tcp_port}|{}",
+                crate::crypt::encode_key(&table_key)
+            )
+        } else {
+            format!("BN|{self_id}|{handle}|{tcp_port}")
+        };
+        let mut buf = [0u8; 512];
+        while !stop.load(Ordering::SeqCst) {
+            let _ = sock.send_to(pkt.as_bytes(), ("255.255.255.255", UDP_PORT));
+            if let Ok((n, from)) = sock.recv_from(&mut buf) {
+                if let Ok(text) = std::str::from_utf8(&buf[..n]) {
+                    if let Some((id, name, port, key)) = parse_beacon(text) {
+                        if id != self_id {
+                            let host = format!("{}:{port}", from.ip());
+                            let addr = if key.len() == crate::crypt::KEY_LEN {
+                                crate::crypt::encode_invite(&key, &[host])
+                            } else {
+                                host
+                            };
+                            let _ = ev_tx.send(NetEvent::PeerSeen { id, name, addr });
+                        }
+                    }
                 }
             }
-            match ws_recv(&mut ws) {
-                Ok(Some(msg)) => guest_incoming(msg, &self_id, &ev_tx),
-                Ok(None) => {}
-                Err(()) => break,
-            }
         }
-        let _ = ev_tx.send(NetEvent::Left);
-        let _ = ev_tx.send(NetEvent::Status("Offline".into()));
     });
 }
 
-fn guest_incoming(msg: Wire, self_id: &str, ev_tx: &Sender<NetEvent>) {
+fn parse_beacon(text: &str) -> Option<(String, String, u16, Vec<u8>)> {
+    let mut parts = text.trim().split('|');
+    if parts.next()? != "BN" {
+        return None;
+    }
+    let id = parts.next()?.to_string();
+    let name = parts.next()?.to_string();
+    let port = parts.next()?.parse().ok()?;
+    let key = parts
+        .next()
+        .and_then(crate::crypt::decode_key)
+        .unwrap_or_default();
+    Some((id, name, port, key))
+}
+
+fn dial_peer(
+    addr: &str,
+    self_id: String,
+    handle: String,
+    clients: ClientMap,
+    ev_tx: Sender<NetEvent>,
+    stop: Arc<AtomicBool>,
+) {
+    let Some(inv) = crate::crypt::parse_invite(addr).or_else(|| {
+        parse_addr(addr).map(|a| crate::crypt::Invite {
+            key: vec![],
+            addrs: vec![a],
+            web: None,
+        })
+    }) else {
+        return;
+    };
+    let hello = Wire::Hello {
+        id: self_id.clone(),
+        name: handle,
+        role: "presence".into(),
+    };
+    if let Some(stream) = connect_invite(&crate::mesh::tcp_slots(&inv.addrs)) {
+        let Ok(reader_stream) = stream.try_clone() else {
+            return;
+        };
+        let Ok(mut writer) = stream.try_clone() else {
+            return;
+        };
+        let mut reader = BufReader::new(reader_stream);
+        let Some(cipher) = crate::crypt::handshake_client(&mut reader, &mut writer, &inv.key) else {
+            return;
+        };
+        let cipher = Arc::new(cipher);
+        if !write_line(&mut writer, &hello, &cipher) {
+            return;
+        }
+        let shown = crate::crypt::encode_invite(&inv.key, &inv.addrs);
+        let (wtx, wrx) = wire_chan();
+        let mut w2 = writer.try_clone().ok();
+        let cipher_w = cipher.clone();
+        thread::spawn(move || {
+            while let Some(batch) = recv_batch(&wrx) {
+                let mut dead = false;
+                if let Some(ref mut w) = w2 {
+                    for msg in &batch {
+                        if !write_line(w, msg, &cipher_w) {
+                            dead = true;
+                            break;
+                        }
+                    }
+                } else {
+                    break;
+                }
+                if dead {
+                    break;
+                }
+            }
+        });
+        let mut line = String::new();
+        while !stop.load(Ordering::SeqCst) {
+            line.clear();
+            match reader.read_line(&mut line) {
+                Ok(0) => break,
+                Ok(_) => {
+                    let Some(msg) = cipher.open_line::<Wire>(line.trim()) else {
+                        continue;
+                    };
+                    if let Wire::Welcome { id, .. } = &msg {
+                        if let Ok(mut map) = clients.lock() {
+                            map.insert(id.clone(), wtx.clone());
+                        }
+                        let _ = ev_tx.send(NetEvent::PeerSeen {
+                            id: id.clone(),
+                            name: String::new(),
+                            addr: shown.clone(),
+                        });
+                    }
+                    guest_incoming(msg, &self_id, &ev_tx);
+                }
+                Err(_) => break,
+            }
+        }
+        return;
+    }
+    let (wtx, wrx) = wire_chan();
+    let _ = wtx;
+    let _ = crate::mesh::join_guest(
+        &crate::mesh::udp_targets(&inv.addrs),
+        &inv.key,
+        hello,
+        wrx,
+        ev_tx,
+        stop,
+        self_id,
+    );
+}
+
+pub(crate) fn guest_incoming(msg: Wire, self_id: &str, ev_tx: &Sender<NetEvent>) {
     match msg {
         Wire::Welcome { peers, .. } | Wire::Peers { peers } => {
             let _ = ev_tx.send(NetEvent::Peers(peers));
@@ -2267,165 +2119,321 @@ fn guest_incoming(msg: Wire, self_id: &str, ev_tx: &Sender<NetEvent>) {
         Wire::MapMarksAsk => {
             let _ = ev_tx.send(NetEvent::MapMarksAsk);
         }
+        Wire::MapTokens { tokens } => {
+            let _ = ev_tx.send(NetEvent::MapTokens { tokens });
+        }
+        Wire::MapTokensAsk => {
+            let _ = ev_tx.send(NetEvent::MapTokensAsk);
+        }
+        Wire::Sheet { from, chars } => {
+            if from != self_id {
+                let _ = ev_tx.send(NetEvent::Sheet { from, chars });
+            }
+        }
+        Wire::SheetAsk => {
+            let _ = ev_tx.send(NetEvent::SheetAsk);
+        }
+        Wire::MapImageAsk => {
+            let _ = ev_tx.send(NetEvent::MapImageAsk);
+        }
         _ => {}
     }
 }
 
-fn pick_relay_url(text: &str) -> Option<String> {
-    for raw in text.split_whitespace() {
-        let mut url = raw.trim_matches(|c: char| "<>.,;\"'()[]".contains(c)).to_string();
-        if url.starts_with("http://") {
-            url = format!("https://{}", &url[7..]);
-        }
-        if !url.starts_with("https://") {
+fn is_lan_host(addr: &str) -> bool {
+    let host = addr
+        .strip_prefix("udp:")
+        .unwrap_or(addr)
+        .split(':')
+        .next()
+        .unwrap_or(addr);
+    host == "localhost"
+        || host.starts_with("127.")
+        || host.starts_with("10.")
+        || host.starts_with("192.168.")
+        || host.starts_with("172.16.")
+        || host.starts_with("172.17.")
+        || host.starts_with("172.18.")
+        || host.starts_with("172.19.")
+        || host.starts_with("172.2")
+        || host.starts_with("172.30.")
+        || host.starts_with("172.31.")
+}
+
+fn connect_invite(addrs: &[String]) -> Option<TcpStream> {
+    let mut lan = Vec::new();
+    let mut wan = Vec::new();
+    for a in addrs {
+        if crate::mesh::is_udp_slot(a) {
             continue;
         }
-        let host = url
-            .trim_start_matches("https://")
-            .split('/')
-            .next()
-            .unwrap_or("")
-            .to_lowercase();
-        if host.is_empty()
-            || host == "github.com"
-            || host == "localhost"
-            || host == "127.0.0.1"
-            || host.ends_with(".github.com")
-            || host.ends_with(".google.com")
-        {
-            continue;
+        if is_lan_host(a) {
+            lan.push(a.clone());
+        } else {
+            wan.push(a.clone());
         }
-        return Some(url.trim_end_matches('/').to_string());
+    }
+    if let Some(s) = connect_any(&lan, Duration::from_millis(800)) {
+        return Some(s);
+    }
+    connect_any(&wan, Duration::from_secs(4))
+}
+
+fn connect_any(addrs: &[String], timeout: Duration) -> Option<TcpStream> {
+    if addrs.is_empty() {
+        return None;
+    }
+    if addrs.len() == 1 {
+        let sock = addrs[0].to_socket_addrs().ok().and_then(|mut it| it.next())?;
+        let s = TcpStream::connect_timeout(&sock, timeout).ok()?;
+        let _ = s.set_nodelay(true);
+        return Some(s);
+    }
+    let (tx, rx) = mpsc::channel();
+    for a in addrs {
+        let tx = tx.clone();
+        let a = a.clone();
+        thread::spawn(move || {
+            if let Some(sock) = a.to_socket_addrs().ok().and_then(|mut it| it.next()) {
+                if let Ok(s) = TcpStream::connect_timeout(&sock, timeout) {
+                    let _ = s.set_nodelay(true);
+                    let _ = tx.send(s);
+                }
+            }
+        });
+    }
+    drop(tx);
+    rx.recv_timeout(timeout + Duration::from_millis(250)).ok()
+}
+
+fn open_internet_invite(
+    port: u16,
+    key: &[u8],
+    mut addrs: Vec<String>,
+    mesh: Option<String>,
+    ev_tx: Sender<NetEvent>,
+    stop: Arc<AtomicBool>,
+) {
+    if stop.load(Ordering::SeqCst) {
+        return;
+    }
+    let lan = addrs
+        .iter()
+        .find(|a| !a.starts_with("127.") && !a.starts_with("[::") && !a.starts_with("udp:"))
+        .cloned();
+    let mapped = if let Some(ref local) = lan {
+        let tcp = upnp_map(port, local, "TCP");
+        let udp = upnp_map(port, local, "UDP");
+        tcp || udp
+    } else {
+        false
+    };
+    if let Some(ip) = stun_public_ip().or_else(http_public_ip) {
+        let wan = format!("{ip}:{port}");
+        if !addrs.iter().any(|a| a == &wan) {
+            addrs.insert(0, wan);
+        }
+        let udp = format!("udp:{ip}:{port}");
+        if !addrs.iter().any(|a| a == &udp) {
+            addrs.push(udp);
+        }
+    }
+    if let Some(slot) = mesh {
+        if !addrs.iter().any(|a| a == &slot) {
+            addrs.push(slot);
+        }
+    }
+    let invite = crate::crypt::encode_invite(key, &addrs);
+    let _ = ev_tx.send(NetEvent::Relay { url: invite });
+    let _ = ev_tx.send(NetEvent::Status(if mapped {
+        "Hosting · node internet path ready".into()
+    } else {
+        "Hosting · node invite ready. Daemons punch UDP; TCP maps if the router allows it.".into()
+    }));
+}
+
+fn stun_public_ip() -> Option<String> {
+    for host in ["stun.l.google.com:19302", "stun.cloudflare.com:3478"] {
+        if let Some(ip) = stun_query(host) {
+            return Some(ip);
+        }
     }
     None
 }
 
-fn cloudflared_bin(root: &std::path::Path) -> Option<std::path::PathBuf> {
-    let names = if cfg!(windows) {
-        ["cloudflared.exe", "cloudflared"]
-    } else {
-        ["cloudflared", "cloudflared.exe"]
-    };
-    if let Some(p) = crate::sys::which("cloudflared") {
-        return Some(p);
-    }
-    for n in names {
-        let p = root.join(n);
-        if p.is_file() {
-            return Some(p);
-        }
-    }
-    let local = if cfg!(windows) {
-        root.join("cloudflared.exe")
-    } else {
-        root.join("cloudflared")
-    };
-    let url = if cfg!(windows) {
-        "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe"
-    } else if cfg!(target_os = "macos") {
-        "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-darwin-amd64.tgz"
-    } else {
-        "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64"
-    };
-    if !crate::sys::download(url, &local) {
-        let _ = std::fs::remove_file(&local);
-        return None;
-    }
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        if let Ok(meta) = std::fs::metadata(&local) {
-            let mut p = meta.permissions();
-            p.set_mode(0o755);
-            let _ = std::fs::set_permissions(&local, p);
-        }
-    }
-    Some(local)
+fn stun_query(host: &str) -> Option<String> {
+    let sock = UdpSocket::bind("0.0.0.0:0").ok()?;
+    sock.set_read_timeout(Some(Duration::from_millis(900))).ok()?;
+    let mut req = [0u8; 20];
+    req[0] = 0x00;
+    req[1] = 0x01;
+    req[4] = 0x21;
+    req[5] = 0x12;
+    req[6] = 0xa4;
+    req[7] = 0x42;
+    rand::RngCore::fill_bytes(&mut rand::thread_rng(), &mut req[8..20]);
+    sock.send_to(&req, host).ok()?;
+    let mut buf = [0u8; 256];
+    let n = sock.recv(&mut buf).ok()?;
+    parse_stun_mapped(&buf[..n])
 }
 
-fn spawn_cloudflare(
-    port: u16,
-    root: &std::path::Path,
-    ev_tx: Sender<NetEvent>,
-    stop: Arc<AtomicBool>,
-) -> Option<std::process::Child> {
-    let bin = match cloudflared_bin(root) {
-        Some(b) => b,
-        None => {
-            let _ = ev_tx.send(NetEvent::Error(
-                "No cloudflared. Internet Host needs Cloudflare's tunnel binary.".into(),
-            ));
-            return None;
-        }
-    };
-    let local = format!("http://127.0.0.1:{port}");
-    let mut cmd = std::process::Command::new(&bin);
-    crate::sys::hide(&mut cmd);
-    cmd.args(["tunnel", "--no-autoupdate", "--url", &local])
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped());
-    let mut child = match cmd.spawn() {
-        Ok(c) => c,
-        Err(e) => {
-            let _ = ev_tx.send(NetEvent::Error(format!("cloudflared: {e}")));
-            return None;
-        }
-    };
-    if let Some(out) = child.stderr.take() {
-        let ev = ev_tx.clone();
-        let halt = stop.clone();
-        thread::spawn(move || {
-            use std::io::Read;
-            let mut r = BufReader::new(out);
-            let mut buf = String::new();
-            let mut chunk = [0u8; 512];
-            while !halt.load(Ordering::SeqCst) {
-                match r.read(&mut chunk) {
-                    Ok(0) => break,
-                    Ok(n) => {
-                        buf.push_str(&String::from_utf8_lossy(&chunk[..n]));
-                        if buf.len() > 8000 {
-                            buf = buf[buf.len() - 4000..].to_string();
-                        }
-                        if let Some(url) = pick_relay_url(&buf) {
-                            let _ = ev.send(NetEvent::Relay { url: url.clone() });
-                            let _ = ev.send(NetEvent::Status("Hosting · internet link ready".into()));
-                            break;
-                        }
-                    }
-                    Err(_) => break,
-                }
-            }
-        });
+fn parse_stun_mapped(buf: &[u8]) -> Option<String> {
+    crate::mesh::stun_mapped_ip_from_buf(buf)
+}
+
+fn http_public_ip() -> Option<String> {
+    let sock = ("api.ipify.org", 443)
+        .to_socket_addrs()
+        .ok()?
+        .find(|a| a.is_ipv4())?;
+    let stream = TcpStream::connect_timeout(&sock, Duration::from_secs(3)).ok()?;
+    let _ = stream.set_read_timeout(Some(Duration::from_secs(3)));
+    let cx = native_tls::TlsConnector::new().ok()?;
+    let mut tls = cx.connect("api.ipify.org", stream).ok()?;
+    tls.write_all(b"GET / HTTP/1.0\r\nHost: api.ipify.org\r\nConnection: close\r\n\r\n")
+        .ok()?;
+    let mut s = String::new();
+    let _ = tls.read_to_string(&mut s);
+    let body = s.split("\r\n\r\n").nth(1)?.trim();
+    if body.split('.').count() == 4 && body.chars().all(|c| c.is_ascii_digit() || c == '.') {
+        Some(body.to_string())
+    } else {
+        None
     }
-    if let Some(out) = child.stdout.take() {
-        let ev = ev_tx.clone();
-        let halt = stop.clone();
-        thread::spawn(move || {
-            use std::io::Read;
-            let mut r = BufReader::new(out);
-            let mut buf = String::new();
-            let mut chunk = [0u8; 512];
-            while !halt.load(Ordering::SeqCst) {
-                match r.read(&mut chunk) {
-                    Ok(0) => break,
-                    Ok(n) => {
-                        buf.push_str(&String::from_utf8_lossy(&chunk[..n]));
-                        if let Some(url) = pick_relay_url(&buf) {
-                            let _ = ev.send(NetEvent::Relay { url });
-                            let _ = ev.send(NetEvent::Status("Hosting · internet link ready".into()));
-                            break;
-                        }
-                    }
-                    Err(_) => break,
-                }
-            }
-        });
+}
+
+fn upnp_map(port: u16, local: &str, proto: &str) -> bool {
+    let ip = local.split(':').next().unwrap_or(local);
+    let sock = match UdpSocket::bind("0.0.0.0:0") {
+        Ok(s) => s,
+        Err(_) => return false,
+    };
+    let _ = sock.set_read_timeout(Some(Duration::from_millis(700)));
+    let _ = sock.set_broadcast(true);
+    let search = concat!(
+        "M-SEARCH * HTTP/1.1\r\n",
+        "HOST: 239.255.255.250:1900\r\n",
+        "MAN: \"ssdp:discover\"\r\n",
+        "MX: 1\r\n",
+        "ST: urn:schemas-upnp-org:device:InternetGatewayDevice:1\r\n",
+        "\r\n"
+    );
+    if sock.send_to(search.as_bytes(), "239.255.255.250:1900").is_err() {
+        return false;
     }
-    let _ = ev_tx.send(NetEvent::Status(
-        "Hosting · waiting on Cloudflare invite…".into(),
-    ));
-    Some(child)
+    let mut buf = [0u8; 2048];
+    let Ok((n, _)) = sock.recv_from(&mut buf) else {
+        return false;
+    };
+    let text = String::from_utf8_lossy(&buf[..n]);
+    let loc = text.lines().find_map(|l| {
+        let l = l.trim();
+        if l.to_ascii_lowercase().starts_with("location:") {
+            Some(l.splitn(2, ':').nth(1)?.trim().to_string())
+        } else {
+            None
+        }
+    });
+    let Some(loc) = loc else {
+        return false;
+    };
+    upnp_add_mapping(&loc, ip, port, proto)
+}
+
+fn upnp_add_mapping(location: &str, internal_ip: &str, port: u16, proto: &str) -> bool {
+    let Some((host, path, port_http)) = split_http_url(location) else {
+        return false;
+    };
+    let xml = match http_get(&host, port_http, &path) {
+        Some(s) => s,
+        None => return false,
+    };
+    let ctrl = upnp_control_url(&xml).unwrap_or_else(|| path.clone());
+    let ctrl_path = if ctrl.starts_with("http") {
+        split_http_url(&ctrl).map(|(_, p, _)| p).unwrap_or(ctrl)
+    } else if ctrl.starts_with('/') {
+        ctrl
+    } else {
+        format!("/{ctrl}")
+    };
+    let body = format!(
+        concat!(
+            "<?xml version=\"1.0\"?>",
+            "<s:Envelope xmlns:s=\"http://schemas.xmlsoap.org/soap/envelope/\" ",
+            "s:encodingStyle=\"http://schemas.xmlsoap.org/soap/encoding/\">",
+            "<s:Body>",
+            "<u:AddPortMapping xmlns:u=\"urn:schemas-upnp-org:service:WANIPConnection:1\">",
+            "<NewRemoteHost></NewRemoteHost>",
+            "<NewExternalPort>{port}</NewExternalPort>",
+            "<NewProtocol>{proto}</NewProtocol>",
+            "<NewInternalPort>{port}</NewInternalPort>",
+            "<NewInternalClient>{ip}</NewInternalClient>",
+            "<NewEnabled>1</NewEnabled>",
+            "<NewPortMappingDescription>Blightnet</NewPortMappingDescription>",
+            "<NewLeaseDuration>0</NewLeaseDuration>",
+            "</u:AddPortMapping>",
+            "</s:Body></s:Envelope>"
+        ),
+        port = port,
+        ip = internal_ip,
+        proto = proto
+    );
+    http_post_soap(&host, port_http, &ctrl_path, &body)
+}
+
+fn split_http_url(url: &str) -> Option<(String, String, u16)> {
+    let rest = url.strip_prefix("http://")?;
+    let (hostport, path) = rest.split_once('/').unwrap_or((rest, ""));
+    let path = format!("/{path}");
+    if let Some((h, p)) = hostport.split_once(':') {
+        Some((h.to_string(), path, p.parse().ok()?))
+    } else {
+        Some((hostport.to_string(), path, 80))
+    }
+}
+
+fn http_get(host: &str, port: u16, path: &str) -> Option<String> {
+    let addr = format!("{host}:{port}");
+    let sock = addr.to_socket_addrs().ok()?.next()?;
+    let mut s = TcpStream::connect_timeout(&sock, Duration::from_secs(2)).ok()?;
+    let _ = s.set_read_timeout(Some(Duration::from_secs(2)));
+    let req = format!("GET {path} HTTP/1.0\r\nHost: {host}\r\nConnection: close\r\n\r\n");
+    s.write_all(req.as_bytes()).ok()?;
+    let mut out = String::new();
+    let _ = s.read_to_string(&mut out);
+    Some(out)
+}
+
+fn http_post_soap(host: &str, port: u16, path: &str, body: &str) -> bool {
+    let addr = format!("{host}:{port}");
+    let Some(sock) = addr.to_socket_addrs().ok().and_then(|mut it| it.next()) else {
+        return false;
+    };
+    let Ok(mut s) = TcpStream::connect_timeout(&sock, Duration::from_secs(2)) else {
+        return false;
+    };
+    let _ = s.set_read_timeout(Some(Duration::from_secs(2)));
+    let req = format!(
+        "POST {path} HTTP/1.0\r\nHost: {host}\r\nContent-Type: text/xml; charset=\"utf-8\"\r\nSOAPAction: \"urn:schemas-upnp-org:service:WANIPConnection:1#AddPortMapping\"\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+        body.len()
+    );
+    if s.write_all(req.as_bytes()).is_err() {
+        return false;
+    }
+    let mut out = String::new();
+    let _ = s.read_to_string(&mut out);
+    out.contains("200") && !out.to_ascii_lowercase().contains("fault")
+}
+
+fn upnp_control_url(xml: &str) -> Option<String> {
+    let lower = xml.to_ascii_lowercase();
+    let idx = lower.find("wanipconnection")?;
+    let slice = &xml[idx..];
+    let c = slice.to_ascii_lowercase().find("<controlurl>")?;
+    let rest = &slice[c + 12..];
+    let end = rest.to_ascii_lowercase().find("</controlurl>")?;
+    Some(rest[..end].trim().to_string())
 }
 
 #[cfg(test)]
@@ -2433,20 +2441,47 @@ mod tests {
     use super::*;
 
     #[test]
-    fn parse_addr_accepts_lan_and_https() {
+    fn parse_addr_accepts_lan_invite() {
         assert_eq!(
             parse_addr("blightnet://10.0.0.4:8766").as_deref(),
             Some("10.0.0.4:8766")
         );
         assert_eq!(parse_addr("192.168.1.9").as_deref(), Some("192.168.1.9:8766"));
-        assert!(looks_web("https://foo.trycloudflare.com"));
-        assert_eq!(
-            parse_addr("https://foo.trycloudflare.com").as_deref(),
-            Some("https://foo.trycloudflare.com")
-        );
+        assert!(parse_addr("https://foo.trycloudflare.com").is_none());
         assert!(parse_addr("").is_none());
-        assert_eq!(to_ws_url("https://foo.trycloudflare.com"), "wss://foo.trycloudflare.com");
-        assert_eq!(to_ws_url("http://127.0.0.1:8766"), "ws://127.0.0.1:8766");
+        assert_eq!(
+            parse_addr("blightnet://10.0.0.4:8766\r").as_deref(),
+            Some("10.0.0.4:8766")
+        );
+        assert_eq!(
+            parse_addr("BLIGHTNET://192.168.0.12").as_deref(),
+            Some("192.168.0.12:8766")
+        );
+        let key = crate::crypt::mint_key();
+        let inv = crate::crypt::encode_invite(&key, &["10.0.0.4:8766".into(), "9.9.9.9:8766".into()]);
+        assert_eq!(parse_addr(&inv).as_deref(), Some("10.0.0.4:8766"));
+        let parsed = crate::crypt::parse_invite(&inv).unwrap();
+        assert_eq!(parsed.key, key);
+        assert_eq!(parsed.addrs.len(), 2);
+    }
+
+    #[test]
+    fn stun_xor_mapped_ipv4() {
+        let mut buf = vec![0u8; 32];
+        buf[0] = 0x01;
+        buf[1] = 0x01;
+        buf[20] = 0x00;
+        buf[21] = 0x20;
+        buf[22] = 0x00;
+        buf[23] = 0x08;
+        buf[25] = 0x01;
+        buf[26] = 0x21;
+        buf[27] = 0x12;
+        buf[28] = 0x21 ^ 10;
+        buf[29] = 0x12 ^ 0;
+        buf[30] = 0xa4 ^ 0;
+        buf[31] = 0x42 ^ 1;
+        assert_eq!(parse_stun_mapped(&buf).as_deref(), Some("10.0.0.1"));
     }
 
     #[test]
@@ -2481,6 +2516,16 @@ mod tests {
                 crew: None,
                 data: "abcd".into(),
             },
+            Wire::Mix {
+                layers: HashMap::from([("rain".into(), 0.4)]),
+                blight: true,
+                place: "nightcity".into(),
+                time: "night".into(),
+                inside: false,
+            },
+            Wire::SheetAsk,
+            Wire::MapImageAsk,
+            Wire::MapTokensAsk,
         ] {
             let s = serde_json::to_string(&msg).unwrap();
             let back: Wire = serde_json::from_str(&s).unwrap();
@@ -2539,10 +2584,12 @@ mod tests {
         let mut host = NetHub::new("Host".into(), &a);
         host.host(false, a.clone());
         let mut port = 0u16;
+        let mut invite = String::new();
         for _ in 0..80 {
             for ev in host.poll() {
-                if let NetEvent::Hosting { port: p, .. } = ev {
+                if let NetEvent::Hosting { port: p, key, .. } = ev {
                     port = p;
+                    invite = crate::crypt::encode_invite(&key, &[format!("127.0.0.1:{p}")]);
                 }
             }
             if host.role == Role::Host && port != 0 {
@@ -2553,7 +2600,7 @@ mod tests {
         assert!(matches!(host.role, Role::Host));
         assert!(port != 0);
         let mut guest = NetHub::new("Guest".into(), &b);
-        guest.join(&format!("127.0.0.1:{port}"));
+        guest.join(&invite);
         let mut joined = false;
         for _ in 0..80 {
             let _ = host.poll();
@@ -2589,5 +2636,89 @@ mod tests {
         let _ = std::fs::remove_dir_all(&a);
         let _ = std::fs::remove_dir_all(&b);
         assert!(saw, "host did not receive guest chat");
+    }
+
+    #[test]
+    fn host_guest_sync_mix_sheet_tokens() {
+        let a = std::env::temp_dir().join(format!("bn-sync-h-{}", rand::random::<u32>()));
+        let b = std::env::temp_dir().join(format!("bn-sync-g-{}", rand::random::<u32>()));
+        std::fs::create_dir_all(&a).unwrap();
+        std::fs::create_dir_all(&b).unwrap();
+        let mut host = NetHub::new("Host".into(), &a);
+        host.host(false, a.clone());
+        let mut port = 0u16;
+        let mut invite = String::new();
+        for _ in 0..80 {
+            for ev in host.poll() {
+                if let NetEvent::Hosting { port: p, key, .. } = ev {
+                    port = p;
+                    invite = crate::crypt::encode_invite(&key, &[format!("127.0.0.1:{p}")]);
+                }
+            }
+            if host.role == Role::Host && port != 0 {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(25));
+        }
+        let mut guest = NetHub::new("Guest".into(), &b);
+        guest.join(&invite);
+        for _ in 0..80 {
+            let _ = host.poll();
+            let _ = guest.poll();
+            if guest.role == Role::Guest {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(25));
+        }
+        assert_eq!(guest.role, Role::Guest);
+        guest.send_mix(
+            HashMap::from([("rain".into(), 0.5)]),
+            true,
+            "nightcity".into(),
+            "night".into(),
+            false,
+        );
+        let mut saw_mix = false;
+        for _ in 0..80 {
+            for ev in host.poll() {
+                if let NetEvent::Mix { place, .. } = ev {
+                    if place == "nightcity" {
+                        saw_mix = true;
+                    }
+                }
+            }
+            if saw_mix {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(25));
+        }
+        host.send_sheet(vec![]);
+        host.send_map_tokens(vec![]);
+        host.send_map_image_ask();
+        let mut saw_sheet = false;
+        let mut saw_tok = false;
+        let mut saw_ask = false;
+        for _ in 0..80 {
+            for ev in guest.poll() {
+                match ev {
+                    NetEvent::Sheet { .. } => saw_sheet = true,
+                    NetEvent::MapTokens { .. } => saw_tok = true,
+                    NetEvent::MapImageAsk => saw_ask = true,
+                    _ => {}
+                }
+            }
+            if saw_sheet && saw_tok && saw_ask {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(25));
+        }
+        drop(guest);
+        drop(host);
+        let _ = std::fs::remove_dir_all(&a);
+        let _ = std::fs::remove_dir_all(&b);
+        assert!(saw_mix, "host did not receive guest mix");
+        assert!(saw_sheet, "guest did not receive sheets");
+        assert!(saw_tok, "guest did not receive tokens");
+        assert!(saw_ask, "guest did not receive map-image-ask");
     }
 }

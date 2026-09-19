@@ -22,6 +22,10 @@ data/deck-library.json
 data/deck-vol.txt
 data/nethooks/
 data/inbox/
+data/daemon.lock
+data/daemon.log
+data/daemon-state.json
+data/daemon.json
 
 # Python
 __pycache__/

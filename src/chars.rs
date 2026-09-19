@@ -1,6 +1,6 @@
 use crate::images::TexCache;
 use crate::theme::{self, CREAM, CYAN, DIM, KILL, MUTED, ORANGE};
-use eframe::egui::{self, Color32, RichText, Vec2};
+use eframe::egui::{self, Color32, FontId, RichText, Vec2};
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -90,7 +90,7 @@ const CP_ROLES: &[&str] = &[
     "Fixer", "Nomad", "Gamemaster",
 ];
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Attack {
     #[serde(default)]
     pub name: String,
@@ -100,7 +100,7 @@ pub struct Attack {
     pub damage: String,
 }
 
-#[derive(Clone, Serialize, Deserialize, Default)]
+#[derive(Clone, Debug, Serialize, Deserialize, Default)]
 pub struct KitItem {
     #[serde(default)]
     pub id: String,
@@ -151,7 +151,7 @@ pub struct KitSpec {
     pub rarity: String,
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Character {
     #[serde(default)]
     pub id: String,
@@ -597,10 +597,62 @@ pub fn import_picture(root: &Path, ch: &mut Character, closeup: bool) -> Result<
 
 fn field(ui: &mut egui::Ui, label: &str, value: &mut String) {
     ui.horizontal_wrapped(|ui| {
-        ui.label(RichText::new(label).family(theme::mono()).size(10.0).color(DIM));
+        ui.label(
+            RichText::new(label)
+                .family(theme::mono())
+                .size(10.0)
+                .color(CYAN),
+        );
         let w = ui.available_width().clamp(80.0, 280.0);
-        ui.add(egui::TextEdit::singleline(value).desired_width(w));
+        ui.add(
+            egui::TextEdit::singleline(value)
+                .desired_width(w)
+                .text_color(ORANGE),
+        );
     });
+}
+
+fn sheet_card(ui: &mut egui::Ui, title: &str, add: impl FnOnce(&mut egui::Ui)) {
+    egui::Frame::NONE
+        .fill(Color32::from_rgb(8, 8, 5))
+        .stroke(egui::Stroke::new(1.0, ORANGE))
+        .inner_margin(egui::Margin::symmetric(10, 8))
+        .show(ui, |ui| {
+            ui.label(
+                RichText::new(title)
+                    .family(theme::mono())
+                    .size(10.0)
+                    .color(ORANGE),
+            );
+            ui.add_space(4.0);
+            add(ui);
+        });
+}
+
+fn hp_bar(ui: &mut egui::Ui, hp: i32, max: i32) {
+    let max = max.max(1);
+    let t = (hp as f32 / max as f32).clamp(0.0, 1.0);
+    let (r, _) = ui.allocate_exact_size(Vec2::new(ui.available_width().min(220.0), 10.0), egui::Sense::hover());
+    ui.painter().rect_filled(r, 0.0, Color32::from_rgb(12, 12, 8));
+    ui.painter().rect_stroke(r, 0.0, egui::Stroke::new(1.0, ORANGE), egui::StrokeKind::Inside);
+    if t > 0.0 {
+        let fill = egui::Rect::from_min_size(r.min, Vec2::new((r.width() * t).max(2.0), r.height()));
+        let col = if t > 0.5 {
+            ORANGE
+        } else if t > 0.25 {
+            CYAN
+        } else {
+            KILL
+        };
+        ui.painter().rect_filled(fill.shrink(1.0), 0.0, col);
+    }
+    ui.painter().text(
+        r.center(),
+        egui::Align2::CENTER_CENTER,
+        format!("{hp}/{max}"),
+        FontId::new(10.0, theme::mono()),
+        CREAM,
+    );
 }
 
 fn wrap(ui: &mut egui::Ui, text: &str, color: Color32, size: f32) {
@@ -627,7 +679,7 @@ fn pic(ui: &mut egui::Ui, tex: &mut TexCache, root: &Path, rel: &str, max: Vec2)
         });
         return None;
     }
-    let path = root.join(rel);
+    let path = crate::images::resolve_rel(root, rel);
     if path.is_file() {
         if crate::images::show_fit(ui, tex, &path, max)
             .on_hover_text("Click to zoom")
@@ -659,7 +711,7 @@ pub fn ui_sheet(
     zoom: &mut Option<PathBuf>,
 ) {
     if is_gm {
-        let drop = ui.interact(ui.max_rect(), egui::Id::new("sheet-drop"), egui::Sense::hover());
+        let drop = ui.interact(ui.clip_rect(), egui::Id::new("sheet-drop"), egui::Sense::hover());
         if let Some(spec) = drop.dnd_release_payload::<KitSpec>() {
             if let Some(c) = chars.get_mut(*char_i) {
                 receive_kit(c, &spec);
@@ -675,8 +727,9 @@ pub fn ui_sheet(
             }
         }
     }
+    theme::section_head(ui, "05", "CHARACTER SHEET");
+    ui.add_space(4.0);
     ui.horizontal_wrapped(|ui| {
-        theme::section_head(ui, "05", "CHARACTER SHEET");
         if theme::neon_btn(ui, "+ New").clicked() {
             chars.push(Character::new(if blight { "blight" } else { "hearthsong" }));
             *char_i = chars.len() - 1;
@@ -742,85 +795,110 @@ pub fn ui_sheet(
         }
     });
     if !dice.is_empty() {
-        ui.label(RichText::new(dice.as_str()).color(CYAN));
+        ui.label(
+            RichText::new(dice.as_str())
+                .family(theme::mono())
+                .size(13.0)
+                .color(CYAN),
+        );
     }
     if chars.is_empty() {
         wrap(ui, "No characters. Press + New to open a full sheet.", MUTED, 13.0);
         return;
     }
-    egui::ScrollArea::vertical()
-        .id_salt("char-roster")
-        .max_height(150.0)
-        .show(ui, |ui| {
-            for (i, c) in chars.iter().enumerate() {
-                let mark = if c.dead {
-                    "†"
-                } else if c.downed {
-                    "↓"
-                } else {
-                    "●"
-                };
-                let aimed = target.as_deref() == Some(c.id.as_str());
-                ui.horizontal_wrapped(|ui| {
-                    crate::maps::drag_source(
-                        ui,
-                        ("char-drag", c.id.clone()),
-                        crate::maps::TokenSpec {
-                            name: c.name.clone(),
-                            image: c.portrait.clone(),
-                            sheet: c.id.clone(),
-                            cat: String::new(),
-                            src: String::new(),
-                        },
-                        |ui| {
-                            if ui
-                                .selectable_label(
-                                    *char_i == i,
-                                    format!(
-                                        "{}{mark} {}  {}/{} hp",
+    sheet_card(ui, "ROSTER", |ui| {
+        egui::ScrollArea::vertical()
+            .id_salt("char-roster")
+            .max_height(88.0)
+            .show(ui, |ui| {
+                for (i, c) in chars.iter().enumerate() {
+                    let mark = if c.dead {
+                        "†"
+                    } else if c.downed {
+                        "↓"
+                    } else {
+                        "●"
+                    };
+                    let aimed = target.as_deref() == Some(c.id.as_str());
+                    let on = *char_i == i;
+                    ui.horizontal_wrapped(|ui| {
+                        crate::maps::drag_source(
+                            ui,
+                            ("char-drag", c.id.clone()),
+                            crate::maps::TokenSpec {
+                                name: c.name.clone(),
+                                image: c.portrait.clone(),
+                                sheet: c.id.clone(),
+                                cat: String::new(),
+                                src: String::new(),
+                            },
+                            |ui| {
+                                if theme::neon_btn_color(
+                                    ui,
+                                    &format!(
+                                        "{}{mark} {}  {}/{}",
                                         if aimed { "▸ " } else { "" },
                                         c.name,
                                         c.hp,
                                         c.hp_max
                                     ),
+                                    ORANGE,
+                                    on,
                                 )
                                 .clicked()
-                            {
-                                *char_i = i;
-                            }
-                        },
-                    );
-                    if theme::neon_btn_color(ui, "Aim", CYAN, aimed).clicked() {
-                        *target = Some(c.id.clone());
-                    }
-                });
-            }
-        });
+                                {
+                                    *char_i = i;
+                                }
+                            },
+                        );
+                        if theme::neon_btn_color(ui, "Aim", CYAN, aimed).clicked() {
+                            *target = Some(c.id.clone());
+                        }
+                    });
+                }
+            });
+    });
+    ui.add_space(6.0);
     let i = (*char_i).min(chars.len() - 1);
     *char_i = i;
     let mut pic_close = false;
     let mut pic_full = false;
     if let Some(c) = chars.get(i) {
-        ui.horizontal_wrapped(|ui| {
-            if let Some(p) = pic(ui, tex, root, &c.portrait, Vec2::new(72.0, 72.0)) {
-                *zoom = Some(p);
-            }
-            ui.vertical(|ui| {
-                wrap(ui, "Close-up", DIM, 10.0);
-                if theme::neon_btn(ui, "Upload close-up").clicked() {
-                    pic_close = true;
+        sheet_card(ui, "PORTRAIT", |ui| {
+            ui.horizontal_wrapped(|ui| {
+                if let Some(p) = pic(ui, tex, root, &c.portrait, Vec2::new(72.0, 72.0)) {
+                    *zoom = Some(p);
                 }
-            });
-            if let Some(p) = pic(ui, tex, root, &c.fullbody, Vec2::new(56.0, 92.0)) {
-                *zoom = Some(p);
-            }
-            ui.vertical(|ui| {
-                wrap(ui, "Full body", DIM, 10.0);
-                if theme::neon_btn(ui, "Upload full body").clicked() {
-                    pic_full = true;
+                ui.vertical(|ui| {
+                    wrap(ui, "Close-up", DIM, 10.0);
+                    if theme::neon_btn(ui, "Upload close-up").clicked() {
+                        pic_close = true;
+                    }
+                    ui.add_space(4.0);
+                    hp_bar(ui, c.hp, c.hp_max);
+                    ui.label(
+                        RichText::new(format!(
+                            "LV {} · {}",
+                            c.level,
+                            if blight { "BLIGHT" } else { "HEARTH" }
+                        ))
+                        .family(theme::mono())
+                        .size(11.0)
+                        .color(CYAN),
+                    );
+                });
+                if let Some(p) = pic(ui, tex, root, &c.fullbody, Vec2::new(52.0, 84.0)) {
+                    *zoom = Some(p);
                 }
+                ui.vertical(|ui| {
+                    wrap(ui, "Full body", DIM, 10.0);
+                    if theme::neon_btn(ui, "Upload full body").clicked() {
+                        pic_full = true;
+                    }
+                });
             });
         });
+        ui.add_space(6.0);
     }
     if pic_close {
         if let Some(c) = chars.get_mut(i) {
@@ -869,20 +947,19 @@ pub fn ui_sheet(
             }
         }
     });
-    egui::ScrollArea::vertical()
-        .id_salt("char-body")
-        .show(ui, |ui| match (blight_sheet, c.tab) {
-            (_, 0) => ui_bio(ui, c, blight_sheet, names),
-            (false, 1) => ui_stats_5e(ui, c),
-            (true, 1) => ui_stats_red(ui, c),
-            (_, 2) => ui_combat(ui, c, blight_sheet, dice, log, luck, roll, target),
-            (false, 3) => ui_magic(ui, c),
-            (true, 3) => ui_red_skills(ui, c),
-            (false, 4) => ui_features(ui, c),
-            (true, 4) => ui_chrome(ui, c),
-            (_, 5) => ui_gear(ui, c, blight_sheet),
-            (_, _) => ui_story(ui, c, blight_sheet),
-        });
+    ui.add_space(4.0);
+    match (blight_sheet, c.tab) {
+        (_, 0) => ui_bio(ui, c, blight_sheet, names),
+        (false, 1) => ui_stats_5e(ui, c),
+        (true, 1) => ui_stats_red(ui, c),
+        (_, 2) => ui_combat(ui, c, blight_sheet, dice, log, luck, roll, target),
+        (false, 3) => ui_magic(ui, c),
+        (true, 3) => ui_red_skills(ui, c),
+        (false, 4) => ui_features(ui, c),
+        (true, 4) => ui_chrome(ui, c),
+        (_, 5) => ui_gear(ui, c, blight_sheet),
+        (_, _) => ui_story(ui, c, blight_sheet),
+    }
 }
 
 fn compose_name(c: &mut Character) {
@@ -901,6 +978,7 @@ fn ui_bio(ui: &mut egui::Ui, c: &mut Character, blight: bool, names: &crate::nam
         MUTED,
         11.0,
     );
+    ui.add_space(4.0);
     ui.horizontal_wrapped(|ui| {
         if theme::neon_btn_color(ui, "Female", ORANGE, c.gender != "male").clicked() {
             c.gender = "female".into();

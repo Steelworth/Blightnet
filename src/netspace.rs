@@ -1,4 +1,4 @@
-use crate::theme::{self, BG, CREAM, CYAN, DIM, MUTED, ORANGE, PANEL, TITLE};
+use crate::theme::{self, BG, CREAM, CYAN, DIM, INK, MUTED, ORANGE, PANEL, TITLE};
 use eframe::egui::{
     self, Align2, Color32, FontId, Galley, Key, PointerButton, Pos2, Rect, RichText, Sense,
     Stroke, StrokeKind, Vec2,
@@ -31,6 +31,16 @@ const SIGNS: &[&str] = &[
     "OMNI",
     "HEXNODE",
     "VOID.SYS",
+    "ARASAKA",
+    "MILITECH",
+    "KANG TAO",
+    "ZETATECH",
+    "BIOTECHNICA",
+    "TRAUMA TEAM",
+    "NCPD",
+    "AFTERLIFE",
+    "LIZZIE'S",
+    "TOTENTANZ",
 ];
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -43,6 +53,8 @@ enum Kind {
     Park,
     Market,
     Trench,
+    Canal,
+    Garden,
     Solid,
 }
 
@@ -77,6 +89,11 @@ pub struct Netspace {
     look: &'static str,
     atlas: Option<Atlas>,
     zbuf: Vec<f32>,
+    pub cruise: bool,
+    stuck: f32,
+    cruise_tx: f32,
+    cruise_tz: f32,
+    cruise_dir: i32,
 }
 
 impl Default for Netspace {
@@ -102,6 +119,11 @@ impl Netspace {
             look: "CORP PLAZA",
             atlas: None,
             zbuf: Vec::new(),
+            cruise: false,
+            stuck: 0.0,
+            cruise_tx: x,
+            cruise_tz: z,
+            cruise_dir: 2,
         }
     }
 
@@ -137,6 +159,116 @@ impl Netspace {
     pub fn district(&self) -> &'static str {
         district(self.x, self.z)
     }
+}
+
+const CRUISE_DIR: [(i32, i32); 4] = [(0, -1), (1, 0), (0, 1), (-1, 0)];
+
+fn wrap_delta(a: f32, b: f32) -> f32 {
+    let m = MAP as f32;
+    let mut d = (a - b).rem_euclid(m);
+    if d > m * 0.5 {
+        d -= m;
+    }
+    d
+}
+
+fn ang_diff(want: f32, have: f32) -> f32 {
+    let mut d = want - have;
+    while d > std::f32::consts::PI {
+        d -= std::f32::consts::TAU;
+    }
+    while d < -std::f32::consts::PI {
+        d += std::f32::consts::TAU;
+    }
+    d
+}
+
+fn dir_yaw(d: i32) -> f32 {
+    match d.rem_euclid(4) {
+        0 => std::f32::consts::PI,
+        1 => std::f32::consts::FRAC_PI_2,
+        2 => 0.0,
+        _ => -std::f32::consts::FRAC_PI_2,
+    }
+}
+
+fn cruise_ok(ns: &Netspace, x: i32, z: i32) -> bool {
+    let c = ns.at(x, z);
+    c.h < 0.2
+        && matches!(
+            c.kind,
+            Kind::Avenue | Kind::Street | Kind::Plaza | Kind::Sidewalk | Kind::Alley | Kind::Canal
+        )
+}
+
+fn cruise_ahead(ns: &Netspace, x: i32, z: i32, d: i32, steps: i32) -> bool {
+    let (dx, dz) = CRUISE_DIR[d.rem_euclid(4) as usize];
+    for s in 1..=steps {
+        if !cruise_ok(ns, x + dx * s, z + dz * s) {
+            return false;
+        }
+    }
+    true
+}
+
+fn cruise_pick(ns: &mut Netspace, allow_back: bool) {
+    let cx = ns.x.floor() as i32;
+    let cz = ns.z.floor() as i32;
+    let back = (ns.cruise_dir + 2).rem_euclid(4);
+    let mut opts: Vec<i32> = (0..4)
+        .filter(|&d| allow_back || d != back)
+        .filter(|&d| cruise_ahead(ns, cx, cz, d, 2))
+        .collect();
+    if opts.is_empty() {
+        opts = (0..4).filter(|&d| cruise_ahead(ns, cx, cz, d, 1)).collect();
+    }
+    if opts.is_empty() {
+        ns.cruise_dir = (ns.cruise_dir + 1).rem_euclid(4);
+        let (dx, dz) = CRUISE_DIR[ns.cruise_dir as usize];
+        ns.cruise_tx = (cx + dx * 2) as f32 + 0.5;
+        ns.cruise_tz = (cz + dz * 2) as f32 + 0.5;
+        return;
+    }
+    let h = hash2(cx, cz.wrapping_add(ns.cruise_dir * 17));
+    let choice = if opts.contains(&ns.cruise_dir) && h % 5 != 0 {
+        ns.cruise_dir
+    } else {
+        opts[(h as usize) % opts.len()]
+    };
+    let steps = 4 + (h % 6) as i32;
+    let (dx, dz) = CRUISE_DIR[choice as usize];
+    ns.cruise_dir = choice;
+    ns.cruise_tx = (cx + dx * steps) as f32 + 0.5;
+    ns.cruise_tz = (cz + dz * steps) as f32 + 0.5;
+}
+
+fn cruise_step(ns: &mut Netspace, dt: f32) {
+    let dx = wrap_delta(ns.cruise_tx, ns.x);
+    let dz = wrap_delta(ns.cruise_tz, ns.z);
+    let dist = dx.hypot(dz);
+    if dist < 0.85 {
+        cruise_pick(ns, false);
+    }
+    let want = dx.atan2(dz);
+    let err = ang_diff(want, ns.yaw);
+    ns.yaw += err.clamp(-1.85 * dt, 1.85 * dt);
+    let sy = ns.yaw.sin();
+    let cy = ns.yaw.cos();
+    let spd = if err.abs() < 0.45 { 3.55 } else { 1.35 };
+    let before = (ns.x, ns.z);
+    ns.try_move(sy * spd * dt, cy * spd * dt);
+    let moved = wrap_delta(ns.x, before.0).abs() + wrap_delta(ns.z, before.1).abs();
+    if moved < 0.004 {
+        ns.stuck += dt;
+    } else {
+        ns.stuck *= 0.4;
+    }
+    if ns.stuck > 0.9 {
+        cruise_pick(ns, true);
+        ns.yaw = dir_yaw(ns.cruise_dir);
+        ns.stuck = 0.0;
+    }
+    ns.bob += dt * 7.2;
 }
 
 fn idx(x: i32, z: i32) -> usize {
@@ -230,7 +362,7 @@ fn build_city() -> Vec<Cell> {
                 continue;
             }
 
-            let lot_kind = lot % 13;
+            let lot_kind = lot % 17;
             let courtyard = lot_kind == 0 && bx >= 3 && bx <= 5 && bz >= 3 && bz <= 5;
             let park_lot = lot_kind == 1;
             let market_lot = lot_kind == 2;
@@ -326,6 +458,12 @@ fn build_city() -> Vec<Cell> {
                 5
             } else if lot_kind == 12 {
                 6
+            } else if lot_kind == 13 {
+                10
+            } else if lot_kind == 14 {
+                11
+            } else if lot_kind == 15 {
+                12
             } else {
                 1
             };
@@ -337,6 +475,9 @@ fn build_city() -> Vec<Cell> {
                 5 => 1.8 + (lot % 3) as f32 * 0.3,
                 6 => 2.0 + (lot % 4) as f32 * 0.4,
                 8 => 5.0 + (lot % 4) as f32 * 0.5,
+                10 => 1.6 + (lot % 3) as f32 * 0.25,
+                11 => 3.2 + (lot % 5) as f32 * 0.4,
+                12 => 2.6 + (lot % 4) as f32 * 0.35,
                 _ => 3.8 + (lot % 6) as f32 * 0.55,
             };
             if lot_kind == 9 {
@@ -396,6 +537,66 @@ fn build_city() -> Vec<Cell> {
                 sign: 8,
                 var: 9,
             };
+        }
+    }
+    // Canal with bridges
+    for x in 0..MAP {
+        let z = 24 + ((x as f32 * 0.22).sin() * 4.0).round() as i32;
+        for dz in -1..=1 {
+            let zz = z + dz;
+            let i = idx(x, zz);
+            if map[i].kind == Kind::Plaza {
+                continue;
+            }
+            if x % 16 == 0 {
+                map[i].kind = Kind::Street;
+                map[i].h = 0.0;
+                map[i].var = 12;
+            } else {
+                map[i].kind = Kind::Canal;
+                map[i].h = 0.0;
+                map[i].ice = false;
+                map[i].facade = 0;
+            }
+        }
+    }
+    // North–south boulevard
+    for z in 0..MAP {
+        for dx in 0..2 {
+            let i = idx(40 + dx, z);
+            if map[i].kind != Kind::Plaza {
+                map[i].kind = Kind::Avenue;
+                map[i].h = 0.0;
+            }
+        }
+    }
+    // Gardens beside parks, extra planters on sidewalks
+    for z in 0..MAP {
+        for x in 0..MAP {
+            let i = idx(x, z);
+            if map[i].kind == Kind::Park && hash2(x, z) % 5 == 0 && map[i].h < 0.2 {
+                map[i].kind = Kind::Garden;
+            }
+            if map[i].kind == Kind::Sidewalk {
+                let n = map[idx(x + 1, z)].kind == Kind::Park
+                    || map[idx(x - 1, z)].kind == Kind::Park
+                    || map[idx(x, z + 1)].kind == Kind::Park
+                    || map[idx(x, z - 1)].kind == Kind::Park;
+                if n && hash2(x, z) % 3 == 0 {
+                    map[i].kind = Kind::Garden;
+                    map[i].h = 0.0;
+                }
+            }
+            if map[i].kind == Kind::Park && hash2(x + 3, z) % 7 == 0 && map[i].h < 0.2 {
+                map[i] = Cell {
+                    kind: Kind::Solid,
+                    h: 1.8 + (hash2(x, z) % 3) as f32 * 0.5,
+                    ice: false,
+                    facade: 13,
+                    sign: 0,
+                    var: 3,
+                };
+            }
         }
     }
     map
@@ -509,6 +710,60 @@ fn scatter(map: &[Cell]) -> Vec<Sprite> {
                     kind: 8,
                 });
             }
+            if matches!(c.kind, Kind::Park | Kind::Garden) && n % 8 == 0 && out.len() < 280 {
+                out.push(Sprite {
+                    x: x as f32 + 0.4,
+                    z: z as f32 + 0.6,
+                    vx: 0.0,
+                    vz: 0.0,
+                    kind: 9,
+                });
+            }
+            if c.kind == Kind::Garden && n % 5 == 0 && out.len() < 320 {
+                out.push(Sprite {
+                    x: x as f32 + 0.55,
+                    z: z as f32 + 0.4,
+                    vx: 0.0,
+                    vz: 0.0,
+                    kind: 10,
+                });
+            }
+            if matches!(c.kind, Kind::Plaza | Kind::Park | Kind::Avenue) && n % 53 == 0 && out.len() < 340 {
+                out.push(Sprite {
+                    x: x as f32 + 0.5,
+                    z: z as f32 + 0.5,
+                    vx: ((n % 4) as f32 - 1.5) * 2.2,
+                    vz: ((n % 6) as f32 - 2.5) * 1.6,
+                    kind: 11,
+                });
+            }
+            if c.kind == Kind::Sidewalk && n % 29 == 0 && out.len() < 360 {
+                out.push(Sprite {
+                    x: x as f32 + 0.5,
+                    z: z as f32 + 0.5,
+                    vx: 0.0,
+                    vz: 0.0,
+                    kind: 12,
+                });
+            }
+            if matches!(c.kind, Kind::Avenue | Kind::Street) && n % 37 == 0 && out.len() < 400 {
+                out.push(Sprite {
+                    x: x as f32 + 0.35,
+                    z: z as f32 + 0.65,
+                    vx: 0.0,
+                    vz: 0.0,
+                    kind: 12,
+                });
+            }
+            if c.kind == Kind::Plaza && n % 9 == 0 && out.len() < 430 {
+                out.push(Sprite {
+                    x: x as f32 + 0.5,
+                    z: z as f32 + 0.5,
+                    vx: ((n % 3) as f32 - 1.0) * 0.4,
+                    vz: ((n % 5) as f32 - 2.0) * 0.3,
+                    kind: 1,
+                });
+            }
         }
     }
     out
@@ -538,12 +793,13 @@ fn district(x: f32, z: f32) -> &'static str {
 
 struct Atlas {
     g: [Option<Arc<Galley>>; 128],
+    px: f32,
 }
 
 impl Atlas {
-    fn new(painter: &egui::Painter, font: FontId) -> Self {
+    fn new(painter: &egui::Painter, font: FontId, px: f32) -> Self {
         const SET: &str =
-            " .`'*+|:;/\\-=#_[](){}<>^~Iil!@H0O8█▓▒░,#\"$%&ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+            " .`'*+|:;/\\-=#_[](){}<>^~Iil!@H0O8█▓▒░,#\"$%&ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789Y^n";
         let mut g: [Option<Arc<Galley>>; 128] = std::array::from_fn(|_| None);
         for ch in SET.chars() {
             let u = ch as usize;
@@ -555,7 +811,7 @@ impl Atlas {
                 ));
             }
         }
-        Self { g }
+        Self { g, px }
     }
 
     fn get(&self, ch: char) -> Option<Arc<Galley>> {
@@ -650,6 +906,7 @@ fn march(ns: &Netspace, rdx: f32, rdz: f32) -> Hit {
 }
 
 fn wall_tex(hit: &Hit, v: f32, t: f32) -> (char, Color32) {
+    let _ = t;
     let d = hit.dist * if hit.side == 1 { 1.15 } else { 1.0 };
     let floors = (hit.h * 1.25).clamp(2.0, 30.0) as i32;
     let floor_i = ((1.0 - v) * floors as f32).clamp(0.0, (floors - 1) as f32) as i32;
@@ -684,10 +941,13 @@ fn wall_tex(hit: &Hit, v: f32, t: f32) -> (char, Color32) {
     let dish = roof && hit.var % 4 == 1 && col_i % 5 == 2;
     let ticker = hit.sign > 0 && floor_i >= floors.saturating_sub(2) && v < 0.24 && v > 0.04;
     let neon_bar = (chrome || vault) && (floor_i == 1 || floor_i == 3 || floor_i == 5);
-    let blink = ((t * (2.2 + (hit.var % 5) as f32)).floor() as i32 + hit.mx).rem_euclid(5) == 0;
+
     let fire_esc = hit.var % 3 == 0 && hit.u < 0.16 && v > 0.1 && v < 0.9;
     let pipe = hit.var % 5 == 2 && hit.u > 0.88;
     let ac = floor_i % 3 == 0 && col_i % 4 == 2 && v > 0.18 && v < 0.32;
+    let vent = floor_i % 5 == 4 && col_i % 3 == 1 && v > 0.42 && v < 0.52;
+    let shutter = hit.facade == 0 && v > 0.62 && v < 0.72 && (hit.u - 0.5).abs() < 0.22;
+    let cable = hit.facade != 2 && v > 0.08 && v < 0.14 && n % 4 == 0;
     let graffiti = floor_i == 0 && n % 6 == 0 && v > 0.72;
     let floor_num = col_i == 0 && (v * 20.0) as i32 % 7 == 0 && v > 0.15 && v < 0.85;
     let win_pitch = 1 + (hit.var % 3) as i32;
@@ -712,18 +972,17 @@ fn wall_tex(hit: &Hit, v: f32, t: f32) -> (char, Color32) {
         return (ch, cream);
     }
     if awning {
-        return ('~', if blink { cyan } else { orange });
+        return ('~', orange);
     }
     if ticker {
         let s = SIGNS[(hit.sign as usize - 1) % SIGNS.len()];
         let bytes = s.as_bytes();
-        let scroll = ((t * 4.0) as usize).wrapping_add((hit.u * 12.0) as usize);
-        let k = scroll % bytes.len();
+        let k = ((hit.u * 14.0) as usize) % bytes.len();
         let ch = bytes[k] as char;
-        return (ch, if vault || blink { cyan } else { orange });
+        return (ch, if vault { cyan } else { orange });
     }
     if neon_bar {
-        return ('=', if blink { cream } else { cyan });
+        return ('=', cyan);
     }
     if balcony {
         return ('=', cream);
@@ -740,6 +999,15 @@ fn wall_tex(hit: &Hit, v: f32, t: f32) -> (char, Color32) {
     if ac {
         return ('o', muted);
     }
+    if vent {
+        return ('#', dim);
+    }
+    if shutter {
+        return ('=', muted);
+    }
+    if cable {
+        return ('~', dim);
+    }
     if floor_num {
         let digit = b"0123456789"[(floor_i as usize) % 10] as char;
         return (digit, cyan);
@@ -750,8 +1018,7 @@ fn wall_tex(hit: &Hit, v: f32, t: f32) -> (char, Color32) {
     }
     if window {
         let live = n % 8 > 1;
-        let flicker = live && n % 13 == 0 && blink;
-        let lit = live && !flicker;
+        let lit = live;
         let inner = if n % 5 == 0 { '+' } else { '#' };
         if vault {
             return (if lit { inner } else { ':' }, if lit { cyan } else { dim });
@@ -777,12 +1044,32 @@ fn wall_tex(hit: &Hit, v: f32, t: f32) -> (char, Color32) {
         if hit.facade == 6 {
             return (if n % 2 == 0 { '.' } else { '`' }, muted);
         }
+        if hit.facade == 10 {
+            return (if n % 2 == 0 { '_' } else { '.' }, cream);
+        }
+        if hit.facade == 11 {
+            return (if lit { '*' } else { '+' }, if lit { orange } else { muted });
+        }
+        if hit.facade == 12 {
+            return (if lit { '#' } else { ':' }, if lit { cyan } else { mix(MUTED, CYAN, 0.4) });
+        }
+        if hit.facade == 13 {
+            return (if n % 2 == 0 { '"' } else { ',' }, muted);
+        }
         return (
             if lit { inner } else { '.' },
             if lit { cream } else { mix(ORANGE, BG, 0.6) },
         );
     }
-    let rain = hash3(hit.mx, col_i, (t * 9.0) as i32) % 11 == 0;
+    let ivy = hit.facade == 13 && n % 3 == 0 && v > 0.2 && v < 0.9;
+    if ivy {
+        return (if n % 2 == 0 { '"' } else { ',' }, mix(MUTED, ORANGE, 0.35));
+    }
+    let banner = hit.var % 7 == 0 && v > 0.35 && v < 0.55 && (hit.u - 0.5).abs() < 0.28;
+    if banner {
+        return ('=', orange);
+    }
+    let rain = hash3(hit.mx, col_i, 0) % 14 == 0;
     if rain && v < 0.96 {
         return ('/', mix(CYAN, BG, 0.55));
     }
@@ -819,12 +1106,13 @@ fn floor_tex(
     lamps: &[(f32, f32)],
     reflect: Option<(char, Color32)>,
 ) -> (char, Color32) {
+    let _ = t;
     let ix = fx.floor() as i32;
     let iz = fz.floor() as i32;
     let c = ns.at(ix, iz);
     let gx = fx.rem_euclid(1.0);
     let gz = fz.rem_euclid(1.0);
-    let n = hash3(ix, iz, (t as i32).wrapping_mul(3));
+    let n = hash3(ix, iz, 0);
     let bx = ix.rem_euclid(LOT);
     let bz = iz.rem_euclid(LOT);
     let cross = (bx == 0 && bz == 0) || (bx == 4 && bz == 4);
@@ -837,6 +1125,10 @@ fn floor_tex(
                 ('=', fogged(CREAM, d))
             } else if n % 17 == 0 {
                 ('*', fogged(ORANGE, d * 1.2))
+            } else if n % 29 == 0 {
+                ('H', fogged(ORANGE, d))
+            } else if (gx - 0.25).abs() < 0.03 || (gx - 0.75).abs() < 0.03 {
+                (':', fogged(MUTED, d))
             } else {
                 ('.', fogged(DIM, d))
             }
@@ -858,7 +1150,7 @@ fn floor_tex(
             )
         }
         Kind::Trench => {
-            let flow = ((fx * 4.0 + t * 3.0) as i32).rem_euclid(3);
+            let flow = ((ix + iz) % 3).abs();
             (
                 if flow == 0 { '~' } else { '=' },
                 fogged(CYAN, d * 0.7),
@@ -871,6 +1163,12 @@ fn floor_tex(
                 ('+', fogged(MUTED, d))
             } else if n % 9 == 0 {
                 (',', fogged(ORANGE, d * 1.3))
+            } else if n % 14 == 0 {
+                ('o', fogged(DIM, d))
+            } else if n % 21 == 0 {
+                ('~', fogged(CYAN, d * 1.1))
+            } else if n % 11 == 0 {
+                ('+', fogged(ORANGE, d * 1.4))
             } else {
                 (':', fogged(MUTED, d))
             }
@@ -900,6 +1198,34 @@ fn floor_tex(
                 fogged(MUTED, d),
             )
         }
+        Kind::Garden => {
+            let g = n % 4;
+            (
+                if g == 0 {
+                    '*'
+                } else if g == 1 {
+                    ','
+                } else if g == 2 {
+                    '"'
+                } else {
+                    '+'
+                },
+                fogged(if g == 0 { ORANGE } else { MUTED }, d),
+            )
+        }
+        Kind::Canal => {
+            let flow = ((ix * 2 + iz) % 3).abs();
+            (
+                if flow == 0 {
+                    '~'
+                } else if flow == 1 {
+                    '='
+                } else {
+                    '-'
+                },
+                fogged(CYAN, d * 0.55),
+            )
+        }
         Kind::Market => {
             let stall = n % 4 == 0;
             (
@@ -917,7 +1243,7 @@ fn floor_tex(
     }
     let wet = matches!(
         c.kind,
-        Kind::Avenue | Kind::Street | Kind::Alley | Kind::Trench | Kind::Plaza
+        Kind::Avenue | Kind::Street | Kind::Alley | Kind::Trench | Kind::Plaza | Kind::Canal
     );
     if wet {
         if let Some((rg, rc)) = reflect {
@@ -939,9 +1265,10 @@ fn floor_tex(
 }
 
 fn ceiling_tex(fx: f32, fz: f32, d: f32, t: f32) -> (char, Color32) {
+    let _ = t;
     let ix = fx.floor() as i32;
     let iz = fz.floor() as i32;
-    let n = hash3(ix, iz, (t * 2.0) as i32);
+    let n = hash3(ix, iz, 0);
     let gx = fx.rem_euclid(1.0);
     if n % 11 == 0 {
         ('=', fogged(ORANGE, d))
@@ -955,7 +1282,8 @@ fn ceiling_tex(fx: f32, fz: f32, d: f32, t: f32) -> (char, Color32) {
 }
 
 fn sky_tex(col: i32, row: i32, t: f32, near_horizon: bool) -> (char, Color32) {
-    let n = hash3(col, row, (t * 5.0) as i32);
+    let _ = t;
+    let n = hash3(col, row, 0);
     if n % 7 == 0 {
         return ('|', mix(CYAN, BG, 0.62));
     }
@@ -974,10 +1302,14 @@ fn sky_tex(col: i32, row: i32, t: f32, near_horizon: bool) -> (char, Color32) {
         ('*', CYAN)
     } else if n % 23 == 0 {
         ('.', ORANGE)
+    } else if n % 61 == 0 {
+        ('+', mix(CYAN, BG, 0.5))
     } else if row < 2 {
         ('`', DIM)
     } else if n % 47 == 0 {
         ('-', mix(MUTED, BG, 0.4))
+    } else if n % 89 == 0 {
+        ('o', mix(ORANGE, BG, 0.7))
     } else {
         (' ', BG)
     }
@@ -991,6 +1323,14 @@ fn tick(ns: &mut Netspace, ui: &egui::Ui, focused: bool, dt: f32) {
     let mut yaw_d = 0.0f32;
     if !typing {
         ui.input(|i| {
+            if i.key_pressed(Key::C) {
+                ns.cruise = !ns.cruise;
+                ns.stuck = 0.0;
+                if ns.cruise {
+                    cruise_pick(ns, true);
+                    ns.yaw = dir_yaw(ns.cruise_dir);
+                }
+            }
             if i.key_down(Key::W) || i.key_down(Key::ArrowUp) {
                 mx += 1.0;
             }
@@ -1011,6 +1351,10 @@ fn tick(ns: &mut Netspace, ui: &egui::Ui, focused: bool, dt: f32) {
             }
         });
     }
+    if mx.abs() + mz.abs() + yaw_d.abs() > 0.0 {
+        ns.cruise = false;
+        ns.stuck = 0.0;
+    }
     let sprint = ui.input(|i| i.modifiers.shift);
     let speed = if sprint { 7.4 } else { 3.9 };
     ns.yaw += yaw_d * 1.7 * dt;
@@ -1020,13 +1364,15 @@ fn tick(ns: &mut Netspace, ui: &egui::Ui, focused: bool, dt: f32) {
     if moving {
         ns.try_move((sy * mx + cy * mz) * speed * dt, (cy * mx - sy * mz) * speed * dt);
         ns.bob += dt * 10.0;
+    } else if ns.cruise {
+        cruise_step(ns, dt);
     } else {
         ns.bob *= 0.9;
     }
     let m = MAP as f32;
     for i in 0..ns.sprites.len() {
         let k = ns.sprites[i].kind;
-        if k == 2 || k == 4 || k == 5 || k == 6 || k == 8 {
+        if k == 2 || k == 4 || k == 5 || k == 6 || k == 8 || k == 9 || k == 10 || k == 12 {
             continue;
         }
         let mut x = (ns.sprites[i].x + ns.sprites[i].vx * dt).rem_euclid(m);
@@ -1050,7 +1396,7 @@ fn tick(ns: &mut Netspace, ui: &egui::Ui, focused: bool, dt: f32) {
     }
 }
 
-pub fn paint(ui: &mut egui::Ui, ns: &mut Netspace, t: f32) {
+pub fn paint(ui: &mut egui::Ui, ns: &mut Netspace, t: f32, full: bool) {
     let rect = ui.available_rect_before_wrap();
     let resp = ui.allocate_rect(rect, Sense::click_and_drag());
     if resp.clicked() {
@@ -1068,22 +1414,53 @@ pub fn paint(ui: &mut egui::Ui, ns: &mut Netspace, t: f32) {
     tick(ns, ui, resp.has_focus(), dt);
 
     ui.painter().rect_filled(rect, 0.0, BG);
-    let pad = rect.shrink2(Vec2::new(4.0, 2.0));
-    let radar_w = (pad.width() * 0.24).clamp(188.0, 280.0);
-    let (view, radar) = pad.split_left_right_at_x(pad.right() - radar_w);
-    let inner = view.shrink2(Vec2::new(2.0, 0.0));
-    let cw = 6.0;
-    let ch = 10.0;
-    let cols = (inner.width() / cw).floor().clamp(36.0, 120.0) as i32;
-    let rows = (inner.height() / ch).floor().clamp(18.0, 48.0) as i32;
+    let pad = rect.shrink2(Vec2::new(if full { 0.0 } else { 4.0 }, if full { 0.0 } else { 2.0 }));
+    let radar_w = if full {
+        (pad.width() * 0.22).clamp(200.0, 280.0)
+    } else {
+        (pad.width() * 0.24).clamp(188.0, 280.0)
+    };
+    let (view, radar_split) = if full {
+        (pad, Rect::from_min_size(Pos2::ZERO, Vec2::ZERO))
+    } else {
+        pad.split_left_right_at_x(pad.right() - radar_w)
+    };
+    let inner = if full {
+        view
+    } else {
+        view.shrink2(Vec2::new(2.0, 0.0))
+    };
+    let mut cols = (inner.width() / if full { 6.0 } else { 6.5 }).floor() as i32;
+    let mut rows = (inner.height() / if full { 9.0 } else { 10.0 }).floor() as i32;
+    cols = cols.clamp(40, if full { 220 } else { 120 });
+    rows = rows.clamp(22, if full { 96 } else { 48 });
+    let cw = inner.width() / cols as f32;
+    let ch = inner.height() / rows as f32;
     if cols < 10 || rows < 10 {
-        draw_radar(ns, ui.painter(), radar.shrink(4.0));
+        let rr = if full {
+            Rect::from_min_size(
+                pad.right_bottom() - Vec2::new(radar_w + 10.0, radar_w * 1.15 + 10.0),
+                Vec2::new(radar_w, radar_w * 1.15),
+            )
+        } else {
+            radar_split.shrink(4.0)
+        };
+        draw_radar(ns, ui.painter(), rr, full);
         return;
     }
     let painter = ui.painter().with_clip_rect(inner);
-    let font = FontId::new(10.0, theme::mono());
-    if ns.atlas.is_none() {
-        ns.atlas = Some(Atlas::new(&painter, font));
+    let font_px = ch.clamp(8.0, 14.0);
+    let need = ns
+        .atlas
+        .as_ref()
+        .map(|a| (a.px - font_px).abs() > 0.45)
+        .unwrap_or(true);
+    if need {
+        ns.atlas = Some(Atlas::new(
+            &painter,
+            FontId::new(font_px, theme::mono()),
+            font_px,
+        ));
     }
     let atlas = ns.atlas.as_ref().unwrap();
     let cam_y = 1.44 + ns.bob.sin() * 0.05;
@@ -1166,23 +1543,89 @@ pub fn paint(ui: &mut egui::Ui, ns: &mut Netspace, t: f32) {
             7 => "TRAUMA WARD",
             8 => "NCPD",
             9 => "NOMAD DINER",
+            10 => "KIOSK",
+            11 => "SHRINE",
+            12 => "GLASSHOUSE",
+            13 => "CANOPY",
             _ => "HAB BLOCK",
         }
     } else {
         match center_kind {
             Kind::Plaza => "CORP PLAZA",
             Kind::Park => "GRID PARK",
+            Kind::Garden => "PLANTER",
             Kind::Avenue => "AVENUE",
             Kind::Street => "SIDE STREET",
             Kind::Alley => "ALLEY",
             Kind::Sidewalk => "WALK",
             Kind::Market => "NIGHT MARKET",
             Kind::Trench => "DATA TRENCH",
+            Kind::Canal => "CANAL",
             Kind::Solid => "ICE",
         }
     };
 
-    draw_radar(ns, ui.painter(), radar.shrink(4.0));
+    let radar_rect = if full {
+        Rect::from_min_size(
+            pad.right_bottom() - Vec2::new(radar_w + 12.0, radar_w * 1.18 + 14.0),
+            Vec2::new(radar_w, radar_w * 1.18),
+        )
+    } else {
+        radar_split.shrink(4.0)
+    };
+    draw_radar(ns, ui.painter(), radar_rect, full);
+    if full {
+        draw_cruise_hud(ui, ns, pad);
+    }
+}
+
+fn draw_cruise_hud(ui: &mut egui::Ui, ns: &mut Netspace, pad: Rect) {
+    let bar = Rect::from_min_max(
+        pad.left_top() + Vec2::new(10.0, 8.0),
+        Pos2::new(pad.right() - 12.0, pad.top() + 34.0),
+    );
+    ui.painter()
+        .rect_filled(bar, 0.0, Color32::from_rgba_unmultiplied(8, 8, 5, 200));
+    ui.painter()
+        .rect_stroke(bar, 0.0, Stroke::new(1.0, ORANGE), StrokeKind::Inside);
+    ui.painter().text(
+        bar.left_center() + Vec2::new(12.0, 0.0),
+        Align2::LEFT_CENTER,
+        format!(
+            "NETSPACE  ·  {}  ·  {:05.1},{:05.1}  ·  {}  ·  WASD Q/E  SHIFT  C AUTO",
+            ns.district(),
+            ns.x,
+            ns.z,
+            ns.look
+        ),
+        FontId::new(12.0, theme::mono()),
+        CYAN,
+    );
+    let auto = Rect::from_min_size(bar.right_center() + Vec2::new(-118.0, -12.0), Vec2::new(108.0, 24.0));
+    let on = ns.cruise;
+    theme::fill_chamfer(
+        ui,
+        auto,
+        4.0,
+        if on { CYAN } else { Color32::from_rgba_unmultiplied(77, 232, 255, 18) },
+        Stroke::new(1.4, CYAN),
+    );
+    ui.painter().text(
+        auto.center(),
+        Align2::CENTER_CENTER,
+        if on { "AUTO ON" } else { "AUTO WALK" },
+        FontId::new(12.0, theme::ui_font()),
+        if on { INK } else { CYAN },
+    );
+    let hit = ui.interact(auto, egui::Id::new("ns-cruise"), Sense::click());
+    if hit.clicked() {
+        ns.cruise = !ns.cruise;
+        ns.stuck = 0.0;
+        if ns.cruise {
+            cruise_pick(ns, true);
+            ns.yaw = dir_yaw(ns.cruise_dir);
+        }
+    }
 }
 
 fn blit(
@@ -1244,7 +1687,13 @@ fn draw_sprites(
             _ => 1.55,
         };
         let spr_h = (body_h / depth) * rows as f32 * 0.5;
-        let lift = if s.kind == 3 { 2.2 + (t * 2.0).sin() * 0.4 } else { 0.0 };
+        let lift = if s.kind == 3 {
+            2.2 + (t * 2.0).sin() * 0.4
+        } else if s.kind == 11 {
+            3.4 + (t * 1.6).sin() * 0.8
+        } else {
+            0.0
+        };
         let bot = horizon + ((cam_y - lift) / depth) * rows as f32 * 0.20;
         let top = bot - spr_h;
         let width = match s.kind {
@@ -1275,20 +1724,17 @@ fn draw_sprites(
                 ),
                 3 => ('*', fogged(CYAN, depth * 0.6)),
                 4 => ('A', fogged(ORANGE, depth)),
+                9 => (
+                    if dc == 0 { 'Y' } else { '"' },
+                    fogged(MUTED, depth),
+                ),
+                10 => ('*', fogged(ORANGE, depth * 0.7)),
+                11 => ('^', fogged(CYAN, depth * 0.5)),
+                12 => ('n', fogged(DIM, depth)),
                 5 => ('#', fogged(DIM, depth)),
-                6 => (
-                    if ((t * 6.0) as i32) % 2 == 0 { '*' } else { '+' },
-                    fogged(ORANGE, depth * 0.5),
-                ),
+                6 => ('*', fogged(ORANGE, depth * 0.5)),
                 7 => ('=', fogged(CYAN, depth * 0.4)),
-                8 => (
-                    if ((t * 3.0) as i32) % 2 == 0 { 'O' } else { 'o' },
-                    if ((t * 3.0) as i32) % 2 == 0 {
-                        fogged(ORANGE, depth)
-                    } else {
-                        fogged(CYAN, depth)
-                    },
-                ),
+                8 => ('O', fogged(ORANGE, depth)),
                 _ => ('I', fogged(CYAN, depth)),
             };
             let r0 = top.max(0.0) as i32;
@@ -1307,19 +1753,20 @@ fn draw_sprites(
     }
 }
 
-fn draw_radar(ns: &Netspace, painter: &egui::Painter, rect: Rect) {
+fn draw_radar(ns: &Netspace, painter: &egui::Painter, rect: Rect, rich: bool) {
     painter.rect_filled(rect, 0.0, TITLE);
+    painter.rect_stroke(rect, 0.0, Stroke::new(2.0, ORANGE), StrokeKind::Inside);
     painter.rect_stroke(
-        rect,
+        rect.shrink(3.0),
         0.0,
-        Stroke::new(2.0, ORANGE),
+        Stroke::new(1.0, mix(CYAN, BG, 0.4)),
         StrokeKind::Inside,
     );
     let inner = rect.shrink2(Vec2::new(8.0, 8.0));
     painter.text(
         inner.left_top(),
         Align2::LEFT_TOP,
-        "RADAR",
+        if rich { "NETMAP" } else { "RADAR" },
         FontId::new(13.0, theme::display()),
         ORANGE,
     );
@@ -1331,12 +1778,12 @@ fn draw_radar(ns: &Netspace, painter: &egui::Painter, rect: Rect) {
         CYAN,
     );
     let grid = Rect::from_min_max(
-        inner.left_top() + Vec2::new(0.0, 22.0),
-        inner.right_bottom() - Vec2::new(0.0, 36.0),
+        inner.left_top() + Vec2::new(0.0, 20.0),
+        inner.right_bottom() - Vec2::new(0.0, if rich { 42.0 } else { 36.0 }),
     );
     painter.rect_filled(grid, 0.0, BG);
     painter.rect_stroke(grid, 0.0, Stroke::new(1.0, mix(ORANGE, BG, 0.45)), StrokeKind::Inside);
-    let cells = 36i32;
+    let cells = if rich { 52i32 } else { 36i32 };
     let cw = grid.width() / cells as f32;
     let ch = grid.height() / cells as f32;
     let px = ns.x.floor() as i32;
@@ -1351,34 +1798,84 @@ fn draw_radar(ns: &Netspace, painter: &egui::Painter, rect: Rect) {
                     mix(CYAN, BG, 0.15)
                 } else if c.facade == 4 {
                     mix(ORANGE, CYAN, 0.25)
+                } else if c.facade == 13 {
+                    mix(MUTED, ORANGE, 0.35)
                 } else {
-                    ORANGE
+                    mix(ORANGE, BG, 0.08)
                 }
             } else {
                 match c.kind {
                     Kind::Plaza => mix(CYAN, BG, 0.35),
-                    Kind::Park => mix(MUTED, BG, 0.2),
+                    Kind::Park => mix(MUTED, BG, 0.15),
+                    Kind::Garden => mix(MUTED, ORANGE, 0.55),
                     Kind::Market => mix(ORANGE, BG, 0.35),
-                    Kind::Trench => mix(CYAN, BG, 0.45),
-                    Kind::Avenue => mix(DIM, BG, 0.15),
-                    Kind::Street => mix(DIM, BG, 0.35),
+                    Kind::Trench | Kind::Canal => mix(CYAN, BG, 0.4),
+                    Kind::Avenue => mix(DIM, BG, 0.08),
+                    Kind::Street => mix(DIM, BG, 0.28),
                     Kind::Alley => mix(DIM, BG, 0.5),
+                    Kind::Sidewalk => mix(PANEL, MUTED, 0.35),
                     _ => mix(PANEL, BG, 0.1),
                 }
             };
             let p = Pos2::new(grid.left() + mx as f32 * cw, grid.top() + mz as f32 * ch);
-            painter.rect_filled(Rect::from_min_size(p, Vec2::new(cw.max(1.0), ch.max(1.0))), 0.0, col);
+            painter.rect_filled(
+                Rect::from_min_size(p, Vec2::new(cw.max(1.0), ch.max(1.0))),
+                0.0,
+                col,
+            );
         }
     }
     let cx = grid.center();
     let facing = Vec2::new(ns.yaw.sin(), -ns.yaw.cos());
-    let tip = cx + facing * (cw.max(ch) * 4.5);
-    painter.line_segment([cx, tip], Stroke::new(2.0, CYAN));
-    painter.rect_filled(
-        Rect::from_center_size(cx, Vec2::splat((cw.max(ch) * 1.6).max(4.0))),
-        0.0,
+    let range = cw.max(ch);
+    for i in 1..=3 {
+        let r = range * (6.0 + i as f32 * 5.0);
+        painter.circle_stroke(cx, r.min(grid.width() * 0.46), Stroke::new(1.0, mix(CYAN, BG, 0.72)));
+    }
+    let left = Vec2::new((-FOV * 0.5).sin(), -(-FOV * 0.5).cos());
+    let right = Vec2::new((FOV * 0.5).sin(), -(FOV * 0.5).cos());
+    let rot = |v: Vec2| {
+        let c = ns.yaw.cos();
+        let s = ns.yaw.sin();
+        Vec2::new(v.x * c - v.y * s, v.x * s + v.y * c)
+    };
+    let cone = range * 14.0;
+    painter.line_segment([cx, cx + rot(left) * cone], Stroke::new(1.0, mix(CYAN, BG, 0.35)));
+    painter.line_segment([cx, cx + rot(right) * cone], Stroke::new(1.0, mix(CYAN, BG, 0.35)));
+    painter.line_segment([cx, cx + facing * (range * 7.0)], Stroke::new(2.0, CYAN));
+    for s in &ns.sprites {
+        let dx = ((s.x - ns.x).round() as i32).clamp(-cells / 2, cells / 2);
+        let dz = ((s.z - ns.z).round() as i32).clamp(-cells / 2, cells / 2);
+        if dx.abs() >= cells / 2 || dz.abs() >= cells / 2 {
+            continue;
+        }
+        let p = Pos2::new(
+            grid.center().x + dx as f32 * cw,
+            grid.center().y + dz as f32 * ch,
+        );
+        let col = match s.kind {
+            0 | 7 => ORANGE,
+            1 => CREAM,
+            2 | 8 => CYAN,
+            3 | 11 => mix(CYAN, CREAM, 0.4),
+            9 | 10 => MUTED,
+            _ => DIM,
+        };
+        painter.rect_filled(Rect::from_center_size(p, Vec2::splat(2.2)), 0.0, col);
+    }
+    let tip = cx + facing * (range * 3.2);
+    let left_w = cx + Vec2::new(-facing.y, facing.x) * (range * 1.4) - facing * range;
+    let right_w = cx + Vec2::new(facing.y, -facing.x) * (range * 1.4) - facing * range;
+    painter.add(egui::Shape::convex_polygon(
+        vec![tip, left_w, right_w],
         CYAN,
-    );
+        Stroke::NONE,
+    ));
+    let n_pos = grid.center_top() + Vec2::new(0.0, 10.0);
+    painter.text(n_pos, Align2::CENTER_CENTER, "N", FontId::new(11.0, theme::mono()), ORANGE);
+    painter.text(grid.center_bottom() + Vec2::new(0.0, -10.0), Align2::CENTER_CENTER, "S", FontId::new(10.0, theme::mono()), DIM);
+    painter.text(grid.left_center() + Vec2::new(10.0, 0.0), Align2::CENTER_CENTER, "W", FontId::new(10.0, theme::mono()), DIM);
+    painter.text(grid.right_center() + Vec2::new(-10.0, 0.0), Align2::CENTER_CENTER, "E", FontId::new(10.0, theme::mono()), DIM);
     painter.text(
         inner.left_bottom() + Vec2::new(0.0, -18.0),
         Align2::LEFT_BOTTOM,
@@ -1396,7 +1893,7 @@ fn draw_radar(ns: &Netspace, painter: &egui::Painter, rect: Rect) {
     painter.text(
         inner.right_bottom(),
         Align2::RIGHT_BOTTOM,
-        "YOU",
+        if rich { "YOU · FOV" } else { "YOU" },
         FontId::new(11.0, theme::mono()),
         ORANGE,
     );
@@ -1429,6 +1926,8 @@ mod tests {
         let mut walls = 0;
         let mut plaza = 0;
         let mut alley = 0;
+        let mut canal = 0;
+        let mut garden = 0;
         for z in 0..MAP {
             for x in 0..MAP {
                 let c = ns.at(x, z);
@@ -1443,12 +1942,20 @@ mod tests {
                 if c.kind == Kind::Alley {
                     alley += 1;
                 }
+                if c.kind == Kind::Canal {
+                    canal += 1;
+                }
+                if c.kind == Kind::Garden {
+                    garden += 1;
+                }
             }
         }
         assert!(walk > 800, "walkable {walk}");
         assert!(walls > 800, "walls {walls}");
         assert!(plaza >= 16, "plaza {plaza}");
         assert!(alley > 10, "alley {alley}");
+        assert!(canal > 20, "canal {canal}");
+        assert!(garden > 10, "garden {garden}");
         assert!(ns.at(ns.x.floor() as i32, ns.z.floor() as i32).h < 0.2);
     }
 
@@ -1466,6 +1973,19 @@ mod tests {
         assert!(ns.walkable(ns.x, ns.z));
         assert!(ns.at(ns.x.floor() as i32, ns.z.floor() as i32).h < 0.2);
         assert!(ns.x != start_x);
+    }
+
+    #[test]
+    fn cruise_picks_street_waypoints() {
+        let mut ns = Netspace::new();
+        ns.cruise = true;
+        cruise_pick(&mut ns, true);
+        let d0 = wrap_delta(ns.cruise_tx, ns.x).hypot(wrap_delta(ns.cruise_tz, ns.z));
+        assert!(d0 > 0.4, "waypoint too close {d0}");
+        for _ in 0..40 {
+            cruise_step(&mut ns, 0.05);
+        }
+        assert!(ns.walkable(ns.x, ns.z));
     }
 
     #[test]
@@ -1490,6 +2010,6 @@ mod tests {
         }
         assert!(signs > 40, "signs {signs}");
         assert!(facades.iter().filter(|n| **n > 0).count() >= 4);
-        assert!(ns.sprites.len() > 20);
+        assert!(ns.sprites.len() > 40);
     }
 }
