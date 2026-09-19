@@ -21,7 +21,7 @@ The deck writes here so you can see what changed after an update. Newest first. 
 - House 21 is a felt table with real card faces, a hole card, and chip stacks.
 - Blight radio adds Night City stations on top of Riot, Gloom, Dusk, and Warehouse.
 - Jack-in is a walkable ASCII Night City (WASD, look-drag, Shift to run) with more building types, trains, lights, holograms, cached glyph atlas, and a capped ray grid.
-- Background node starts with the window. Status bar NODE is ACTIVE or OFFLINE. Online starts the node; press again to stop it.
+- Background node starts with the window. Status bar NODE is ACTIVE or OFFLINE. Online starts the node; press again to stop it. If the child process cannot bind, the node runs in-process so Online still works.
 - Internet tables are node-to-node: encrypted invite (`blightnet://key@addrs`), UDP hole punch, optional UPnP. No Cloudflare tunnel.
 - Table wire is X25519 + ChaCha20-Poly1305. Chat, files, voice, video, mix, sheets, tokens, and maps sync. Master volume stays local.
 - Seats on TABLE: click a name to open that player's sheet. Combat log and private notes dock on the right and scroll. Panels close by pressing the same button. Hover tips follow the cursor.

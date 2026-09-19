@@ -736,39 +736,92 @@ fn try_connect(root: &Path, handle: &str) -> Option<TcpStream> {
     None
 }
 
+fn log_line(root: &Path, msg: &str) {
+    let _ = std::fs::create_dir_all(root.join("data"));
+    if let Ok(mut f) = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(log_path(root))
+    {
+        let _ = writeln!(f, "{msg}");
+    }
+}
+
+fn clear_stale_lock(root: &Path) {
+    let Some(lock) = read_lock(root) else {
+        return;
+    };
+    if try_tcp(lock.port).is_some() {
+        return;
+    }
+    if lock.port != IPC_PORT && try_tcp(IPC_PORT).is_some() {
+        return;
+    }
+    let _ = std::fs::remove_file(lock_path(root));
+}
+
 fn spawn_proc(root: &Path) -> bool {
     let Ok(exe) = std::env::current_exe() else {
+        log_line(root, "node spawn: no current exe");
         return false;
     };
     let log = log_path(root);
     let _ = std::fs::create_dir_all(root.join("data"));
-    let file = OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(&log)
-        .ok();
-    let mut cmd = Command::new(exe);
+    log_line(
+        root,
+        &format!("node spawn: {exe:?} daemon --root {root:?}"),
+    );
+    let Ok(file) = OpenOptions::new().create(true).append(true).open(&log) else {
+        return false;
+    };
+    let Ok(err) = file.try_clone() else {
+        return false;
+    };
+    let mut cmd = Command::new(&exe);
     cmd.arg("daemon").arg("--root").arg(root);
     cmd.current_dir(root);
-    crate::sys::hide(&mut cmd);
+    cmd.env("BLIGHTNET_NODE", "1");
     cmd.stdin(std::process::Stdio::null());
-    if let Some(f) = file {
-        cmd.stdout(f.try_clone().unwrap_or(f));
-    }
-    if let Ok(f) = OpenOptions::new().create(true).append(true).open(&log) {
-        cmd.stderr(f);
-    }
+    cmd.stdout(file);
+    cmd.stderr(err);
     #[cfg(unix)]
     {
         use std::os::unix::process::CommandExt;
-        cmd.process_group(0);
+        unsafe {
+            cmd.pre_exec(|| {
+                libc::setsid();
+                libc::signal(libc::SIGHUP, libc::SIG_IGN);
+                Ok(())
+            });
+        }
     }
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;
-        cmd.creation_flags(0x00000008 | 0x08000000);
+        // CREATE_NO_WINDOW only. DETACHED_PROCESS drops stdio and the child exits.
+        crate::sys::hide(&mut cmd);
+        cmd.creation_flags(0x08000000);
     }
-    cmd.spawn().is_ok()
+    match cmd.spawn() {
+        Ok(child) => {
+            log_line(root, &format!("node spawn: pid {}", child.id()));
+            true
+        }
+        Err(e) => {
+            log_line(root, &format!("node spawn failed: {e}"));
+            false
+        }
+    }
+}
+
+fn start_embedded(root: PathBuf) {
+    log_line(&root, "node: starting in-process");
+    thread::Builder::new()
+        .name("blightnet-node".into())
+        .spawn(move || {
+            let _ = run_node(root);
+        })
+        .ok();
 }
 
 pub fn is_up(root: &Path) -> bool {
@@ -781,19 +834,26 @@ pub fn is_up(root: &Path) -> bool {
 }
 
 pub fn connect_or_spawn(root: &Path, handle: &str) -> Result<TcpStream, String> {
+    clear_stale_lock(root);
     if let Some(s) = try_connect(root, handle) {
         return Ok(s);
     }
-    if !spawn_proc(root) {
-        return Err("could not start the Blightnet node".into());
-    }
+    let _ = spawn_proc(root);
     for _ in 0..CONNECT_TRIES {
         thread::sleep(Duration::from_millis(80));
         if let Some(s) = try_connect(root, handle) {
             return Ok(s);
         }
     }
-    Err("node started but did not accept this window".into())
+    log_line(root, "node spawn did not accept; embedding in this process");
+    start_embedded(root.to_path_buf());
+    for _ in 0..CONNECT_TRIES {
+        thread::sleep(Duration::from_millis(80));
+        if let Some(s) = try_connect(root, handle) {
+            return Ok(s);
+        }
+    }
+    Err("could not start the Blightnet node".into())
 }
 
 pub fn run_client(
@@ -844,26 +904,28 @@ pub fn run_client(
 }
 
 pub fn run(root: PathBuf) -> i32 {
-    #[cfg(unix)]
-    unsafe {
-        libc::setsid();
-        libc::signal(libc::SIGHUP, libc::SIG_IGN);
+    if std::env::var_os("BLIGHTNET_NODE").is_none() {
+        #[cfg(unix)]
+        unsafe {
+            if libc::setsid() != -1 {
+                libc::signal(libc::SIGHUP, libc::SIG_IGN);
+            }
+        }
     }
     run_node(root)
 }
 
 fn run_node(root: PathBuf) -> i32 {
     let _ = std::fs::create_dir_all(root.join("data"));
-    if try_tcp(IPC_PORT).is_some() {
-        eprintln!("blightnet node already running");
-        return 0;
-    }
+    eprintln!("blightnet node starting in {}", root.display());
+    let _ = std::io::stderr().flush();
     let listener = match TcpListener::bind(ipc_addr(IPC_PORT))
         .or_else(|_| TcpListener::bind(ipc_addr(0)))
     {
         Ok(l) => l,
         Err(e) => {
             eprintln!("blightnet node bind: {e}");
+            let _ = std::io::stderr().flush();
             return 1;
         }
     };
@@ -877,6 +939,8 @@ fn run_node(root: PathBuf) -> i32 {
         pid: std::process::id(),
     };
     write_lock(&root, &lock);
+    eprintln!("blightnet node listening on 127.0.0.1:{port}");
+    let _ = std::io::stderr().flush();
     let cfg = load_cfg(&root);
     save_cfg(&root, &cfg);
     let persist = load_persist(&root);
@@ -1372,6 +1436,8 @@ mod tests {
             },
         );
         assert!(!try_tcp(1).is_some() && !pid_alive(0));
+        clear_stale_lock(&dir);
+        assert!(read_lock(&dir).is_none());
         let _ = std::fs::remove_dir_all(&dir);
     }
 
