@@ -1,21 +1,24 @@
 use eframe::egui::{
-    self, Color32, CornerRadius, FontData, FontDefinitions, FontFamily, FontId, Pos2, Rect, Sense,
+    self, Color32, FontData, FontDefinitions, FontFamily, FontId, Pos2, Rect, Sense,
     Shape, Stroke, StrokeKind, Ui, Vec2,
 };
 use std::borrow::Cow;
 use std::sync::Arc;
 
 pub const ORANGE: Color32 = Color32::from_rgb(255, 106, 18);
-pub const BG: Color32 = Color32::from_rgb(12, 12, 8);
-pub const PANEL: Color32 = Color32::from_rgb(10, 10, 6);
-pub const TITLE: Color32 = Color32::from_rgb(17, 17, 8);
-pub const MUTED: Color32 = Color32::from_rgb(154, 147, 96);
-pub const DIM: Color32 = Color32::from_rgb(109, 104, 64);
-pub const CREAM: Color32 = Color32::from_rgb(207, 200, 147);
+pub const BG: Color32 = Color32::from_rgb(8, 10, 14);
+pub const PANEL: Color32 = Color32::from_rgb(10, 12, 16);
+pub const TITLE: Color32 = Color32::from_rgb(14, 18, 24);
+pub const MUTED: Color32 = Color32::from_rgb(138, 156, 168);
+pub const DIM: Color32 = Color32::from_rgb(92, 112, 124);
+pub const CREAM: Color32 = Color32::from_rgb(214, 226, 232);
 pub const CYAN: Color32 = Color32::from_rgb(77, 232, 255);
-pub const KILL: Color32 = Color32::from_rgb(255, 0, 60);
+pub const NEON_RED: Color32 = Color32::from_rgb(255, 23, 68);
+pub const KILL: Color32 = NEON_RED;
+pub const ACID: Color32 = Color32::from_rgb(214, 255, 63);
+pub const HOT: Color32 = Color32::from_rgb(255, 79, 216);
 pub const INK: Color32 = Color32::from_rgb(17, 17, 17);
-pub const RAIL: Color32 = Color32::from_rgb(10, 10, 6);
+pub const RAIL: Color32 = Color32::from_rgb(8, 12, 16);
 
 pub fn mono() -> FontFamily {
     FontFamily::Name("share".into())
@@ -119,9 +122,9 @@ impl Palette {
 
 pub fn index_palette() -> Palette {
     Palette {
-        gold: ORANGE,
-        gold_soft: Color32::from_rgb(255, 176, 96),
-        ember: CYAN,
+        gold: CYAN,
+        gold_soft: Color32::from_rgb(186, 244, 255),
+        ember: ACID,
         ink: CREAM,
         muted: MUTED,
         dim: DIM,
@@ -138,20 +141,13 @@ pub fn fade(c: Color32, a: u8) -> Color32 {
 pub fn pane() -> egui::Frame {
     egui::Frame::NONE
         .fill(PANEL)
-        .stroke(Stroke::new(1.0, ORANGE))
+        .stroke(Stroke::new(1.0, fade(HOT, 200)))
         .inner_margin(egui::Margin::symmetric(12, 10))
 }
 
 pub fn plate(ui: &Ui, rect: Rect) {
-    fill_chamfer(ui, rect, 10.0, PANEL, Stroke::new(1.5, ORANGE));
-    ui.painter().rect_stroke(
-        rect.shrink(3.0),
-        0.0,
-        Stroke::new(1.0, fade(CYAN, 55)),
-        StrokeKind::Inside,
-    );
-    hairline_top(ui, rect.shrink(1.0), fade(ORANGE, 90));
-    brackets(ui, rect.shrink(8.0), fade(CYAN, 180), 12.0);
+    fill_chamfer(ui, rect, 8.0, PANEL, Stroke::new(1.0, fade(HOT, 190)));
+    hairline_top(ui, rect.shrink(1.0), fade(CYAN, 170));
 }
 
 pub fn hairline_top(ui: &Ui, rect: Rect, color: Color32) {
@@ -167,7 +163,7 @@ pub fn hatch_bar(ui: &Ui, rect: Rect) {
     ui.painter().rect_filled(rect, 0.0, TITLE);
     hatch(ui, rect, Color32::from_rgba_unmultiplied(255, 106, 18, 16));
     ui.painter()
-        .hline(rect.x_range(), rect.bottom(), Stroke::new(2.0, ORANGE));
+        .hline(rect.x_range(), rect.bottom(), Stroke::new(2.0, CYAN));
 }
 
 pub fn wide_btn(ui: &mut Ui, label: &str, sub: &str, on: bool) -> egui::Response {
@@ -175,33 +171,15 @@ pub fn wide_btn(ui: &mut Ui, label: &str, sub: &str, on: bool) -> egui::Response
     let h = if sub.is_empty() { 36.0 } else { 52.0 };
     let (rect, resp) = ui.allocate_exact_size(Vec2::new(w, h), Sense::click());
     let hover = resp.hovered();
-    let fill = if on {
-        ORANGE
-    } else if hover {
-        fade(ORANGE, 48)
-    } else {
-        fade(ORANGE, 14)
-    };
-    fill_chamfer(ui, rect, 8.0, fill, Stroke::new(if on { 1.6 } else { 1.0 }, ORANGE));
-    if hover && !on {
-        ui.painter().rect_stroke(
-            rect.expand(1.0),
-            0.0,
-            Stroke::new(1.0, fade(ORANGE, 80)),
-            StrokeKind::Outside,
-        );
-    }
-    hairline_top(ui, rect.shrink(2.0), fade(CREAM, if on || hover { 50 } else { 22 }));
-    if on {
-        let tick = Rect::from_min_size(rect.left_top() + Vec2::new(0.0, 6.0), Vec2::new(3.0, rect.height() - 12.0));
-        ui.painter().rect_filled(tick, 0.0, CYAN);
-    }
-    let fg = if on || hover { INK } else { ORANGE };
-    let muted = if on || hover {
-        Color32::from_rgb(40, 32, 16)
-    } else {
-        MUTED
-    };
+    let edge = if on || hover { ACID } else { fade(CYAN, 90) };
+    fill_chamfer(ui, rect, 6.0, PANEL, Stroke::new(if on { 1.5 } else { 1.0 }, edge));
+    ui.painter().hline(
+        (rect.left() + 8.0)..=(rect.right() - 8.0),
+        rect.bottom() - 1.0,
+        Stroke::new(1.0, if on { ACID } else { fade(CYAN, 70) }),
+    );
+    let fg = if on || hover { ACID } else { CREAM };
+    let muted = CYAN;
     let clip = rect.shrink2(Vec2::new(12.0, 4.0));
     let p = ui.painter().with_clip_rect(clip);
     p.text(
@@ -240,17 +218,17 @@ pub fn section_head(ui: &mut Ui, id: &str, title: &str) {
             egui::RichText::new(title)
                 .family(display())
                 .size(18.0)
-                .color(ORANGE),
+                .color(ACID),
         );
         let (r, _) = ui.allocate_exact_size(
             Vec2::new(ui.available_width().max(8.0), 2.0),
             Sense::hover(),
         );
-        ui.painter().rect_filled(r, 0.0, fade(ORANGE, 140));
+        ui.painter().rect_filled(r, 0.0, fade(CYAN, 80));
         ui.painter().rect_filled(
             Rect::from_min_size(r.left_top(), Vec2::new((r.width() * 0.22).max(8.0), 2.0)),
             0.0,
-            CYAN,
+            ACID,
         );
     });
 }
@@ -453,7 +431,7 @@ pub fn analog_watch(ui: &mut Ui, minutes: u32, pal: Palette) -> egui::Response {
             c,
             c + Vec2::new(hour_a.sin() * 9.0, -hour_a.cos() * 9.0),
         ],
-        Stroke::new(2.4, pal.gold),
+        Stroke::new(2.4, ACID),
     );
     p.line_segment(
         [c, c + Vec2::new(min_a.sin() * 13.5, -min_a.cos() * 13.5)],
@@ -488,34 +466,34 @@ pub fn place_btn(ui: &mut Ui, label: &str, on: bool, pal: Palette) -> egui::Resp
 pub fn visuals() -> egui::Visuals {
     let mut v = egui::Visuals::dark();
     v.dark_mode = true;
-    v.override_text_color = Some(ORANGE);
+    v.override_text_color = Some(CREAM);
     v.panel_fill = BG;
     v.window_fill = PANEL;
-    v.extreme_bg_color = Color32::from_rgb(5, 5, 3);
-    v.faint_bg_color = Color32::from_rgb(16, 14, 8);
-    v.code_bg_color = Color32::from_rgb(8, 8, 4);
+    v.extreme_bg_color = Color32::from_rgb(5, 7, 12);
+    v.faint_bg_color = Color32::from_rgb(16, 20, 28);
+    v.code_bg_color = Color32::from_rgb(6, 10, 14);
     v.hyperlink_color = CYAN;
-    v.window_stroke = Stroke::new(1.0, ORANGE);
+    v.window_stroke = Stroke::new(1.0, fade(ACID, 180));
     v.slider_trailing_fill = true;
     v.handle_shape = egui::style::HandleShape::Rect { aspect_ratio: 0.45 };
     v.widgets.noninteractive.bg_fill = PANEL;
     v.widgets.noninteractive.fg_stroke = Stroke::new(1.0, MUTED);
     v.widgets.inactive.bg_fill = PANEL;
     v.widgets.inactive.weak_bg_fill = Color32::from_rgb(14, 12, 8);
-    v.widgets.inactive.bg_stroke = Stroke::new(1.0, fade(ORANGE, 110));
-    v.widgets.inactive.fg_stroke = Stroke::new(1.0, ORANGE);
-    v.widgets.hovered.bg_fill = Color32::from_rgb(42, 28, 10);
-    v.widgets.hovered.weak_bg_fill = Color32::from_rgb(42, 28, 10);
-    v.widgets.hovered.bg_stroke = Stroke::new(1.0, ORANGE);
-    v.widgets.hovered.fg_stroke = Stroke::new(1.0, Color32::from_rgb(255, 176, 96));
-    v.widgets.active.bg_fill = ORANGE;
-    v.widgets.active.bg_stroke = Stroke::new(1.0, CYAN);
+    v.widgets.inactive.bg_stroke = Stroke::new(1.0, fade(HOT, 140));
+    v.widgets.inactive.fg_stroke = Stroke::new(1.0, CREAM);
+    v.widgets.hovered.bg_fill = Color32::from_rgb(28, 16, 28);
+    v.widgets.hovered.weak_bg_fill = Color32::from_rgb(28, 16, 28);
+    v.widgets.hovered.bg_stroke = Stroke::new(1.0, CYAN);
+    v.widgets.hovered.fg_stroke = Stroke::new(1.0, ACID);
+    v.widgets.active.bg_fill = ACID;
+    v.widgets.active.bg_stroke = Stroke::new(1.0, HOT);
     v.widgets.active.fg_stroke = Stroke::new(1.0, INK);
-    v.widgets.open.bg_fill = Color32::from_rgb(22, 16, 8);
-    v.widgets.open.bg_stroke = Stroke::new(1.0, ORANGE);
-    v.selection.bg_fill = fade(ORANGE, 170);
-    v.selection.stroke = Stroke::new(1.0, CYAN);
-    v.text_cursor.stroke = Stroke::new(1.6, CYAN);
+    v.widgets.open.bg_fill = Color32::from_rgb(18, 12, 16);
+    v.widgets.open.bg_stroke = Stroke::new(1.0, HOT);
+    v.selection.bg_fill = fade(ACID, 80);
+    v.selection.stroke = Stroke::new(1.0, HOT);
+    v.text_cursor.stroke = Stroke::new(1.6, ACID);
     v.popup_shadow = egui::Shadow {
         offset: [2, 3],
         blur: 8,
@@ -571,6 +549,22 @@ pub fn brackets(ui: &Ui, rect: Rect, color: Color32, size: f32) {
     p.line_segment([rect.right_bottom(), rect.right_bottom() - Vec2::new(0.0, size)], s);
 }
 
+/// Four short corner marks. Steady HUD ticks, not a second frame.
+pub fn hud_ticks(ui: &Ui, rect: Rect, color: Color32, size: f32) {
+    let s = Stroke::new(1.5, color);
+    let p = ui.painter();
+    let marks = [
+        (rect.left_top(), Vec2::new(1.0, 1.0)),
+        (rect.right_top(), Vec2::new(-1.0, 1.0)),
+        (rect.left_bottom(), Vec2::new(1.0, -1.0)),
+        (rect.right_bottom(), Vec2::new(-1.0, -1.0)),
+    ];
+    for (c, dir) in marks {
+        p.line_segment([c, c + Vec2::new(size * dir.x, 0.0)], s);
+        p.line_segment([c, c + Vec2::new(0.0, size * dir.y)], s);
+    }
+}
+
 pub fn kicker(ui: &mut Ui, text: &str) {
     ui.horizontal(|ui| {
         ui.label(
@@ -581,15 +575,44 @@ pub fn kicker(ui: &mut Ui, text: &str) {
         );
         ui.label(
             egui::RichText::new(text)
-                .color(ORANGE)
+                .color(CREAM)
                 .family(mono())
                 .size(11.0),
         );
     });
 }
 
+/// Full-width row for the table rail. Acid edge when it is on or under the pointer.
+pub fn rail_row(ui: &mut Ui, label: &str, on: bool, danger: bool) -> egui::Response {
+    let w = ui.available_width().max(40.0);
+    let (rect, resp) = ui.allocate_exact_size(Vec2::new(w, 26.0), Sense::click());
+    let hover = resp.hovered();
+    let edge = if danger {
+        NEON_RED
+    } else if on || hover {
+        ACID
+    } else {
+        fade(CYAN, 80)
+    };
+    fill_chamfer(ui, rect, 4.0, PANEL, Stroke::new(1.0, edge));
+    ui.painter().text(
+        rect.left_center() + Vec2::new(10.0, 0.0),
+        egui::Align2::LEFT_CENTER,
+        label,
+        FontId::new(13.0, ui_font()),
+        if danger {
+            NEON_RED
+        } else if on || hover {
+            ACID
+        } else {
+            CREAM
+        },
+    );
+    attach_tip(resp, hint_for(label))
+}
+
 pub fn neon_btn(ui: &mut Ui, label: &str) -> egui::Response {
-    neon_btn_color(ui, label, ORANGE, false)
+    neon_btn_color(ui, label, CYAN, false)
 }
 
 pub fn neon_btn_color(ui: &mut Ui, label: &str, color: Color32, solid: bool) -> egui::Response {
@@ -597,39 +620,39 @@ pub fn neon_btn_color(ui: &mut Ui, label: &str, color: Color32, solid: bool) -> 
 }
 
 fn neon_btn_paint(ui: &mut Ui, label: &str, color: Color32, solid: bool) -> egui::Response {
+    let danger = color == KILL || color == NEON_RED;
+    let accent = if danger { NEON_RED } else if solid { ACID } else { HOT };
     let galley = ui.painter().layout_no_wrap(
         label.to_uppercase(),
         FontId::new(13.0, ui_font()),
-        if solid { INK } else { color },
+        if solid { INK } else { if danger { NEON_RED } else { CREAM } },
     );
     let size = Vec2::new((galley.size().x + 22.0).max(36.0), 30.0);
     let (rect, resp) = ui.allocate_exact_size(size, Sense::click());
     let hover = resp.hovered();
-    let fill = if solid || hover {
-        color
+    let fill = if danger && (solid || hover) {
+        fade(NEON_RED, if solid { 255 } else { 48 })
+    } else if solid {
+        ACID
+    } else if hover {
+        fade(CYAN, 36)
     } else {
-        fade(color, 16)
+        fade(HOT, 18)
     };
-    let fg = if solid || hover { INK } else { color };
-    let thick = if solid { 1.8 } else { 1.0 };
-    fill_chamfer(ui, rect, 6.0, fill, Stroke::new(thick, color));
-    hairline_top(ui, rect.shrink(1.5), fade(CREAM, if solid || hover { 55 } else { 28 }));
-    if solid {
-        ui.painter().hline(
-            rect.x_range(),
-            rect.bottom() - 1.5,
-            Stroke::new(1.5, fade(CYAN, 180)),
-        );
-    }
-    if hover {
-        ui.painter().rect_stroke(
-            rect.expand(1.5),
-            0.0,
-            Stroke::new(1.0, fade(color, 100)),
-            StrokeKind::Outside,
-        );
-        brackets(ui, rect.shrink(3.0), fade(CYAN, 160), 5.0);
-    }
+    let fg = if danger && solid {
+        CREAM
+    } else if solid {
+        INK
+    } else if danger {
+        NEON_RED
+    } else if hover {
+        ACID
+    } else {
+        CREAM
+    };
+    let stroke = if hover && !solid { CYAN } else { accent };
+    fill_chamfer(ui, rect, 6.0, fill, Stroke::new(if solid { 1.4 } else { 1.0 }, stroke));
+    hairline_top(ui, rect.shrink(1.5), fade(ACID, if solid { 80 } else { 28 }));
     ui.painter().galley(
         Pos2::new(
             rect.center().x - galley.size().x * 0.5,
@@ -676,20 +699,32 @@ fn hint_for(label: &str) -> Cow<'static, str> {
         "Leave" | "Leave table" => "Leave this table. Mix and map stay on the host.",
         "Copy address" | "Copy LAN address" => "Copy the blightnet:// join link for this table.",
         "Copy invite link" => "Copy the encrypted blightnet:// invite. Friends paste it into Join. No extra program.",
+        "Talk" => "Open chat, contacts, voice, video, and the player. Press again to close.",
         "Go online" | "Online" => {
-            "Start or stop the node. Online = node active (host, join, calls). Press again to take it offline."
+            "Start the node. Nothing listens until you press this. Press again to stop it."
         }
+        "UPDATE" => "Pull the latest Blightnet from GitHub, then restart.",
+        "ROTN" => "Open Rebels of the Net. A local fixer with a soul. Nothing leaves this deck.",
+        "Scenes" => "Open or close the scene list in the center of the table. Press again to close.",
+        "Run clock" => "Table time moves on its own. Midnight changes the day and restocks the stall.",
+        "−y" | "+y" => "Change the campaign year. Vendors restock.",
+        "−m" | "+m" => "Change the campaign month. Vendors restock.",
+        "−d" | "+d" => "Change the campaign day. Vendors restock.",
+        "Mix" => "Open or close layer volumes in the center of the table. Master volume stays on this computer.",
+        "Learn HTML" => "Eight short steps. Each one drops an example into the editor.",
+        "Learn CSS" => "Eight short steps for color, size, and spacing. No network CSS.",
         "Go offline" => "Stop the node. Hosting, joins, and presence go down.",
         "Chat" => "Open or close table talk, DMs, and file send.",
         "Contacts" => "Open or close people you have saved. Dial, DM, or call.",
         "Voice" => "Open or close mic, mute, and voice calls.",
         "Video" => "Open video chat, or send a video file from this chat.",
-        "Update" => "Rescan mics, speakers, and cameras on this deck.",
+        "Update" => "Pull the latest Blightnet from GitHub, then restart.",
+        "Rescan devices" => "Look again for mics, speakers, and cameras on this deck.",
         "Play" => "Play or resume your local music player. Does not change the table mix.",
         "Pause" => "Pause the local player. Does not change the table mix.",
         "Prev" => "Previous track in your local library.",
         "Next" => "Next track in your local library.",
-        "Library" => "Add files or folders to the local player.",
+        "Library" => "Open the player on this deck. Add files or folders. It is separate from the table mix.",
         "Record" => "Record a voice note from this mic, then Stop to send.",
         "Image" => "Send a picture to this chat.",
         "Audio" => "Send an audio file to this chat.",
@@ -756,7 +791,7 @@ fn hint_for(label: &str) -> Cow<'static, str> {
         "−" => "Step the table clock back 15 minutes.",
         "+" => "Step the table clock forward 15 minutes.",
         "Shuffle" => "Pick a random mix scene for this world.",
-        "Shuffle stall" => "Reroll vendor stock for this buyer.",
+
         "Deal" => "Deal a new House 21 hand.",
         "Hit" => "Take another card.",
         "Stand" => "Keep this hand. Dealer plays.",
@@ -794,15 +829,22 @@ fn hint_for(label: &str) -> Cow<'static, str> {
         "Crew video" => "Start a video call with this crew.",
         "Disband" => "Delete this crew from this deck.",
         "Add" => "Save this person to contacts.",
-        "Add files" => "Add audio files to the local player library.",
-        "Add folder" => "Add a folder of audio to the local player library.",
+        "Add files" => "Add pictures, video, PDF, or music from this computer.",
+        "Add folder" => "Add a folder of pictures, video, PDF, or music.",
+        "Full page" => "Give the player the whole page.",
+        "Dock" => "Put the player back in the side rail.",
+        "Import Roll20" => "Read a Roll20 character JSON from this computer. The file stays here.",
+        "Open outside" => "Open this file in another program.",
+        "Prev page" => "Show the previous PDF page.",
+        "Next page" => "Show the next PDF page.",
         "Clear" => "Empty this list.",
         "Download" => "Keep a copy of this file on this deck.",
         "Open video" => "Play this video in the system player.",
         "Table" => "Send chat to everyone at this table.",
         "YOU" => "Open your character sheet. Press again to close.",
         "Off air" => "Turn the Night City radio off.",
-        "×" => "Close Blightnet.",
+        "Stop" => "Stop the station. The table mix keeps playing.",
+        "×" => "Close this window. The node keeps running until Online is pressed again, or INDEX 00 DISCONNECT.",
         "□" => "Maximize this window.",
         "❐" => "Restore this window.",
         _ => "",
@@ -841,95 +883,84 @@ mod tests {
 pub fn sys_tile(ui: &mut Ui, id: &str, title: &str, sub: &str, go: &str, kill: bool) -> egui::Response {
     let size = Vec2::new(ui.available_width().max(120.0), 88.0);
     let (rect, resp) = ui.allocate_exact_size(size, Sense::click());
-    let color = if kill { KILL } else { ORANGE };
     let hover = resp.hovered();
-    let fill = if hover { color } else { fade(color, 12) };
-    fill_chamfer(ui, rect, 10.0, fill, Stroke::new(1.4, color));
-    hairline_top(ui, rect.shrink(2.0), fade(CREAM, if hover { 40 } else { 22 }));
-    if hover {
-        brackets(ui, rect.shrink(6.0), fade(CYAN, 200), 8.0);
+    let edge = if kill {
+        NEON_RED
+    } else if hover {
+        ACID
     } else {
-        brackets(ui, rect.shrink(8.0), fade(CYAN, 70), 7.0);
+        fade(HOT, 70)
+    };
+    fill_chamfer(ui, rect, 8.0, PANEL, Stroke::new(if hover || kill { 1.4 } else { 1.0 }, edge));
+    if !kill {
+        hud_ticks(ui, rect.shrink(5.0), fade(CYAN, if hover { 200 } else { 120 }), 8.0);
     }
-    let fg = if hover { INK } else { color };
-    let muted = if hover { Color32::from_rgb(40, 40, 40) } else { MUTED };
-    let id_c = if hover { INK } else { CYAN };
+    let id_c = if kill { NEON_RED } else { ACID };
     let clip = rect.shrink2(Vec2::new(12.0, 8.0));
     let p = ui.painter().with_clip_rect(clip);
     p.text(clip.left_top(), egui::Align2::LEFT_TOP, id, FontId::new(13.0, mono()), id_c);
-    p.text(clip.left_top() + Vec2::new(0.0, 18.0), egui::Align2::LEFT_TOP, title, FontId::new(16.0, display()), fg);
-    p.text(clip.left_top() + Vec2::new(0.0, 42.0), egui::Align2::LEFT_TOP, sub, FontId::new(11.0, mono()), muted);
-    let go_r = Rect::from_min_size(
-        clip.right_bottom() - Vec2::new(56.0, 18.0),
-        Vec2::new(56.0, 18.0),
+    p.text(
+        clip.left_top() + Vec2::new(0.0, 18.0),
+        egui::Align2::LEFT_TOP,
+        title,
+        FontId::new(16.0, display()),
+        CREAM,
     );
-    fill_chamfer(
-        ui,
-        go_r,
-        4.0,
-        if hover { INK } else { fade(color, 40) },
-        Stroke::new(1.0, if hover { INK } else { color }),
+    p.text(
+        clip.left_top() + Vec2::new(0.0, 42.0),
+        egui::Align2::LEFT_TOP,
+        sub,
+        FontId::new(11.0, mono()),
+        CYAN,
     );
-    ui.painter().text(
-        go_r.center(),
-        egui::Align2::CENTER_CENTER,
+    p.text(
+        clip.right_bottom(),
+        egui::Align2::RIGHT_BOTTOM,
         go,
         FontId::new(11.0, ui_font()),
-        if hover { color } else { fg },
+        if hover { ACID } else { DIM },
     );
     attach_tip(resp, format!("{title} — {sub}"))
 }
 
 pub fn jack_tile(ui: &mut Ui, t: f32) -> egui::Response {
+    let _ = t;
     let size = Vec2::new(ui.available_width().max(180.0), 216.0);
     let (rect, resp) = ui.allocate_exact_size(size, Sense::click());
     let hover = resp.hovered();
-    let fill = if hover { ORANGE } else { PANEL };
-    fill_chamfer(ui, rect, 22.0, fill, Stroke::new(2.0, ORANGE));
-    ui.painter().rect_stroke(
-        rect.shrink(4.0),
-        0.0,
-        Stroke::new(1.0, fade(CYAN, if hover { 40 } else { 80 })),
-        StrokeKind::Inside,
-    );
-    if !hover {
-        hatch(ui, rect.shrink(6.0), fade(ORANGE, 14));
-    }
-    brackets(ui, rect.shrink(10.0), if hover { INK } else { CYAN }, 16.0);
+    let edge = if hover { ACID } else { fade(HOT, 80) };
+    fill_chamfer(ui, rect, 10.0, PANEL, Stroke::new(if hover { 1.6 } else { 1.0 }, edge));
+    hud_ticks(ui, rect.shrink(8.0), fade(CYAN, if hover { 210 } else { 130 }), 14.0);
     let c = rect.center();
-    let p = ui.painter().with_clip_rect(rect.shrink(4.0));
-    for i in 0..3 {
-        let r = 48.0 + i as f32 * 18.0 + (t * 12.0 + i as f32).sin() * 3.0;
-        p.rect_stroke(
-            Rect::from_center_size(c, Vec2::splat(r * 2.0)),
-            CornerRadius::ZERO,
-            Stroke::new(
-                1.0,
-                if hover {
-                    Color32::from_black_alpha(80)
-                } else {
-                    fade(CYAN, 70)
-                },
-            ),
-            StrokeKind::Inside,
-        );
-    }
-    let scan_y = rect.top() + (t * 80.0 % rect.height());
-    p.hline(rect.x_range(), scan_y, Stroke::new(14.0, fade(ORANGE, 18)));
-    let id_c = if hover { Color32::from_rgb(40, 40, 40) } else { CYAN };
-    let fg = if hover { INK } else { ORANGE };
-    p.text(c + Vec2::new(0.0, -52.0), egui::Align2::CENTER_CENTER, "01", FontId::new(16.0, mono()), id_c);
-    p.text(c + Vec2::new(0.0, -10.0), egui::Align2::CENTER_CENTER, "BLIGHTNEXUS", FontId::new(24.0, display()), fg);
+    let p = ui.painter().with_clip_rect(rect.shrink(8.0));
     p.text(
-        c + Vec2::new(0.0, 22.0),
+        c + Vec2::new(0.0, -48.0),
+        egui::Align2::CENTER_CENTER,
+        "01",
+        FontId::new(16.0, mono()),
+        ACID,
+    );
+    p.text(
+        c + Vec2::new(0.0, -12.0),
+        egui::Align2::CENTER_CENTER,
+        "BLIGHTNEXUS",
+        FontId::new(24.0, display()),
+        CREAM,
+    );
+    p.text(
+        c + Vec2::new(0.0, 18.0),
         egui::Align2::CENTER_CENTER,
         "AMBIENCE // MIXER",
         FontId::new(11.0, mono()),
-        if hover { Color32::from_rgb(50, 50, 50) } else { MUTED },
+        CYAN,
     );
-    let go = Rect::from_center_size(c + Vec2::new(0.0, 60.0), Vec2::new(118.0, 28.0));
-    fill_chamfer(ui, go, 5.0, if hover { INK } else { ORANGE }, Stroke::new(1.0, if hover { INK } else { ORANGE }));
-    p.text(go.center(), egui::Align2::CENTER_CENTER, "JACK IN", FontId::new(13.0, ui_font()), if hover { ORANGE } else { INK });
+    p.text(
+        c + Vec2::new(0.0, 52.0),
+        egui::Align2::CENTER_CENTER,
+        "JACK IN",
+        FontId::new(13.0, ui_font()),
+        if hover { ACID } else { CREAM },
+    );
     attach_tip(
         resp,
         "Open the TABLE mix. Scenes, catalogs, map, and sheets.",

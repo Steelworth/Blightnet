@@ -55,6 +55,10 @@ pub enum Wire {
     Ping,
     #[serde(rename = "pong")]
     Pong,
+    #[serde(rename = "probe")]
+    Probe { from: String, n: u64 },
+    #[serde(rename = "probe-back")]
+    ProbeBack { from: String, n: u64 },
     #[serde(rename = "voice")]
     Voice {
         from: String,
@@ -164,6 +168,17 @@ pub enum Wire {
     SheetAsk,
     #[serde(rename = "map-image-ask")]
     MapImageAsk,
+    #[serde(rename = "net-pos")]
+    NetPos {
+        from: String,
+        name: String,
+        x: f32,
+        z: f32,
+        yaw: f32,
+    },
+    /// Blackjack or chess. `game` is "bj" or "chess". `body` is the table state.
+    #[serde(rename = "pit")]
+    Pit { from: String, game: String, body: String },
 }
 
 pub enum NetEvent {
@@ -253,6 +268,16 @@ pub enum NetEvent {
     },
     SheetAsk,
     MapImageAsk,
+    NetPos {
+        from: String,
+        name: String,
+        x: f32,
+        z: f32,
+        yaw: f32,
+    },
+    Pit { from: String, game: String, body: String },
+    Probe { from: String, n: u64 },
+    ProbeBack { from: String, n: u64 },
 }
 
 pub(crate) enum Cmd {
@@ -470,6 +495,38 @@ impl NetHub {
 
     pub fn send_map_tokens_ask(&self) {
         let _ = self.tx.send(Cmd::Send(Wire::MapTokensAsk));
+    }
+
+    pub fn send_probe(&self, n: u64) {
+        let _ = self.tx.send(Cmd::Send(Wire::Probe {
+            from: self.self_id.clone(),
+            n,
+        }));
+    }
+
+    pub fn send_probe_back(&self, n: u64) {
+        let _ = self.tx.send(Cmd::Send(Wire::ProbeBack {
+            from: self.self_id.clone(),
+            n,
+        }));
+    }
+
+    pub fn send_pit(&self, game: &str, body: &str) {
+        let _ = self.tx.send(Cmd::Send(Wire::Pit {
+            from: self.self_id.clone(),
+            game: game.to_string(),
+            body: body.to_string(),
+        }));
+    }
+
+    pub fn send_net_pos(&self, name: &str, x: f32, z: f32, yaw: f32) {
+        let _ = self.tx.send(Cmd::Send(Wire::NetPos {
+            from: self.self_id.clone(),
+            name: name.to_string(),
+            x,
+            z,
+            yaw,
+        }));
     }
 
     pub fn send_sheet(&self, chars: Vec<crate::chars::Character>) {
@@ -1666,6 +1723,38 @@ pub(crate) fn host_incoming(
                         let _ = ev_tx.send(NetEvent::MapImageAsk);
                         broadcast_hold(&clients, &msg, Some(&cid));
                     }
+                    Wire::NetPos { from, name, x, z, yaw } => {
+                        let _ = ev_tx.send(NetEvent::NetPos {
+                            from: from.clone(),
+                            name: name.clone(),
+                            x: *x,
+                            z: *z,
+                            yaw: *yaw,
+                        });
+                        broadcast(&clients, &msg, Some(&cid));
+                    }
+                    Wire::Pit { from, game, body } => {
+                        let _ = ev_tx.send(NetEvent::Pit {
+                            from: from.clone(),
+                            game: game.clone(),
+                            body: body.clone(),
+                        });
+                        broadcast(&clients, &msg, Some(&cid));
+                    }
+                    Wire::Probe { from, n } => {
+                        let _ = ev_tx.send(NetEvent::Probe {
+                            from: from.clone(),
+                            n: *n,
+                        });
+                        broadcast(&clients, &msg, Some(&cid));
+                    }
+                    Wire::ProbeBack { from, n } => {
+                        let _ = ev_tx.send(NetEvent::ProbeBack {
+                            from: from.clone(),
+                            n: *n,
+                        });
+                        broadcast(&clients, &msg, Some(&cid));
+                    }
                     _ => {}
                 }
 }
@@ -2135,6 +2224,26 @@ pub(crate) fn guest_incoming(msg: Wire, self_id: &str, ev_tx: &Sender<NetEvent>)
         }
         Wire::MapImageAsk => {
             let _ = ev_tx.send(NetEvent::MapImageAsk);
+        }
+        Wire::NetPos { from, name, x, z, yaw } => {
+            if from != self_id {
+                let _ = ev_tx.send(NetEvent::NetPos { from, name, x, z, yaw });
+            }
+        }
+        Wire::Pit { from, game, body } => {
+            if from != self_id {
+                let _ = ev_tx.send(NetEvent::Pit { from, game, body });
+            }
+        }
+        Wire::Probe { from, n } => {
+            if from != self_id {
+                let _ = ev_tx.send(NetEvent::Probe { from, n });
+            }
+        }
+        Wire::ProbeBack { from, n } => {
+            if from != self_id {
+                let _ = ev_tx.send(NetEvent::ProbeBack { from, n });
+            }
         }
         _ => {}
     }

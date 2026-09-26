@@ -195,6 +195,16 @@ enum IpcEvent {
     },
     SheetAsk,
     MapImageAsk,
+    Pit { from: String, game: String, body: String },
+    Probe { from: String, n: u64 },
+    ProbeBack { from: String, n: u64 },
+    NetPos {
+        from: String,
+        name: String,
+        x: f32,
+        z: f32,
+        yaw: f32,
+    },
 }
 
 struct Inner {
@@ -509,6 +519,26 @@ fn event_out(ev: &NetEvent) -> IpcEvent {
         },
         NetEvent::SheetAsk => IpcEvent::SheetAsk,
         NetEvent::MapImageAsk => IpcEvent::MapImageAsk,
+        NetEvent::Pit { from, game, body } => IpcEvent::Pit {
+            from: from.clone(),
+            game: game.clone(),
+            body: body.clone(),
+        },
+        NetEvent::Probe { from, n } => IpcEvent::Probe {
+            from: from.clone(),
+            n: *n,
+        },
+        NetEvent::ProbeBack { from, n } => IpcEvent::ProbeBack {
+            from: from.clone(),
+            n: *n,
+        },
+        NetEvent::NetPos { from, name, x, z, yaw } => IpcEvent::NetPos {
+            from: from.clone(),
+            name: name.clone(),
+            x: *x,
+            z: *z,
+            yaw: *yaw,
+        },
     }
 }
 
@@ -654,6 +684,10 @@ fn event_in(ev: IpcEvent) -> NetEvent {
         IpcEvent::Sheet { from, chars } => NetEvent::Sheet { from, chars },
         IpcEvent::SheetAsk => NetEvent::SheetAsk,
         IpcEvent::MapImageAsk => NetEvent::MapImageAsk,
+        IpcEvent::NetPos { from, name, x, z, yaw } => NetEvent::NetPos { from, name, x, z, yaw },
+        IpcEvent::Pit { from, game, body } => NetEvent::Pit { from, game, body },
+        IpcEvent::Probe { from, n } => NetEvent::Probe { from, n },
+        IpcEvent::ProbeBack { from, n } => NetEvent::ProbeBack { from, n },
     }
 }
 
@@ -752,9 +786,6 @@ fn clear_stale_lock(root: &Path) {
         return;
     };
     if try_tcp(lock.port).is_some() {
-        return;
-    }
-    if lock.port != IPC_PORT && try_tcp(IPC_PORT).is_some() {
         return;
     }
     let _ = std::fs::remove_file(lock_path(root));
@@ -1192,6 +1223,19 @@ fn snapshot_events(g: &Inner) -> Vec<Ipc> {
     out
 }
 
+fn token_eq(a: &str, b: &str) -> bool {
+    let a = a.as_bytes();
+    let b = b.as_bytes();
+    if a.len() != b.len() {
+        return false;
+    }
+    let mut diff = 0u8;
+    for (x, y) in a.iter().zip(b.iter()) {
+        diff |= x ^ y;
+    }
+    diff == 0
+}
+
 fn serve_gui(
     mut stream: TcpStream,
     token: String,
@@ -1213,7 +1257,7 @@ fn serve_gui(
         Err(_) => return,
     };
     match hello {
-        Ipc::Hello { token: t, handle } if t == token => {
+        Ipc::Hello { token: t, handle } if token_eq(&t, &token) => {
             if !write_ipc(
                 &mut stream,
                 &Ipc::Welcome {

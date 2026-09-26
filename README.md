@@ -21,7 +21,7 @@ Pick **one** method. Keep the whole folder together (`start.sh` / `start.bat`, `
 3. Unzip it. You should get a folder named **`Blightnet-main`**.
 4. Follow **Windows**, **Linux**, or **macOS** below.
 
-Later, open Blightnet and click **02 UPDATE** on INDEX. That pulls new or changed files from GitHub onto this machine.
+Later, open Blightnet and press **Update** on INDEX or on the status line. That pulls new or changed files from GitHub. Restart after it finishes.
 
 ### 2. Git clone (if you already use Git)
 
@@ -30,7 +30,7 @@ git clone https://github.com/Steelworth/Blightnet.git
 cd Blightnet
 ```
 
-Then follow **Windows**, **Linux**, or **macOS** below. **02 UPDATE** can fast-forward this clone.
+Then follow **Windows**, **Linux**, or **macOS** below. **Update** on INDEX or the status line can fast-forward this clone. Restart after it finishes.
 
 ---
 
@@ -42,7 +42,7 @@ You need [Rust](https://rustup.rs) once, so `start.bat` can build the native win
 2. Double-click **`start.bat`**. The first run compiles; later runs just launch.
 3. A **Blightnet** window opens. There is no browser and no `http://127.0.0.1`.
 
-Closing the window does not stop the node. Press **Online** again to take it offline, or INDEX **00 DISCONNECT**, or `blightnet daemon-stop`. You do not need the `tools` folder on Windows.
+Closing the window does not stop the node. Press **Online** again to take it offline and leave the window open. INDEX **00 DISCONNECT** stops the node and closes the window. `blightnet daemon-stop` stops the node from a terminal. You do not need the `tools` folder on Windows.
 
 If Windows SmartScreen warns about an unknown app: **More info** → **Run anyway**. That is the local launcher, not a Store download.
 
@@ -61,6 +61,15 @@ chmod +x start.sh
 ```
 
 That runs the native window. Install Rust from [rustup.rs](https://rustup.rs) if `cargo` is missing.
+
+To build a double-click launcher after the release binary exists:
+
+```bash
+chmod +x packaging/build-appimage.sh
+./packaging/build-appimage.sh
+```
+
+That writes `Blightnet-x86_64.AppImage` in this folder. Keep `audio/`, `assets/`, and `data/` beside the image, then double-click it. If FUSE is missing: `APPIMAGE_EXTRACT_AND_RUN=1 ./Blightnet-x86_64.AppImage`.
 
 ### macOS
 
@@ -81,33 +90,41 @@ If macOS blocks the binary: System Settings → Privacy & Security → **Open An
 
 ## After it is running
 
-INDEX (neon orange deck):
+The command bar is the top row. Tabs are **INDEX**, **TABLE**, **NETHOOKS**, **NETSPACE**, **ROTN**, **TERMINAL**, and **RECON**. **CHAT**, **CONTACTS**, **VOICE**, **VIDEO**, and **PLAYER** sit on that same row. **Online** starts the node. Press it again to stop the node and leave the window open. CPU, GPU (or a dash), RAM, and free disk stay on the bar. Those numbers are not sent to anyone.
 
-- **01 BLIGHTNEXUS** — opens TABLE (mixer). Status bar NODE is ACTIVE or OFFLINE. **Online** starts or stops the node.
-- **02 CHARS** — sheets and the 0–100 die
-- **03 TUTORIAL** — field manual
-- **04 BLACKJACK** — house 21
-- **05 AUDIO** — send level
-- **00 DISCONNECT** — quit
+INDEX:
 
-Set a **Handle**. Switch **Hearthsong** / **Blight** in the top bar. Catalogs (Bestiary, Datashard, Gangs, and the rest) sit on INDEX.
+- **01 BLIGHTNEXUS** opens TABLE.
+- **02 CONTACTS**, **04 CHAT**, **05 VOICE**, and **07 VIDEO CALL** open the side rail.
+- **03 TUTORIAL** is the field manual.
+- **06 BLACKJACK** opens House 21 on the table.
+- **08 NETHOOKS** opens the page desk.
+- **Update** pulls from GitHub. **Rescan devices** looks for mics, speakers, and cameras.
+- **00 DISCONNECT** shuts the node down and closes the window.
+
+Set a **Handle** in the command bar. Switch **Hearthsong** / **Blight** on INDEX or on the TABLE bar. Catalogs open from the table’s left rail.
 
 ---
 
 ## What you get
 
-**Hearthsong** (fantasy) — tavern gold, 5e sheets, SRD bestiary (334 creatures), NPCs, gods, Armory, market stalls.
+**Hearthsong** (fantasy) — tavern gold, sheets, bestiary, NPCs, gods, Armory, market stalls.
 
-**Blight** (Night City) — HUD chrome, Cyberpunk RED sheets, Datashard, Faces, Corps, Lore, **Gangs** (101 crews with portraits), Night Market + Black Chrome, radio, blackjack.
+**Blight** — HUD chrome, sheets, Datashard, Faces, Corps, Lore, Gangs, Night Market, radio, blackjack, and chess.
 
 Both worlds:
 
-- Mixer — scenes, looping layers, master, time of day, place paintings
-- Catalogs — portraits and dossiers from `data/`
-- Characters — name, HP, level/rank, percentage die
-- House 21
+- Mixer. Scenes and mix open as tiles in the center. Master volume stays on this computer. Time of day and the place painting sync.
+- Catalogs, character sheets, and the percentage die.
+- House 21. On Blight, chess sits beside it. The host plays white.
+- **NETSPACE**, a walkable city on its own tab. WASD, mouse look, Shift to run, C to cruise.
+- **PLAYER** for pictures, video, PDF, and music on this computer. It does not change the table mix. Stop ends a station.
+- **RECON**, a local file of people and companies. It never leaves this computer.
+- **ROTN**, a local fixer. It only talks to a model you start on this machine.
+- **TERMINAL**, a local shell. Its text is not sent to the table.
+- Nethooks you can post to the table board. Private notes stay local.
 
-Bestiary and 5e NPCs stay on Hearthsong. Datashard, Faces, Corps, Gangs, and Lore stay on Blight.
+Chat, the mix, sheets, map tokens, fog, and a posted nethook sync between seats. Invites look like `blightnet://`. There is no tunnel program. If friends cannot join across the internet, forward TCP and UDP **8766** on the host.
 
 ---
 
@@ -115,10 +132,11 @@ Bestiary and 5e NPCs stay on Hearthsong. Datashard, Faces, Corps, Gangs, and Lor
 
 1. Wait for the wake, or click / press a key to skip it.
 2. Set a **Handle**. Switch Hearthsong or Blight.
-3. **01 TABLE**. Click a scene. Sound loops until **Silence**.
-4. **Master** is local. **Place** and **Morning / Day / Evening / Night** change the painting.
+3. Press **Online**. Nothing listens until you do.
+4. **Host** or **Join** from INDEX or from the table’s left rail. Copy the `blightnet://` invite for friends.
+5. Open **TABLE**. Pick a scene. Sound loops until **Silence**.
 
-INDEX returns to the deck without stopping the mix.
+**Master** is local. **Place** and the time of day change the painting. INDEX returns to the deck without stopping the mix. Closing the window is not the same as **00 DISCONNECT**: the window X leaves the node running.
 
 ---
 
@@ -127,8 +145,10 @@ INDEX returns to the deck without stopping the mix.
 | What you see | What to do |
 | --- | --- |
 | No window | Install Rust from rustup.rs, then `./start.sh` or `start.bat`. |
-| Missing catalog / no sound | Keep `data/`, `audio/`, and `assets/` next to the `blightnet` binary. |
-| Wrong painting after Blight | Switch world in the top bar; Place resets to that world’s first location. |
+| Missing catalog / no sound | Keep `data/`, `audio/`, and `assets/` next to the binary or the AppImage. |
+| Node still running after you close the window | That is the window X. Press **Online** again, or run `blightnet daemon-stop`. **00 DISCONNECT** stops the node and closes. |
+| Wrong painting after Blight | Switch world on the TABLE bar. Place resets to that world’s first location. |
+| Friends cannot join | Both seats need this build. Paste the full `blightnet://` invite. Across the internet, forward TCP and UDP 8766 on the host. |
 | Cargo errors | `cargo build --release` from the folder that contains `Cargo.toml`. |
 
 ---
@@ -138,7 +158,9 @@ INDEX returns to the deck without stopping the mix.
 The native app is **Rust** (`src/`, `Cargo.toml`). It reads the same `audio/`, `assets/`, and `data/` trees. Mixer catalogs are `data/mixer-catalog.json`.
 
 ```bash
-cargo run --release
+cargo test --offline
+cargo build --release
+./packaging/build-appimage.sh
 ```
 
 See [CONTRIBUTING.md](CONTRIBUTING.md).

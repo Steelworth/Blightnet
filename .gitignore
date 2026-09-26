@@ -6,6 +6,9 @@ uploads/manifest.json
 /target/
 /blightnet
 /blightnet.exe
+/Blightnet-*.AppImage
+/packaging/AppDir/
+/packaging/appimagetool-*.AppImage
 /cloudflared
 /cloudflared.exe
 
@@ -14,6 +17,8 @@ data/peer-id.txt
 data/characters.json
 data/devices.json
 data/notes.json
+data/recon.json
+data/recon/
 data/combat-log.json
 data/chat.json
 data/crews.json
@@ -26,6 +31,11 @@ data/daemon.lock
 data/daemon.log
 data/daemon-state.json
 data/daemon.json
+data/calendar.json
+data/rotn-memory.json
+data/rotn-soul.json
+data/models/
+data/radio-cache/
 
 # Python
 __pycache__/

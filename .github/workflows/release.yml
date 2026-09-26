@@ -1,0 +1,44 @@
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            artifact: blightnet
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            artifact: blightnet.exe
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            artifact: blightnet
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - name: Build
+        run: cargo build --release --target ${{ matrix.target }}
+      - name: Linux AppImage
+        if: runner.os == 'Linux'
+        run: |
+          cp -f target/${{ matrix.target }}/release/blightnet ./blightnet
+          chmod +x packaging/build-appimage.sh
+          ./packaging/build-appimage.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: blightnet-${{ matrix.target }}
+          path: target/${{ matrix.target }}/release/${{ matrix.artifact }}
+      - uses: actions/upload-artifact@v4
+        if: runner.os == 'Linux'
+        with:
+          name: blightnet-appimage
+          path: Blightnet-*.AppImage

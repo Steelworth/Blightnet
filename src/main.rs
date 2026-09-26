@@ -2,6 +2,7 @@ mod app;
 mod audio;
 mod catalog;
 mod chars;
+mod chess;
 mod crypt;
 mod daemon;
 mod dice;
@@ -11,8 +12,12 @@ mod mesh;
 mod names;
 mod net;
 mod nethook;
+mod recon;
+mod rotn;
+mod stations;
 mod netspace;
 mod sys;
+mod term;
 mod theme;
 mod video;
 
@@ -37,6 +42,11 @@ fn root_dir() -> PathBuf {
     }
     if let Ok(cwd) = std::env::current_dir() {
         candidates.push(cwd);
+    }
+    if let Ok(image) = std::env::var("APPIMAGE") {
+        if let Some(dir) = PathBuf::from(image).parent() {
+            candidates.push(dir.to_path_buf());
+        }
     }
     for dir in candidates {
         if dir.join("data").join("mixer-catalog.json").is_file() {

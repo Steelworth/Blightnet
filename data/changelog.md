@@ -2,6 +2,21 @@
 
 The deck writes here so you can see what changed after an update. Newest first. One heading per day. Edit this file only when a build is about to be pushed to GitHub.
 
+## 2026-09-26
+
+- Command bar tabs are INDEX, TABLE, NETHOOKS, NETSPACE, ROTN, TERMINAL, and RECON. CHAT, CONTACTS, VOICE, VIDEO, and PLAYER stay pinned on that row.
+- The bar shows this computer: CPU, GPU or a dash, RAM, and free disk. The numbers stay on this machine.
+- Online starts the node. It does not start when the window opens. The window X leaves the node running. INDEX 00 shuts the node down and closes. Press Online again, or run daemon-stop, to stop it without using 00.
+- Document pages scroll inside the frame. The table center is tiles: scenes, mix, the board, maps, the pit, chess, and the other tools. The sheet, the combat log, and private notes stay on the sides. Notes stay on this computer.
+- Player is local pictures, video, PDF, and music. Station dots show what is on air. Stop ends the station and leaves the table mix alone.
+- NETSPACE is a walkable city: look, streets, doors, a map, and telephone booths. WASD, Shift to run, C to cruise.
+- Nethooks can be a handout, a rumor, a job, or a lesson. Post to table, then Board. Lessons stay pinned.
+- ROTN is a local fixer. It will only talk to a model on this computer. The terminal is a local shell. Neither is sent to the table.
+- RECON is a local case desk for people and companies. Files stay in data/recon.json. Delete asks twice.
+- Invites stay blightnet:// from node to node. No Cloudflare. Contact quality is a short round trip: clear, steady, slow, or poor.
+- Linux can launch Blightnet-x86_64.AppImage. Keep audio/, assets/, and data/ beside the image.
+- Rescan devices looks for mics, speakers, and cameras. Update pulls from GitHub.
+
 ## 2026-09-19
 
 - Native INDEX chrome: hairlines, cyan ticks, chamfer frames, layered window shadow, watch ticks, framed NET/TALK/PLAY clusters.

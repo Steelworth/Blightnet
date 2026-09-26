@@ -1,5 +1,5 @@
 use crate::images::TexCache;
-use crate::theme::{self, CREAM, CYAN, DIM, KILL, MUTED, ORANGE};
+use crate::theme::{self, CREAM, CYAN, DIM, KILL, MUTED, PANEL};
 use eframe::egui::{self, Color32, FontId, RichText, Vec2};
 use rand::Rng;
 use serde::{Deserialize, Serialize};
@@ -596,37 +596,38 @@ pub fn import_picture(root: &Path, ch: &mut Character, closeup: bool) -> Result<
 }
 
 fn field(ui: &mut egui::Ui, label: &str, value: &mut String) {
-    ui.horizontal_wrapped(|ui| {
-        ui.label(
-            RichText::new(label)
-                .family(theme::mono())
-                .size(10.0)
-                .color(CYAN),
-        );
-        let w = ui.available_width().clamp(80.0, 280.0);
-        ui.add(
-            egui::TextEdit::singleline(value)
-                .desired_width(w)
-                .text_color(ORANGE),
-        );
-    });
+    ui.add_space(2.0);
+    ui.label(
+        RichText::new(label)
+            .family(theme::mono())
+            .size(10.0)
+            .color(CYAN),
+    );
+    let w = ui.available_width().clamp(1.0, 420.0);
+    ui.add(
+        egui::TextEdit::singleline(value)
+            .desired_width(w)
+            .text_color(CYAN),
+    );
 }
 
 fn sheet_card(ui: &mut egui::Ui, title: &str, add: impl FnOnce(&mut egui::Ui)) {
     egui::Frame::NONE
-        .fill(Color32::from_rgb(8, 8, 5))
-        .stroke(egui::Stroke::new(1.0, ORANGE))
+        .fill(PANEL)
+        .stroke(egui::Stroke::new(1.0, theme::fade(theme::HOT, 140)))
         .inner_margin(egui::Margin::symmetric(10, 8))
         .show(ui, |ui| {
+            ui.set_max_width(ui.available_width());
             ui.label(
                 RichText::new(title)
                     .family(theme::mono())
-                    .size(10.0)
-                    .color(ORANGE),
+                    .size(11.0)
+                    .color(theme::ACID),
             );
-            ui.add_space(4.0);
+            ui.add_space(6.0);
             add(ui);
         });
+    ui.add_space(8.0);
 }
 
 fn hp_bar(ui: &mut egui::Ui, hp: i32, max: i32) {
@@ -634,11 +635,11 @@ fn hp_bar(ui: &mut egui::Ui, hp: i32, max: i32) {
     let t = (hp as f32 / max as f32).clamp(0.0, 1.0);
     let (r, _) = ui.allocate_exact_size(Vec2::new(ui.available_width().min(220.0), 10.0), egui::Sense::hover());
     ui.painter().rect_filled(r, 0.0, Color32::from_rgb(12, 12, 8));
-    ui.painter().rect_stroke(r, 0.0, egui::Stroke::new(1.0, ORANGE), egui::StrokeKind::Inside);
+    ui.painter().rect_stroke(r, 0.0, egui::Stroke::new(1.0, CYAN), egui::StrokeKind::Inside);
     if t > 0.0 {
         let fill = egui::Rect::from_min_size(r.min, Vec2::new((r.width() * t).max(2.0), r.height()));
         let col = if t > 0.5 {
-            ORANGE
+            CYAN
         } else if t > 0.25 {
             CYAN
         } else {
@@ -727,72 +728,106 @@ pub fn ui_sheet(
             }
         }
     }
+    ui.set_max_width(ui.available_width());
+    ui.set_clip_rect(ui.clip_rect().intersect(ui.max_rect()));
     theme::section_head(ui, "05", "CHARACTER SHEET");
-    ui.add_space(4.0);
-    ui.horizontal_wrapped(|ui| {
-        if theme::neon_btn(ui, "+ New").clicked() {
-            chars.push(Character::new(if blight { "blight" } else { "hearthsong" }));
-            *char_i = chars.len() - 1;
-            save(root, chars);
-        }
-        if theme::neon_btn_color(ui, "Norm", ORANGE, *luck == crate::dice::Luck::Norm).clicked() {
-            *luck = crate::dice::Luck::Norm;
-        }
-        if theme::neon_btn_color(ui, "Adv", ORANGE, *luck == crate::dice::Luck::Adv).clicked() {
-            *luck = crate::dice::Luck::Adv;
-        }
-        if theme::neon_btn_color(ui, "Dis", ORANGE, *luck == crate::dice::Luck::Dis).clicked() {
-            *luck = crate::dice::Luck::Dis;
-        }
-        if theme::neon_btn(ui, "d%").clicked() {
-            let name = chars
-                .get(*char_i)
-                .map(|c| c.name.clone())
-                .unwrap_or_else(|| "Someone".into());
-            let r = crate::dice::fire(&name, "", false, *luck, target.as_deref().unwrap_or(""));
-            *dice = format!("{} — {}", r.pct, r.grade);
-            log.push(format!("{} rolls {} ({})", name, r.pct, r.grade));
-            *roll = Some(r);
-        }
-        if !chars.is_empty() && theme::neon_btn_color(ui, "Delete", KILL, false).clicked() {
-            let i = (*char_i).min(chars.len() - 1);
-            chars.remove(i);
-            if *char_i >= chars.len() && !chars.is_empty() {
+    ui.add_space(6.0);
+    sheet_card(ui, "DESK", |ui| {
+        ui.horizontal_wrapped(|ui| {
+            if theme::neon_btn(ui, "+ New").clicked() {
+                chars.push(Character::new(if blight { "blight" } else { "hearthsong" }));
                 *char_i = chars.len() - 1;
+                save(root, chars);
             }
-            save(root, chars);
-        }
-        if theme::neon_btn(ui, "Save").clicked() {
-            save(root, chars);
-        }
-        let mut did_rest = false;
-        let i = (*char_i).min(chars.len().saturating_sub(1));
-        if let Some(c) = chars.get_mut(i) {
-            if theme::neon_btn(ui, "Short rest").clicked() {
-                short_rest(c, log);
-                did_rest = true;
+            if theme::neon_btn(ui, "Import Roll20").clicked() {
+                if let Some(path) = rfd::FileDialog::new()
+                    .add_filter("Roll20 JSON", &["json"])
+                    .set_title("Import a Roll20 character")
+                    .pick_file()
+                {
+                    match std::fs::read_to_string(&path) {
+                        Ok(text) => match serde_json::from_str::<serde_json::Value>(&text) {
+                            Ok(v) => {
+                                let batch = roll20_sheets(&v);
+                                if batch.is_empty() {
+                                    *dice = "That file has no Roll20 character.".into();
+                                } else {
+                                    let n = batch.len();
+                                    let name = batch[0].name.clone();
+                                    chars.extend(batch);
+                                    *char_i = chars.len() - 1;
+                                    save(root, chars);
+                                    *dice = if n == 1 {
+                                        format!("Imported {name} from Roll20.")
+                                    } else {
+                                        format!("Imported {n} characters from Roll20.")
+                                    };
+                                }
+                            }
+                            Err(_) => *dice = "That file is not JSON.".into(),
+                        },
+                        Err(e) => *dice = format!("Could not read that file. {e}"),
+                    }
+                }
             }
-        }
-        if did_rest {
-            save(root, chars);
-        }
-    });
-    ui.horizontal_wrapped(|ui| {
-        let mut did_rest = false;
-        let i = (*char_i).min(chars.len().saturating_sub(1));
-        if let Some(c) = chars.get_mut(i) {
-            if theme::neon_btn(ui, "Long rest").clicked() {
-                long_rest(c, log);
-                did_rest = true;
+            if theme::neon_btn(ui, "Save").clicked() {
+                save(root, chars);
             }
-            if (c.downed || c.hp <= 0) && !c.dead && theme::neon_btn(ui, "Death save").clicked() {
-                death_save(c, *luck, dice, log, roll);
-                did_rest = true;
+            if !chars.is_empty() && theme::neon_btn_color(ui, "Delete", KILL, false).clicked() {
+                let i = (*char_i).min(chars.len() - 1);
+                chars.remove(i);
+                if *char_i >= chars.len() && !chars.is_empty() {
+                    *char_i = chars.len() - 1;
+                }
+                save(root, chars);
             }
-        }
-        if did_rest {
-            save(root, chars);
-        }
+        });
+        ui.horizontal_wrapped(|ui| {
+            if theme::neon_btn_color(ui, "Norm", CYAN, *luck == crate::dice::Luck::Norm).clicked() {
+                *luck = crate::dice::Luck::Norm;
+            }
+            if theme::neon_btn_color(ui, "Adv", CYAN, *luck == crate::dice::Luck::Adv).clicked() {
+                *luck = crate::dice::Luck::Adv;
+            }
+            if theme::neon_btn_color(ui, "Dis", CYAN, *luck == crate::dice::Luck::Dis).clicked() {
+                *luck = crate::dice::Luck::Dis;
+            }
+            if theme::neon_btn(ui, "d%").clicked() {
+                let name = chars
+                    .get(*char_i)
+                    .map(|c| c.name.clone())
+                    .unwrap_or_else(|| "Someone".into());
+                let r = crate::dice::fire(&name, "", false, *luck, target.as_deref().unwrap_or(""));
+                *dice = format!("{} — {}", r.pct, r.grade);
+                log.push(format!("{} rolls {} ({})", name, r.pct, r.grade));
+                *roll = Some(r);
+            }
+            let i = (*char_i).min(chars.len().saturating_sub(1));
+            let mut did_rest = false;
+            if let Some(c) = chars.get_mut(i) {
+                if theme::neon_btn(ui, "Short rest").clicked() {
+                    short_rest(c, log);
+                    did_rest = true;
+                }
+                if theme::neon_btn(ui, "Long rest").clicked() {
+                    long_rest(c, log);
+                    did_rest = true;
+                }
+                if (c.downed || c.hp <= 0) && !c.dead && theme::neon_btn(ui, "Death save").clicked() {
+                    death_save(c, *luck, dice, log, roll);
+                    did_rest = true;
+                }
+            }
+            if did_rest {
+                save(root, chars);
+            }
+        });
+        wrap(
+            ui,
+            "Import Roll20 reads a character JSON on this computer. The file stays here.",
+            DIM,
+            11.0,
+        );
     });
     if !dice.is_empty() {
         ui.label(
@@ -822,10 +857,10 @@ pub fn ui_sheet(
                     let aimed = target.as_deref() == Some(c.id.as_str());
                     let on = *char_i == i;
                     ui.horizontal_wrapped(|ui| {
-                        crate::maps::drag_source(
+                        let picked = crate::maps::drag_source(
                             ui,
-                            ("char-drag", c.id.clone()),
-                            crate::maps::TokenSpec {
+                            ("char-drag", c.id.as_str()),
+                            || crate::maps::TokenSpec {
                                 name: c.name.clone(),
                                 image: c.portrait.clone(),
                                 sheet: c.id.clone(),
@@ -833,7 +868,7 @@ pub fn ui_sheet(
                                 src: String::new(),
                             },
                             |ui| {
-                                if theme::neon_btn_color(
+                                theme::neon_btn_color(
                                     ui,
                                     &format!(
                                         "{}{mark} {}  {}/{}",
@@ -842,15 +877,14 @@ pub fn ui_sheet(
                                         c.hp,
                                         c.hp_max
                                     ),
-                                    ORANGE,
+                                    CYAN,
                                     on,
-                                )
-                                .clicked()
-                                {
-                                    *char_i = i;
-                                }
+                                );
                             },
                         );
+                        if picked.clicked() {
+                            *char_i = i;
+                        }
                         if theme::neon_btn_color(ui, "Aim", CYAN, aimed).clicked() {
                             *target = Some(c.id.clone());
                         }
@@ -865,11 +899,15 @@ pub fn ui_sheet(
     let mut pic_full = false;
     if let Some(c) = chars.get(i) {
         sheet_card(ui, "PORTRAIT", |ui| {
+            let narrow = ui.available_width() < 340.0;
+            let face = if narrow { Vec2::new(64.0, 64.0) } else { Vec2::new(88.0, 88.0) };
+            let body = if narrow { Vec2::new(48.0, 72.0) } else { Vec2::new(64.0, 104.0) };
             ui.horizontal_wrapped(|ui| {
-                if let Some(p) = pic(ui, tex, root, &c.portrait, Vec2::new(72.0, 72.0)) {
+                if let Some(p) = pic(ui, tex, root, &c.portrait, face) {
                     *zoom = Some(p);
                 }
                 ui.vertical(|ui| {
+                    ui.set_max_width(ui.available_width().max(80.0));
                     wrap(ui, "Close-up", DIM, 10.0);
                     if theme::neon_btn(ui, "Upload close-up").clicked() {
                         pic_close = true;
@@ -887,7 +925,7 @@ pub fn ui_sheet(
                         .color(CYAN),
                     );
                 });
-                if let Some(p) = pic(ui, tex, root, &c.fullbody, Vec2::new(52.0, 84.0)) {
+                if let Some(p) = pic(ui, tex, root, &c.fullbody, body) {
                     *zoom = Some(p);
                 }
                 ui.vertical(|ui| {
@@ -942,7 +980,7 @@ pub fn ui_sheet(
     };
     ui.horizontal_wrapped(|ui| {
         for (t, lab) in tabs.iter().enumerate() {
-            if theme::neon_btn_color(ui, lab, ORANGE, c.tab == t).clicked() {
+            if theme::neon_btn_color(ui, lab, CYAN, c.tab == t).clicked() {
                 c.tab = t;
             }
         }
@@ -980,10 +1018,10 @@ fn ui_bio(ui: &mut egui::Ui, c: &mut Character, blight: bool, names: &crate::nam
     );
     ui.add_space(4.0);
     ui.horizontal_wrapped(|ui| {
-        if theme::neon_btn_color(ui, "Female", ORANGE, c.gender != "male").clicked() {
+        if theme::neon_btn_color(ui, "Female", CYAN, c.gender != "male").clicked() {
             c.gender = "female".into();
         }
-        if theme::neon_btn_color(ui, "Male", ORANGE, c.gender == "male").clicked() {
+        if theme::neon_btn_color(ui, "Male", CYAN, c.gender == "male").clicked() {
             c.gender = "male".into();
         }
         let female = c.gender != "male";
@@ -1011,7 +1049,7 @@ fn ui_bio(ui: &mut egui::Ui, c: &mut Character, blight: bool, names: &crate::nam
     field(ui, "Player", &mut c.player);
     if blight {
         field(ui, "Handle", &mut c.handle);
-        ui.horizontal(|ui| {
+        ui.horizontal_wrapped(|ui| {
             ui.label(RichText::new("Role").color(DIM).small());
             egui::ComboBox::from_id_salt("role")
                 .selected_text(&c.role)
@@ -1024,7 +1062,7 @@ fn ui_bio(ui: &mut egui::Ui, c: &mut Character, blight: bool, names: &crate::nam
             ui.add(egui::DragValue::new(&mut c.role_rank).range(1..=10));
         });
     } else {
-        ui.horizontal(|ui| {
+        ui.horizontal_wrapped(|ui| {
             ui.label(RichText::new("Ancestry").color(DIM).small());
             egui::ComboBox::from_id_salt("race")
                 .selected_text(if c.race.is_empty() { "—" } else { &c.race })
@@ -1094,7 +1132,7 @@ fn ui_stats_5e(ui: &mut egui::Ui, c: &mut Character) {
             let mut v = c.abil(id);
             let boost = c.bonus_for(id);
             ui.vertical(|ui| {
-                ui.label(RichText::new(*lab).family(theme::mono()).color(ORANGE));
+                ui.label(RichText::new(*lab).family(theme::mono()).color(CYAN));
                 ui.add(egui::DragValue::new(&mut v).range(1..=30));
                 let shown = (v + boost).clamp(1, 30);
                 ui.label(
@@ -1110,13 +1148,13 @@ fn ui_stats_5e(ui: &mut egui::Ui, c: &mut Character) {
             c.abilities.insert((*id).into(), v);
         }
         ui.vertical(|ui| {
-            ui.label(RichText::new("PROF").family(theme::mono()).color(ORANGE));
+            ui.label(RichText::new("PROF").family(theme::mono()).color(CYAN));
             ui.label(RichText::new(signed(Character::prof(c.level))).color(CYAN).size(18.0));
             ui.checkbox(&mut c.inspiration, "Inspiration");
         });
     });
     ui.add_space(6.0);
-    ui.label(RichText::new("SAVING THROWS").family(theme::mono()).size(10.0).color(ORANGE));
+    ui.label(RichText::new("SAVING THROWS").family(theme::mono()).size(10.0).color(CYAN));
     ui.columns(3, |cols| {
         for (i, (id, lab)) in ABILS.iter().enumerate() {
             let ui = &mut cols[i % 3];
@@ -1130,7 +1168,7 @@ fn ui_stats_5e(ui: &mut egui::Ui, c: &mut Character) {
         }
     });
     ui.add_space(6.0);
-    ui.label(RichText::new("SKILLS").family(theme::mono()).size(10.0).color(ORANGE));
+    ui.label(RichText::new("SKILLS").family(theme::mono()).size(10.0).color(CYAN));
     ui.columns(2, |cols| {
         for (i, (id, name, abil)) in HEARTH_SKILLS.iter().enumerate() {
             let ui = &mut cols[i % 2];
@@ -1141,10 +1179,14 @@ fn ui_stats_5e(ui: &mut egui::Ui, c: &mut Character) {
                 let pr = Character::prof(c.level);
                 m + if e { pr * 2 } else if p { pr } else { 0 }
             };
-            ui.horizontal(|ui| {
+            ui.horizontal_wrapped(|ui| {
                 ui.checkbox(&mut p, "P");
                 ui.checkbox(&mut e, "E");
-                ui.label(format!("{name} ({abil}) {}", signed(bonus)));
+                ui.label(
+                    RichText::new(format!("{name} {}", signed(bonus)))
+                        .size(12.0)
+                        .color(CREAM),
+                );
             });
             c.skill_prof.insert((*id).into(), p);
             c.skill_expert.insert((*id).into(), e);
@@ -1159,7 +1201,7 @@ fn ui_stats_red(ui: &mut egui::Ui, c: &mut Character) {
             let mut v = c.red(id);
             let boost = c.bonus_for(id);
             ui.vertical(|ui| {
-                ui.label(RichText::new(*lab).family(theme::mono()).color(ORANGE).size(11.0));
+                ui.label(RichText::new(*lab).family(theme::mono()).color(CYAN).size(11.0));
                 ui.add(egui::DragValue::new(&mut v).range(1..=15));
                 if boost != 0 {
                     ui.label(
@@ -1330,7 +1372,7 @@ fn ui_magic(ui: &mut egui::Ui, c: &mut Character) {
     ui.horizontal(|ui| {
         ui.label("Spellcasting ability");
         for id in ["int", "wis", "cha"] {
-            if theme::neon_btn_color(ui, id, ORANGE, c.spell_ability == id).clicked() {
+            if theme::neon_btn_color(ui, id, CYAN, c.spell_ability == id).clicked() {
                 c.spell_ability = id.into();
             }
         }
@@ -1350,7 +1392,7 @@ fn ui_magic(ui: &mut egui::Ui, c: &mut Character) {
     }
     for lv in 0..9 {
         ui.horizontal(|ui| {
-            ui.label(RichText::new(format!("L{}", lv + 1)).family(theme::mono()).color(ORANGE));
+            ui.label(RichText::new(format!("L{}", lv + 1)).family(theme::mono()).color(CYAN));
             ui.label("slots");
             ui.add(egui::DragValue::new(&mut c.slots_max[lv]).range(0..=9));
             ui.label("used");
@@ -1442,7 +1484,7 @@ fn ui_gear(ui: &mut egui::Ui, c: &mut Character, blight: bool) {
             let mark = if k.equipped { "●" } else { "○" };
             ui.label(
                 RichText::new(format!("{mark} {}", k.name))
-                    .color(if k.equipped { CYAN } else { ORANGE })
+                    .color(if k.equipped { CYAN } else { CYAN })
                     .size(14.0),
             );
             if !k.kind.is_empty() {
@@ -1648,7 +1690,7 @@ fn ui_level_up(ui: &mut egui::Ui, c: &mut Character, blight: bool) {
         12.0,
     );
     if asi {
-        wrap(ui, &format!("Ability points {spent}/{need}. Put them all in now — two in one score, or split."), ORANGE, 12.0);
+        wrap(ui, &format!("Ability points {spent}/{need}. Put them all in now — two in one score, or split."), CYAN, 12.0);
         ui.horizontal_wrapped(|ui| {
             for (id, lab) in ABILS {
                 let now = c.abil(id);
@@ -2548,6 +2590,301 @@ fn sheet_from_god(row: &serde_json::Value, existing: &[Character]) -> Character 
     ch
 }
 
+pub fn from_roll20(v: &serde_json::Value) -> Character {
+    let mut ch = Character::new("hearthsong");
+    let mut leftover = Vec::new();
+    if let Some(name) = v.get("name").and_then(|n| n.as_str()) {
+        if !name.is_empty() {
+            ch.name = name.to_string();
+        }
+    }
+    let attrs = v
+        .get("attribs")
+        .or_else(|| v.get("attributes"))
+        .and_then(|a| a.as_array())
+        .cloned()
+        .unwrap_or_else(|| {
+            if v.as_array().is_some() {
+                v.as_array().cloned().unwrap_or_default()
+            } else {
+                Vec::new()
+            }
+        });
+    for a in attrs {
+        let key = a.get("name").and_then(|n| n.as_str()).unwrap_or("").to_lowercase();
+        let cur = a.get("current").map(|c| match c {
+            serde_json::Value::String(s) => s.clone(),
+            serde_json::Value::Number(n) => n.to_string(),
+            _ => String::new(),
+        }).unwrap_or_default();
+        let max = a.get("max").map(|c| match c {
+            serde_json::Value::String(s) => s.clone(),
+            serde_json::Value::Number(n) => n.to_string(),
+            _ => String::new(),
+        }).unwrap_or_default();
+        if key.is_empty() {
+            continue;
+        }
+        let num = cur.parse::<i32>().ok();
+        let known = match key.as_str() {
+            "character_name" | "name" | "npc_name" if !cur.is_empty() => {
+                ch.name = cur.clone();
+                true
+            }
+            "hp" | "hit_points" | "hp_current" => {
+                if let Some(n) = num {
+                    ch.hp = n;
+                }
+                if let Ok(n) = max.parse::<i32>() {
+                    ch.hp_max = n;
+                }
+                true
+            }
+            "ac" | "armor_class" | "npc_ac" => {
+                if let Some(n) = num {
+                    ch.ac = n;
+                }
+                true
+            }
+            "level" | "base_level" => {
+                if let Some(n) = num {
+                    ch.level = n.max(1);
+                }
+                true
+            }
+            "class" | "class_name" | "class_display" => {
+                if !cur.is_empty() {
+                    ch.class_name = cur.clone();
+                }
+                true
+            }
+            "race" | "ancestry" | "species" => {
+                if !cur.is_empty() {
+                    ch.race = cur.clone();
+                }
+                true
+            }
+            "role" => {
+                if !cur.is_empty() {
+                    ch.role = cur.clone();
+                    ch.world = "blight".into();
+                }
+                true
+            }
+            "eddies" | "eurobucks" => {
+                if let Some(n) = num {
+                    ch.eddies = n;
+                    ch.world = "blight".into();
+                }
+                true
+            }
+            "gp" | "gold" => {
+                if let Some(n) = num {
+                    ch.gp = n;
+                }
+                true
+            }
+            "hp_max" | "max_hp" => {
+                if let Some(n) = num {
+                    ch.hp_max = n.max(1);
+                }
+                true
+            }
+            "player" | "player_name" => {
+                if !cur.is_empty() {
+                    ch.player = cur.clone();
+                }
+                true
+            }
+            "background" => {
+                if !cur.is_empty() {
+                    ch.background = cur.clone();
+                }
+                true
+            }
+            "alignment" => {
+                if !cur.is_empty() {
+                    ch.alignment = cur.clone();
+                }
+                true
+            }
+            "subclass" => {
+                if !cur.is_empty() {
+                    ch.subclass = cur.clone();
+                }
+                true
+            }
+            "xp" | "experience" => {
+                if let Some(n) = num {
+                    ch.xp = n.max(0);
+                }
+                true
+            }
+            "speed" => {
+                if !cur.is_empty() {
+                    ch.speed = cur.clone();
+                }
+                true
+            }
+            "age" => {
+                if !cur.is_empty() {
+                    ch.age = cur.clone();
+                }
+                true
+            }
+            "height" => {
+                if !cur.is_empty() {
+                    ch.height = cur.clone();
+                }
+                true
+            }
+            "weight" => {
+                if !cur.is_empty() {
+                    ch.weight = cur.clone();
+                }
+                true
+            }
+            "eyes" => {
+                if !cur.is_empty() {
+                    ch.eyes = cur.clone();
+                }
+                true
+            }
+            "skin" => {
+                if !cur.is_empty() {
+                    ch.skin = cur.clone();
+                }
+                true
+            }
+            "hair" => {
+                if !cur.is_empty() {
+                    ch.hair = cur.clone();
+                }
+                true
+            }
+            "gender" => {
+                if !cur.is_empty() {
+                    ch.gender = cur.to_lowercase();
+                }
+                true
+            }
+            "notes" | "bio" | "personality" => {
+                if !cur.is_empty() {
+                    if ch.notes.is_empty() {
+                        ch.notes = cur.clone();
+                    } else {
+                        ch.notes = format!("{}\n{cur}", ch.notes);
+                    }
+                }
+                true
+            }
+            "body" | "cool" | "emp" | "ref" | "tech" | "will" | "luck" | "move" => {
+                if let Some(n) = num {
+                    ch.stats_red.insert(key.clone(), n);
+                    ch.world = "blight".into();
+                }
+                true
+            }
+            "humanity" => {
+                if let Some(n) = num {
+                    ch.humanity = n;
+                    ch.world = "blight".into();
+                }
+                true
+            }
+            "strength" | "str" | "dexterity" | "dex" | "constitution" | "con"
+            | "intelligence" | "int" | "wisdom" | "wis" | "charisma" | "cha" => {
+                if let Some(n) = num {
+                    let id = match key.as_str() {
+                        "strength" | "str" => "str",
+                        "dexterity" | "dex" => "dex",
+                        "constitution" | "con" => "con",
+                        "intelligence" | "int" => "int",
+                        "wisdom" | "wis" => "wis",
+                        _ => "cha",
+                    };
+                    ch.abilities.insert(id.into(), n);
+                    if matches!(key.as_str(), "dex" | "int") {
+                        ch.stats_red.insert(id.into(), n);
+                    }
+                }
+                true
+            }
+            _ => false,
+        };
+        if !known && !cur.is_empty() {
+            leftover.push(format!("{key}: {cur}"));
+        }
+    }
+    if ch.hp_max == 0 {
+        ch.hp_max = ch.hp;
+    }
+    if !leftover.is_empty() {
+        if leftover.len() > 80 {
+            let n = leftover.len();
+            leftover.truncate(80);
+            leftover.push(format!("… {n} more fields left in the file"));
+        }
+        let extra = leftover.join("\n");
+        if ch.notes.is_empty() {
+            ch.notes = extra;
+        } else {
+            ch.notes = format!("{}\n{extra}", ch.notes);
+        }
+        if ch.notes.len() > 6000 {
+            ch.notes.truncate(6000);
+        }
+    }
+    ch
+}
+
+pub fn roll20_sheets(v: &serde_json::Value) -> Vec<Character> {
+    let mut out = Vec::new();
+    push_roll20(v, &mut out);
+    out
+}
+
+fn push_roll20(v: &serde_json::Value, out: &mut Vec<Character>) {
+    if let Some(arr) = v.as_array() {
+        for row in arr {
+            push_roll20(row, out);
+        }
+        return;
+    }
+    if !v.is_object() {
+        return;
+    }
+    let kind = v.get("type").and_then(|t| t.as_str()).unwrap_or("");
+    if matches!(
+        kind,
+        "handout" | "deck" | "rollabletable" | "folder" | "text" | "graphic"
+    ) {
+        return;
+    }
+    if let Some(arr) = v.get("characters").and_then(|c| c.as_array()) {
+        for row in arr {
+            push_roll20(row, out);
+        }
+        return;
+    }
+    if let Some(inner) = v.get("character").filter(|c| c.is_object()) {
+        let mut c = from_roll20(inner);
+        if c.name == "New character" {
+            if let Some(name) = v.get("name").and_then(|n| n.as_str()) {
+                if !name.is_empty() {
+                    c.name = name.to_string();
+                }
+            }
+        }
+        out.push(c);
+        return;
+    }
+    let has_attrs = v.get("attribs").is_some() || v.get("attributes").is_some();
+    if has_attrs || kind == "character" {
+        out.push(from_roll20(v));
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2784,5 +3121,40 @@ mod tests {
         assert_eq!(c.ac_now(), 10);
         set_equipped(&mut c, 0, true);
         assert_eq!(c.ac_now(), 18);
+    }
+
+    #[test]
+    fn roll20_import_fills_name_hp_and_keeps_the_rest() {
+        let v = serde_json::json!({
+            "name": "Ada",
+            "attribs": [
+                {"name": "hp", "current": "12", "max": "20"},
+                {"name": "strength", "current": "16", "max": ""},
+                {"name": "class", "current": "Fighter", "max": ""},
+                {"name": "favorite_tea", "current": "black", "max": ""}
+            ]
+        });
+        let c = from_roll20(&v);
+        assert_eq!(c.name, "Ada");
+        assert_eq!(c.hp, 12);
+        assert_eq!(c.hp_max, 20);
+        assert_eq!(c.abilities.get("str"), Some(&16));
+        assert_eq!(c.class_name, "Fighter");
+        assert!(c.notes.contains("favorite_tea"));
+    }
+
+    #[test]
+    fn roll20_journal_skips_handouts() {
+        let v = serde_json::json!({
+            "characters": [
+                {"type": "handout", "name": "Map"},
+                {"type": "character", "name": "Ada", "attribs": [{"name": "hp", "current": "5", "max": "9"}]}
+            ]
+        });
+        let all = roll20_sheets(&v);
+        assert_eq!(all.len(), 1);
+        assert_eq!(all[0].name, "Ada");
+        assert_eq!(all[0].hp, 5);
+        assert_eq!(all[0].hp_max, 9);
     }
 }

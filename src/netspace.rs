@@ -1,6 +1,6 @@
 use crate::theme::{self, BG, CREAM, CYAN, DIM, INK, MUTED, ORANGE, PANEL, TITLE};
 use eframe::egui::{
-    self, Align2, Color32, FontId, Galley, Key, PointerButton, Pos2, Rect, RichText, Sense,
+    self, Align2, Color32, FontId, Galley, Key, Pos2, Rect, RichText, Sense,
     Stroke, StrokeKind, Vec2,
 };
 use std::sync::Arc;
@@ -41,6 +41,11 @@ const SIGNS: &[&str] = &[
     "AFTERLIFE",
     "LIZZIE'S",
     "TOTENTANZ",
+    "CLINIC",
+    "BAR",
+    "RAIL",
+    "SHRINE",
+    "VAULT",
 ];
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -94,6 +99,18 @@ pub struct Netspace {
     cruise_tx: f32,
     cruise_tz: f32,
     cruise_dir: i32,
+    people: Vec<(String, f32, f32, f32)>,
+    indoors: bool,
+    floor: i32,
+    ret_x: f32,
+    ret_z: f32,
+    ret_yaw: f32,
+    look_on: bool,
+    aim_yaw: f32,
+    aim_pitch: f32,
+    map_on: bool,
+    relay: bool,
+    clock: f32,
 }
 
 impl Default for Netspace {
@@ -124,10 +141,41 @@ impl Netspace {
             cruise_tx: x,
             cruise_tz: z,
             cruise_dir: 2,
+            people: Vec::new(),
+            indoors: false,
+            floor: 0,
+            ret_x: x,
+            ret_z: z,
+            ret_yaw: 0.42,
+            look_on: false,
+            aim_yaw: 0.42,
+            aim_pitch: 0.06,
+            map_on: true,
+            relay: false,
+            clock: 0.0,
+        }
+    }
+
+    pub fn street(&self) -> &'static str {
+        street_name(self.x, self.z)
+    }
+
+    pub fn yaw_pub(&self) -> f32 {
+        self.yaw
+    }
+
+    pub fn note_person(&mut self, name: String, x: f32, z: f32, yaw: f32) {
+        if let Some(slot) = self.people.iter_mut().find(|p| p.0 == name) {
+            *slot = (name, x, z, yaw);
+        } else if self.people.len() < 24 {
+            self.people.push((name, x, z, yaw));
         }
     }
 
     fn at(&self, x: i32, z: i32) -> Cell {
+        if self.indoors {
+            return room_cell(x, z, self.floor);
+        }
         let x = x.rem_euclid(MAP);
         let z = z.rem_euclid(MAP);
         self.map[(z * MAP + x) as usize]
@@ -181,6 +229,35 @@ fn ang_diff(want: f32, have: f32) -> f32 {
         d += std::f32::consts::TAU;
     }
     d
+}
+
+fn room_cell(x: i32, z: i32, floor: i32) -> Cell {
+    let wall = Cell {
+        kind: Kind::Solid,
+        h: 3.2,
+        ice: false,
+        facade: floor.clamp(0, 12) as u8,
+        sign: 0,
+        var: 1,
+    };
+    let open = Cell {
+        kind: Kind::Plaza,
+        h: 0.0,
+        ice: false,
+        facade: 0,
+        sign: 0,
+        var: 0,
+    };
+    if !(1..=14).contains(&x) || !(1..=14).contains(&z) {
+        return wall;
+    }
+    if x == 1 || x == 14 || z == 1 || z == 14 {
+        if z == 14 && (x == 7 || x == 8) {
+            return open;
+        }
+        return wall;
+    }
+    open
 }
 
 fn dir_yaw(d: i32) -> f32 {
@@ -254,7 +331,14 @@ fn cruise_step(ns: &mut Netspace, dt: f32) {
     ns.yaw += err.clamp(-1.85 * dt, 1.85 * dt);
     let sy = ns.yaw.sin();
     let cy = ns.yaw.cos();
-    let spd = if err.abs() < 0.45 { 3.55 } else { 1.35 };
+    let ahead = ns.at((ns.x + dx.signum()).floor() as i32, (ns.z + dz.signum()).floor() as i32);
+    let spd = if ahead.h > 16.0 {
+        1.15
+    } else if err.abs() < 0.45 {
+        3.55
+    } else {
+        1.35
+    };
     let before = (ns.x, ns.z);
     ns.try_move(sy * spd * dt, cy * spd * dt);
     let moved = wrap_delta(ns.x, before.0).abs() + wrap_delta(ns.z, before.1).abs();
@@ -269,6 +353,8 @@ fn cruise_step(ns: &mut Netspace, dt: f32) {
         ns.stuck = 0.0;
     }
     ns.bob += dt * 7.2;
+    ns.aim_yaw = ns.yaw;
+    ns.aim_pitch = ns.pitch;
 }
 
 fn idx(x: i32, z: i32) -> usize {
@@ -292,6 +378,29 @@ fn mix(a: Color32, b: Color32, t: f32) -> Color32 {
         (a.g() as f32 + (b.g() as f32 - a.g() as f32) * t) as u8,
         (a.b() as f32 + (b.b() as f32 - a.b() as f32) * t) as u8,
     )
+}
+
+fn coat_color(x: f32, z: f32) -> Color32 {
+    const COATS: [Color32; 6] = [
+        Color32::from_rgb(180, 40, 70),
+        Color32::from_rgb(40, 90, 180),
+        Color32::from_rgb(150, 90, 40),
+        Color32::from_rgb(90, 40, 140),
+        Color32::from_rgb(40, 130, 90),
+        Color32::from_rgb(200, 170, 60),
+    ];
+    COATS[(hash2(x as i32, z as i32) as usize) % COATS.len()]
+}
+
+fn car_color(x: f32, z: f32) -> Color32 {
+    const CARS: [Color32; 5] = [
+        Color32::from_rgb(180, 30, 40),
+        Color32::from_rgb(30, 70, 160),
+        Color32::from_rgb(220, 220, 230),
+        Color32::from_rgb(20, 20, 24),
+        Color32::from_rgb(40, 140, 80),
+    ];
+    CARS[(hash2(x as i32, z as i32) as usize) % CARS.len()]
 }
 
 fn fogged(c: Color32, dist: f32) -> Color32 {
@@ -464,6 +573,16 @@ fn build_city() -> Vec<Cell> {
                 11
             } else if lot_kind == 15 {
                 12
+            } else if lot % 17 == 0 {
+                14
+            } else if lot % 13 == 0 {
+                15
+            } else if lot % 11 == 0 {
+                16
+            } else if lot % 31 == 0 {
+                17
+            } else if lot % 37 == 0 {
+                18
             } else {
                 1
             };
@@ -616,6 +735,8 @@ fn spawn(map: &[Cell]) -> (f32, f32) {
 
 fn scatter(map: &[Cell]) -> Vec<Sprite> {
     let mut out = Vec::new();
+    let mut booths = 0;
+    let mut bikes = 0;
     for z in 0..MAP {
         for x in 0..MAP {
             let c = map[idx(x, z)];
@@ -755,6 +876,32 @@ fn scatter(map: &[Cell]) -> Vec<Sprite> {
                     kind: 12,
                 });
             }
+            if c.kind == Kind::Sidewalk
+                && x.rem_euclid(LOT) == 1
+                && z.rem_euclid(LOT) == 1
+                && booths < 8
+                && n % 2 == 0
+            {
+                out.push(Sprite {
+                    x: x as f32 + 0.5,
+                    z: z as f32 + 0.5,
+                    vx: 0.0,
+                    vz: 0.0,
+                    kind: 14,
+                });
+                booths += 1;
+            }
+            if c.kind == Kind::Sidewalk && n % 19 == 0 && bikes < 18 {
+                let spd = 1.1 + (n % 4) as f32 * 0.25;
+                out.push(Sprite {
+                    x: x as f32 + 0.5,
+                    z: z as f32 + 0.5,
+                    vx: if x % 2 == 0 { spd } else { 0.0 },
+                    vz: if x % 2 == 0 { 0.0 } else { spd },
+                    kind: 13,
+                });
+                bikes += 1;
+            }
             if c.kind == Kind::Plaza && n % 9 == 0 && out.len() < 430 {
                 out.push(Sprite {
                     x: x as f32 + 0.5,
@@ -767,6 +914,22 @@ fn scatter(map: &[Cell]) -> Vec<Sprite> {
         }
     }
     out
+}
+
+fn street_name(x: f32, z: f32) -> &'static str {
+    const EAST: &[&str] = &[
+        "KANG", "WATSON", "SOMA", "HEYWOOD", "PACIFICA", "INDEX", "CHROME", "VOID",
+    ];
+    const NORTH: &[&str] = &[
+        "ARASAKA", "MILITECH", "RAIL", "CLINIC", "AFTERLIFE", "VAULT", "NCPD", "BIO",
+    ];
+    let x = x.rem_euclid(MAP as f32) as i32;
+    let z = z.rem_euclid(MAP as f32) as i32;
+    if x.rem_euclid(LOT) <= 1 {
+        NORTH[(z / LOT).rem_euclid(NORTH.len() as i32) as usize]
+    } else {
+        EAST[(x / LOT).rem_euclid(EAST.len() as i32) as usize]
+    }
 }
 
 fn district(x: f32, z: f32) -> &'static str {
@@ -838,21 +1001,25 @@ struct Hit {
 }
 
 fn march(ns: &Netspace, rdx: f32, rdz: f32) -> Hit {
-    let mut mx = ns.x.floor() as i32;
-    let mut mz = ns.z.floor() as i32;
+    march_from(ns, ns.x, ns.z, rdx, rdz, false)
+}
+
+fn march_from(ns: &Netspace, ox: f32, oz: f32, rdx: f32, rdz: f32, street: bool) -> Hit {
+    let mut mx = ox.floor() as i32;
+    let mut mz = oz.floor() as i32;
     let dx = if rdx.abs() < 1e-5 { 1e30 } else { 1.0 / rdx.abs() };
     let dz = if rdz.abs() < 1e-5 { 1e30 } else { 1.0 / rdz.abs() };
     let step_x = if rdx < 0.0 { -1 } else { 1 };
     let step_z = if rdz < 0.0 { -1 } else { 1 };
     let mut sx = if rdx < 0.0 {
-        (ns.x - mx as f32) * dx
+        (ox - mx as f32) * dx
     } else {
-        (mx as f32 + 1.0 - ns.x) * dx
+        (mx as f32 + 1.0 - ox) * dx
     };
     let mut sz = if rdz < 0.0 {
-        (ns.z - mz as f32) * dz
+        (oz - mz as f32) * dz
     } else {
-        (mz as f32 + 1.0 - ns.z) * dz
+        (mz as f32 + 1.0 - oz) * dz
     };
     let mut dist;
     let mut side;
@@ -880,12 +1047,18 @@ fn march(ns: &Netspace, rdx: f32, rdz: f32) -> Hit {
             sz += dz;
             side = 1;
         }
-        let c = ns.at(mx, mz);
+        let c = if street || !ns.indoors {
+            let x = mx.rem_euclid(MAP);
+            let z = mz.rem_euclid(MAP);
+            ns.map[(z * MAP + x) as usize]
+        } else {
+            room_cell(mx, mz, ns.floor)
+        };
         if c.h > 0.15 {
             let u = if side == 0 {
-                ns.z + rdz * dist
+                oz + rdz * dist
             } else {
-                ns.x + rdx * dist
+                ox + rdx * dist
             };
             hit = Hit {
                 dist: dist.max(0.16),
@@ -905,6 +1078,81 @@ fn march(ns: &Netspace, rdx: f32, rdz: f32) -> Hit {
     hit
 }
 
+fn interior_lamp(floor: i32) -> Color32 {
+    match floor.rem_euclid(6) {
+        0 => Color32::from_rgb(255, 186, 120),
+        1 => Color32::from_rgb(150, 186, 255),
+        2 => Color32::from_rgb(255, 110, 168),
+        3 => Color32::from_rgb(120, 210, 150),
+        4 => Color32::from_rgb(255, 150, 64),
+        _ => Color32::from_rgb(186, 140, 255),
+    }
+}
+
+fn window_glow(n: u32) -> Color32 {
+    match n % 6 {
+        0 => Color32::from_rgb(255, 214, 140),
+        1 => Color32::from_rgb(140, 196, 255),
+        2 => Color32::from_rgb(255, 120, 170),
+        3 => Color32::from_rgb(150, 235, 160),
+        4 => Color32::from_rgb(255, 96, 72),
+        _ => Color32::from_rgb(255, 236, 190),
+    }
+}
+
+fn sign_ink(s: &str) -> Color32 {
+    if s.contains("CLINIC") || s.contains("TRAUMA") {
+        Color32::from_rgb(220, 40, 60)
+    } else if s.contains("BAR") || s.contains("LIZZIE") || s.contains("SHRINE") || s.contains("TOTENTANZ") {
+        Color32::from_rgb(220, 60, 180)
+    } else if s.contains("VAULT") || s.contains("ICE") {
+        CYAN
+    } else if s.contains("PARK") || s.contains("BIO") {
+        Color32::from_rgb(70, 180, 90)
+    } else if s.contains("NCPD") {
+        Color32::from_rgb(80, 140, 255)
+    } else {
+        Color32::from_rgb(255, 176, 60)
+    }
+}
+
+fn district_body(district: u32) -> Color32 {
+    match district % 8 {
+        0 => Color32::from_rgb(58, 92, 128),
+        1 => Color32::from_rgb(132, 72, 58),
+        2 => Color32::from_rgb(78, 96, 64),
+        3 => Color32::from_rgb(150, 98, 42),
+        4 => Color32::from_rgb(92, 48, 112),
+        5 => Color32::from_rgb(128, 42, 48),
+        6 => Color32::from_rgb(36, 108, 118),
+        _ => Color32::from_rgb(112, 108, 96),
+    }
+}
+
+fn facade_body(district: u32, facade: u8) -> Color32 {
+    match facade {
+        0 => Color32::from_rgb(168, 122, 64),
+        2 => Color32::from_rgb(70, 130, 168),
+        3 => Color32::from_rgb(48, 140, 168),
+        4 => Color32::from_rgb(150, 48, 120),
+        5 => Color32::from_rgb(46, 120, 64),
+        6 => Color32::from_rgb(110, 48, 44),
+        7 => Color32::from_rgb(176, 40, 52),
+        8 => Color32::from_rgb(48, 72, 140),
+        9 => Color32::from_rgb(168, 96, 48),
+        10 => Color32::from_rgb(196, 160, 48),
+        11 => Color32::from_rgb(150, 64, 150),
+        12 => Color32::from_rgb(72, 150, 110),
+        13 => Color32::from_rgb(40, 110, 58),
+        14 => Color32::from_rgb(190, 48, 48),
+        15 => Color32::from_rgb(80, 160, 70),
+        16 => Color32::from_rgb(160, 50, 40),
+        17 => Color32::from_rgb(180, 150, 40),
+        18 => Color32::from_rgb(200, 80, 40),
+        _ => district_body(district),
+    }
+}
+
 fn wall_tex(hit: &Hit, v: f32, t: f32) -> (char, Color32) {
     let _ = t;
     let d = hit.dist * if hit.side == 1 { 1.15 } else { 1.0 };
@@ -916,21 +1164,46 @@ fn wall_tex(hit: &Hit, v: f32, t: f32) -> (char, Color32) {
     let district = hash2(hit.mx.div_euclid(LOT), hit.mz.div_euclid(LOT)) % 8;
     let chrome = district == 0 || hit.facade == 4;
     let vault = district == 6 || hit.ice;
-    let combat = district == 5;
-    let orange = fogged(ORANGE, d);
+    let paint_src = facade_body(district, hit.facade);
+    let orange = fogged(paint_src, d);
     let cyan = fogged(CYAN, d);
+    let red = fogged(crate::theme::NEON_RED, d);
+    let acid = fogged(crate::theme::ACID, d);
     let cream = fogged(CREAM, d);
     let muted = fogged(MUTED, d);
     let dim = fogged(DIM, d);
     let body = if vault {
         cyan
     } else if chrome && n % 3 == 0 {
-        cyan
-    } else if combat {
-        orange
+        fogged(mix(CYAN, paint_src, 0.45), d)
     } else {
         orange
     };
+    if (hit.h - 3.2).abs() < 0.08 && hit.var == 1 && hit.facade <= 5 {
+        let lamp = interior_lamp(hit.facade as i32);
+        let plaster = fogged(mix(lamp, Color32::from_rgb(214, 204, 190), 0.7), d);
+        let glow = fogged(lamp, d * 0.35);
+        if v > 0.78 && (hit.u - 0.5).abs() < 0.16 {
+            return ('[', glow);
+        }
+        if v > 0.22 && v < 0.58 && (hit.u * 6.0).fract() < 0.18 {
+            return ('#', glow);
+        }
+        let ch = if hit.dist < 3.0 {
+            '█'
+        } else if hit.dist < 7.0 {
+            '▓'
+        } else {
+            '░'
+        };
+        return (ch, plaster);
+    }
+    if hit.facade == 0 && hit.dist < 5.5 && v > 0.32 && v < 0.74 && (hit.u - 0.5).abs() < 0.3 {
+        if v > 0.55 {
+            return ('_', fogged(Color32::from_rgb(255, 176, 80), d * 0.45));
+        }
+        return ('|', fogged(Color32::from_rgb(48, 32, 22), d));
+    }
 
     let door = v > 0.84 && (hit.u - 0.5).abs() < 0.12 && hit.facade != 2 && hit.h < 9.0;
     let awning = v > 0.74 && v < 0.84 && matches!(hit.facade, 0 | 4 | 9);
@@ -958,6 +1231,21 @@ fn wall_tex(hit: &Hit, v: f32, t: f32) -> (char, Color32) {
         && col_i.rem_euclid(win_pitch + 1) == 1
         && floor_i.rem_euclid(2) == 1;
 
+    if hit.facade == 14 {
+        return (if n % 3 == 0 { '+' } else { 'H' }, red);
+    }
+    if hit.facade == 15 {
+        return (if v < 0.2 { '^' } else { '+' }, acid);
+    }
+    if hit.facade == 16 {
+        return (if v > 0.8 { '[' } else { '=' }, red);
+    }
+    if hit.facade == 17 {
+        return (if n % 2 == 0 { '=' } else { '-' }, acid);
+    }
+    if hit.facade == 18 {
+        return ('X', mix(red, acid, 0.45));
+    }
     if mast {
         return ('|', cyan);
     }
@@ -979,7 +1267,7 @@ fn wall_tex(hit: &Hit, v: f32, t: f32) -> (char, Color32) {
         let bytes = s.as_bytes();
         let k = ((hit.u * 14.0) as usize) % bytes.len();
         let ch = bytes[k] as char;
-        return (ch, if vault { cyan } else { orange });
+        return (ch, fogged(sign_ink(s), d));
     }
     if neon_bar {
         return ('=', cyan);
@@ -1030,7 +1318,10 @@ fn wall_tex(hit: &Hit, v: f32, t: f32) -> (char, Color32) {
             );
         }
         if chrome {
-            return (if lit { '#' } else { '.' }, if lit { cyan } else { orange });
+            return (
+                if lit { '#' } else { '.' },
+                if lit { fogged(window_glow(n), d) } else { orange },
+            );
         }
         if hit.facade == 7 {
             return (if lit { '+' } else { ':' }, if lit { cyan } else { cream });
@@ -1058,7 +1349,11 @@ fn wall_tex(hit: &Hit, v: f32, t: f32) -> (char, Color32) {
         }
         return (
             if lit { inner } else { '.' },
-            if lit { cream } else { mix(ORANGE, BG, 0.6) },
+            if lit {
+                fogged(window_glow(n), d)
+            } else {
+                fogged(mix(paint_src, BG, 0.55), d)
+            },
         );
     }
     let ivy = hit.facade == 13 && n % 3 == 0 && v > 0.2 && v < 0.9;
@@ -1110,6 +1405,19 @@ fn floor_tex(
     let ix = fx.floor() as i32;
     let iz = fz.floor() as i32;
     let c = ns.at(ix, iz);
+    if ns.indoors {
+        let lamp = interior_lamp(ns.floor);
+        let tile = (ix + iz) % 2 == 0;
+        let shaft = (fx - 8.5).abs() < 0.8 && (fz - 8.5).abs() < 0.8;
+        return if shaft {
+            ('+', fogged(lamp, d * 0.4))
+        } else {
+            (
+                if tile { '+' } else { '.' },
+                fogged(mix(lamp, Color32::from_rgb(48, 42, 36), 0.62), d),
+            )
+        };
+    }
     let gx = fx.rem_euclid(1.0);
     let gz = fz.rem_euclid(1.0);
     let n = hash3(ix, iz, 0);
@@ -1195,11 +1503,17 @@ fn floor_tex(
                 } else {
                     '`'
                 },
-                fogged(MUTED, d),
+                fogged(Color32::from_rgb(46, 140, 72), d),
             )
         }
         Kind::Garden => {
             let g = n % 4;
+            let ink = match g {
+                0 => Color32::from_rgb(230, 80, 120),
+                1 => Color32::from_rgb(46, 140, 72),
+                2 => Color32::from_rgb(240, 200, 70),
+                _ => Color32::from_rgb(230, 230, 220),
+            };
             (
                 if g == 0 {
                     '*'
@@ -1210,7 +1524,7 @@ fn floor_tex(
                 } else {
                     '+'
                 },
-                fogged(if g == 0 { ORANGE } else { MUTED }, d),
+                fogged(ink, d),
             )
         }
         Kind::Canal => {
@@ -1228,9 +1542,16 @@ fn floor_tex(
         }
         Kind::Market => {
             let stall = n % 4 == 0;
+            let ink = match n % 5 {
+                0 => Color32::from_rgb(190, 48, 60),
+                1 => Color32::from_rgb(220, 170, 50),
+                2 => Color32::from_rgb(40, 140, 130),
+                3 => Color32::from_rgb(70, 110, 190),
+                _ => Color32::from_rgb(210, 200, 180),
+            };
             (
                 if stall { '*' } else { '+' },
-                fogged(if stall { ORANGE } else { CREAM }, d),
+                fogged(ink, d),
             )
         }
         Kind::Solid => ('.', fogged(ORANGE, d * 1.4)),
@@ -1259,13 +1580,20 @@ fn floor_tex(
         let s = SIGNS[(hash2(ix / 8, iz / 8) as usize) % SIGNS.len()];
         let k = (ix.abs() as usize) % s.len();
         glyph = s.as_bytes()[k] as char;
-        col = fogged(ORANGE, d);
+        col = fogged(sign_ink(s), d);
     }
     (glyph, col)
 }
 
-fn ceiling_tex(fx: f32, fz: f32, d: f32, t: f32) -> (char, Color32) {
+fn ceiling_tex(fx: f32, fz: f32, d: f32, t: f32, lamp: Option<Color32>) -> (char, Color32) {
     let _ = t;
+    if let Some(lamp) = lamp {
+        let ix = fx.floor() as i32;
+        let iz = fz.floor() as i32;
+        let n = hash3(ix, iz, 3);
+        let ch = if n % 5 == 0 { '=' } else { '-' };
+        return (ch, fogged(mix(lamp, Color32::from_rgb(36, 32, 28), 0.55), d));
+    }
     let ix = fx.floor() as i32;
     let iz = fz.floor() as i32;
     let n = hash3(ix, iz, 0);
@@ -1284,6 +1612,9 @@ fn ceiling_tex(fx: f32, fz: f32, d: f32, t: f32) -> (char, Color32) {
 fn sky_tex(col: i32, row: i32, t: f32, near_horizon: bool) -> (char, Color32) {
     let _ = t;
     let n = hash3(col, row, 0);
+    if n % 5 == 0 {
+        return ('|', mix(CYAN, BG, 0.72));
+    }
     if n % 7 == 0 {
         return ('|', mix(CYAN, BG, 0.62));
     }
@@ -1296,12 +1627,20 @@ fn sky_tex(col: i32, row: i32, t: f32, near_horizon: bool) -> (char, Color32) {
             4 => '#',
             _ => '`',
         };
-        return (ch, mix(ORANGE, BG, 0.55));
+        return (ch, mix(Color32::from_rgb(40, 70, 120), Color32::from_rgb(6, 10, 28), 0.35));
     }
     if n % 37 == 0 {
         ('*', CYAN)
     } else if n % 23 == 0 {
-        ('.', ORANGE)
+        (
+            '.',
+            match n % 5 {
+                0 => Color32::from_rgb(255, 220, 160),
+                1 => Color32::from_rgb(160, 190, 255),
+                2 => Color32::from_rgb(255, 160, 190),
+                _ => Color32::from_rgb(190, 235, 200),
+            },
+        )
     } else if n % 61 == 0 {
         ('+', mix(CYAN, BG, 0.5))
     } else if row < 2 {
@@ -1311,7 +1650,25 @@ fn sky_tex(col: i32, row: i32, t: f32, near_horizon: bool) -> (char, Color32) {
     } else if n % 89 == 0 {
         ('o', mix(ORANGE, BG, 0.7))
     } else {
-        (' ', BG)
+        (' ', Color32::from_rgb(6, 10, 28))
+    }
+}
+
+fn near_booth(ns: &Netspace) -> bool {
+    ns.sprites.iter().any(|s| {
+        s.kind == 14 && wrap_delta(s.x, ns.x).hypot(wrap_delta(s.z, ns.z)) < 1.35
+    })
+}
+
+fn skyline_tex(hit: &Hit, v: f32) -> (char, Color32) {
+    let body = fogged(facade_body(hash2(hit.mx, hit.mz) % 8, hit.facade), hit.dist);
+    let lit = v > 0.18 && v < 0.86 && (hit.u * 5.0).fract() < 0.16 && (v * 7.0).fract() < 0.22;
+    if lit {
+        ('#', fogged(window_glow((hit.mx as u32).wrapping_add(hit.mz as u32)), hit.dist))
+    } else if hit.dist > 34.0 {
+        ('.', body)
+    } else {
+        ('#', body)
     }
 }
 
@@ -1329,7 +1686,15 @@ fn tick(ns: &mut Netspace, ui: &egui::Ui, focused: bool, dt: f32) {
                 if ns.cruise {
                     cruise_pick(ns, true);
                     ns.yaw = dir_yaw(ns.cruise_dir);
+                    ns.aim_yaw = ns.yaw;
                 }
+            }
+            if i.key_pressed(Key::Escape) {
+                ns.look_on = false;
+                ns.relay = false;
+            }
+            if i.key_pressed(Key::M) {
+                ns.map_on = !ns.map_on;
             }
             if i.key_down(Key::W) || i.key_down(Key::ArrowUp) {
                 mx += 1.0;
@@ -1346,10 +1711,39 @@ fn tick(ns: &mut Netspace, ui: &egui::Ui, focused: bool, dt: f32) {
             if i.key_down(Key::Q) || i.key_down(Key::ArrowLeft) {
                 yaw_d -= 1.0;
             }
-            if i.key_down(Key::E) || i.key_down(Key::ArrowRight) {
+            let at_booth = !ns.indoors && near_booth(ns);
+            if i.key_pressed(Key::E) && at_booth {
+                ns.relay = !ns.relay;
+            } else if i.key_down(Key::E) || i.key_down(Key::ArrowRight) {
                 yaw_d += 1.0;
             }
+            if i.key_pressed(Key::F) {
+                if ns.indoors {
+                    if (ns.x - 8.5).abs() < 1.4 && (ns.z - 8.5).abs() < 1.4 {
+                        ns.floor = (ns.floor + 1) % 6;
+                    }
+                } else {
+                    let ax = ns.x + ns.yaw.sin();
+                    let az = ns.z + ns.yaw.cos();
+                    if ns.at(ax.floor() as i32, az.floor() as i32).h > 0.2 {
+                        ns.ret_x = ns.x;
+                        ns.ret_z = ns.z;
+                        ns.ret_yaw = ns.yaw;
+                        ns.indoors = true;
+                        ns.floor = 0;
+                        ns.x = 8.5;
+                        ns.z = 12.2;
+                        ns.yaw = std::f32::consts::PI;
+                    }
+                }
+            }
         });
+    }
+    if ns.indoors && ns.z > 13.3 && (ns.x - 8.0).abs() < 1.6 {
+        ns.x = ns.ret_x;
+        ns.z = ns.ret_z;
+        ns.indoors = false;
+        ns.floor = 0;
     }
     if mx.abs() + mz.abs() + yaw_d.abs() > 0.0 {
         ns.cruise = false;
@@ -1357,7 +1751,13 @@ fn tick(ns: &mut Netspace, ui: &egui::Ui, focused: bool, dt: f32) {
     }
     let sprint = ui.input(|i| i.modifiers.shift);
     let speed = if sprint { 7.4 } else { 3.9 };
-    ns.yaw += yaw_d * 1.7 * dt;
+    if yaw_d != 0.0 {
+        ns.aim_yaw += yaw_d * 1.7 * dt;
+        if !ns.look_on {
+            ns.yaw = ns.aim_yaw;
+        }
+    }
+    ns.clock += dt;
     let cy = ns.yaw.cos();
     let sy = ns.yaw.sin();
     let moving = mx.abs() + mz.abs() > 0.0;
@@ -1369,14 +1769,42 @@ fn tick(ns: &mut Netspace, ui: &egui::Ui, focused: bool, dt: f32) {
     } else {
         ns.bob *= 0.9;
     }
+    if ns.look_on {
+        let k = 1.0 - (-12.0 * dt).exp();
+        ns.yaw += ang_diff(ns.aim_yaw, ns.yaw) * k;
+        ns.pitch += (ns.aim_pitch - ns.pitch) * k;
+    } else {
+        ns.aim_yaw = ns.yaw;
+        ns.aim_pitch = ns.pitch;
+    }
     let m = MAP as f32;
     for i in 0..ns.sprites.len() {
         let k = ns.sprites[i].kind;
-        if k == 2 || k == 4 || k == 5 || k == 6 || k == 8 || k == 9 || k == 10 || k == 12 {
+        if k == 2 || k == 4 || k == 5 || k == 6 || k == 8 || k == 9 || k == 10 || k == 12 || k == 14 {
             continue;
         }
         let mut x = (ns.sprites[i].x + ns.sprites[i].vx * dt).rem_euclid(m);
         let mut z = (ns.sprites[i].z + ns.sprites[i].vz * dt).rem_euclid(m);
+        if k == 0 || k == 13 {
+            let near = wrap_delta(x, ns.x).hypot(wrap_delta(z, ns.z)) < if k == 0 { 2.2 } else { 1.4 };
+            let ix = x.floor() as i32;
+            let iz = z.floor() as i32;
+            let crossing = ix.rem_euclid(LOT) <= 1 || iz.rem_euclid(LOT) <= 1;
+            let phase = (ix.div_euclid(LOT) + iz.div_euclid(LOT)).rem_euclid(2);
+            let red = ((ns.clock * 0.12) as i32 + phase) % 2 == 0;
+            if near || (k == 0 && crossing && red) {
+                x = ns.sprites[i].x;
+                z = ns.sprites[i].z;
+            }
+        }
+        if k == 1 {
+            let dx = ns.x - x;
+            let dz = ns.z - z;
+            if dx.hypot(dz) < 1.3 {
+                x -= dx.signum() * 0.08;
+                z -= dz.signum() * 0.08;
+            }
+        }
         if k != 3 {
             let blocked = ns.at(x.floor() as i32, z.floor() as i32).h > 0.2;
             if blocked {
@@ -1400,13 +1828,15 @@ pub fn paint(ui: &mut egui::Ui, ns: &mut Netspace, t: f32, full: bool) {
     let rect = ui.available_rect_before_wrap();
     let resp = ui.allocate_rect(rect, Sense::click_and_drag());
     if resp.clicked() {
+        ns.look_on = true;
         resp.request_focus();
     }
-    if resp.dragged_by(PointerButton::Primary) {
-        let d = resp.drag_delta();
-        ns.yaw += d.x * 0.007;
-        ns.pitch = (ns.pitch - d.y * 0.005).clamp(-0.38, 0.48);
-        resp.request_focus();
+    if ns.look_on && resp.has_focus() {
+        let d = ui.input(|i| i.pointer.delta());
+        if d.length_sq() > 0.0 {
+            ns.aim_yaw += d.x * 0.0045;
+            ns.aim_pitch = (ns.aim_pitch - d.y * 0.0032).clamp(-0.45, 0.58);
+        }
     }
     let now = Instant::now();
     let dt = now.saturating_duration_since(ns.last).as_secs_f32();
@@ -1430,10 +1860,10 @@ pub fn paint(ui: &mut egui::Ui, ns: &mut Netspace, t: f32, full: bool) {
     } else {
         view.shrink2(Vec2::new(2.0, 0.0))
     };
-    let mut cols = (inner.width() / if full { 6.0 } else { 6.5 }).floor() as i32;
-    let mut rows = (inner.height() / if full { 9.0 } else { 10.0 }).floor() as i32;
-    cols = cols.clamp(40, if full { 220 } else { 120 });
-    rows = rows.clamp(22, if full { 96 } else { 48 });
+    let mut cols = (inner.width() / if full { 8.0 } else { 10.0 }).floor() as i32;
+    let mut rows = (inner.height() / if full { 11.0 } else { 14.0 }).floor() as i32;
+    cols = cols.clamp(40, if full { 180 } else { 90 });
+    rows = rows.clamp(20, if full { 80 } else { 36 });
     let cw = inner.width() / cols as f32;
     let ch = inner.height() / rows as f32;
     if cols < 10 || rows < 10 {
@@ -1484,7 +1914,14 @@ pub fn paint(ui: &mut egui::Ui, ns: &mut Netspace, t: f32, full: bool) {
         let rdx = ang.sin();
         let rdz = ang.cos();
         let mut hit = march(ns, rdx, rdz);
-        hit.dist *= (u * FOV).cos().max(0.32);
+        if ns.indoors && hit.mz >= 14 && (hit.mx == 7 || hit.mx == 8 || hit.mz > 14) {
+            let mut out = march_from(ns, ns.ret_x, ns.ret_z, rdx, rdz, true);
+            out.dist += hit.dist.max(0.4);
+            if out.h > 0.15 {
+                hit = out;
+            }
+        }
+        hit.dist *= (u * FOV).cos().max(0.72);
         if col == cols / 2 {
             center_sign = hit.sign;
             center_facade = hit.facade;
@@ -1495,7 +1932,8 @@ pub fn paint(ui: &mut egui::Ui, ns: &mut Netspace, t: f32, full: bool) {
         let wall_h = (hit.h / hit.dist.max(0.28)) * rows as f32 * 0.62;
         let top = horizon - wall_h;
         let bot = horizon + (cam_y / hit.dist.max(0.28)) * rows as f32 * 0.22;
-        let reflect = if hit.h > 0.15 {
+        let far = hit.dist > 22.0 && !ns.indoors;
+        let reflect = if hit.h > 0.15 && !far {
             Some(wall_tex(&hit, 0.62, t))
         } else {
             None
@@ -1504,7 +1942,11 @@ pub fn paint(ui: &mut egui::Ui, ns: &mut Netspace, t: f32, full: bool) {
             let rf = row as f32;
             let (glyph, color) = if hit.h > 0.15 && rf >= top && rf <= bot && hit.dist < 48.0 {
                 let v = ((rf - top) / (bot - top).max(0.001)).clamp(0.0, 1.0);
-                wall_tex(&hit, v, t)
+                if far {
+                    skyline_tex(&hit, v)
+                } else {
+                    wall_tex(&hit, v, t)
+                }
             } else if rf > horizon {
                 let p = ((rf - horizon) / (rows as f32 - horizon).max(1.0)).max(0.03);
                 let d = cam_y / p;
@@ -1516,8 +1958,10 @@ pub fn paint(ui: &mut egui::Ui, ns: &mut Netspace, t: f32, full: bool) {
                 let d = 2.4 / p;
                 let fx = ns.x + rdx * d;
                 let fz = ns.z + rdz * d;
-                if d < 14.0 {
-                    ceiling_tex(fx, fz, d, t)
+                if ns.indoors {
+                    ceiling_tex(fx, fz, d, t, Some(interior_lamp(ns.floor)))
+                } else if d < 14.0 {
+                    ceiling_tex(fx, fz, d, t, None)
                 } else {
                     sky_tex(col, row, t, rf > horizon - 5.0 && hit.dist > 16.0)
                 }
@@ -1573,9 +2017,74 @@ pub fn paint(ui: &mut egui::Ui, ns: &mut Netspace, t: f32, full: bool) {
     } else {
         radar_split.shrink(4.0)
     };
-    draw_radar(ns, ui.painter(), radar_rect, full);
+    if ns.map_on {
+        draw_radar(ns, ui.painter(), radar_rect, full);
+    }
     if full {
         draw_cruise_hud(ui, ns, pad);
+        draw_relay(ui, ns, pad);
+    }
+}
+
+fn draw_relay(ui: &mut egui::Ui, ns: &mut Netspace, pad: Rect) {
+    if !ns.relay {
+        return;
+    }
+    let booths: Vec<(f32, f32)> = ns
+        .sprites
+        .iter()
+        .filter(|s| s.kind == 14)
+        .map(|s| (s.x, s.z))
+        .collect();
+    let h = 28.0 + booths.len() as f32 * 26.0;
+    let plate = Rect::from_min_size(
+        pad.left_top() + Vec2::new(12.0, 42.0),
+        Vec2::new(220.0, h.min(pad.height() - 56.0)),
+    );
+    ui.painter()
+        .rect_filled(plate, 4.0, Color32::from_rgba_unmultiplied(8, 10, 14, 230));
+    ui.painter()
+        .rect_stroke(plate, 4.0, Stroke::new(1.0, CYAN), StrokeKind::Inside);
+    ui.painter().text(
+        plate.left_top() + Vec2::new(10.0, 8.0),
+        Align2::LEFT_TOP,
+        "TELEPHONE RELAY",
+        FontId::new(12.0, theme::mono()),
+        theme::ACID,
+    );
+    for (i, (x, z)) in booths.iter().enumerate() {
+        let row = Rect::from_min_size(
+            plate.left_top() + Vec2::new(8.0, 28.0 + i as f32 * 26.0),
+            Vec2::new(plate.width() - 16.0, 24.0),
+        );
+        if row.bottom() > plate.bottom() - 4.0 {
+            break;
+        }
+        let resp = ui.interact(row, egui::Id::new(("relay", i)), Sense::click());
+        let col = if resp.hovered() { theme::ACID } else { CYAN };
+        ui.painter().rect_filled(
+            row,
+            3.0,
+            if resp.hovered() {
+                Color32::from_rgba_unmultiplied(214, 255, 63, 28)
+            } else {
+                Color32::from_rgba_unmultiplied(77, 232, 255, 16)
+            },
+        );
+        ui.painter().text(
+            row.left_center() + Vec2::new(8.0, 0.0),
+            Align2::LEFT_CENTER,
+            format!("BOOTH {}  {}", i + 1, street_name(*x, *z)),
+            FontId::new(12.0, theme::mono()),
+            col,
+        );
+        if resp.clicked() {
+            ns.x = *x;
+            ns.z = *z + 0.9;
+            ns.relay = false;
+            ns.indoors = false;
+            ns.look_on = false;
+        }
     }
 }
 
@@ -1585,23 +2094,26 @@ fn draw_cruise_hud(ui: &mut egui::Ui, ns: &mut Netspace, pad: Rect) {
         Pos2::new(pad.right() - 12.0, pad.top() + 34.0),
     );
     ui.painter()
-        .rect_filled(bar, 0.0, Color32::from_rgba_unmultiplied(8, 8, 5, 200));
+        .rect_filled(bar, 0.0, Color32::from_rgba_unmultiplied(6, 10, 14, 210));
     ui.painter()
-        .rect_stroke(bar, 0.0, Stroke::new(1.0, ORANGE), StrokeKind::Inside);
-    ui.painter().text(
-        bar.left_center() + Vec2::new(12.0, 0.0),
+        .rect_stroke(bar, 0.0, Stroke::new(1.0, CYAN), StrokeKind::Inside);
+    let auto = Rect::from_min_size(bar.right_center() + Vec2::new(-118.0, -12.0), Vec2::new(108.0, 24.0));
+    let text_clip = Rect::from_min_max(
+        bar.left_top() + Vec2::new(8.0, 2.0),
+        Pos2::new((auto.left() - 8.0).max(bar.left() + 24.0), bar.bottom() - 2.0),
+    );
+    ui.painter().with_clip_rect(text_clip).text(
+        text_clip.left_center(),
         Align2::LEFT_CENTER,
         format!(
-            "NETSPACE  ·  {}  ·  {:05.1},{:05.1}  ·  {}  ·  WASD Q/E  SHIFT  C AUTO",
+            "NETSPACE  ·  {}  ·  {}  ·  {}  ·  CLICK LOOK  M MAP  E BOOTH  F DOOR  C AUTO",
             ns.district(),
-            ns.x,
-            ns.z,
+            ns.street(),
             ns.look
         ),
         FontId::new(12.0, theme::mono()),
         CYAN,
     );
-    let auto = Rect::from_min_size(bar.right_center() + Vec2::new(-118.0, -12.0), Vec2::new(108.0, 24.0));
     let on = ns.cruise;
     theme::fill_chamfer(
         ui,
@@ -1673,6 +2185,22 @@ fn draw_sprites(
         })
         .filter(|(d, _)| *d > 0.32 && *d < 26.0)
         .collect();
+    for (name, px, pz, _) in &ns.people {
+        let s = Sprite {
+            x: *px,
+            z: *pz,
+            vx: 0.0,
+            vz: 0.0,
+            kind: 20,
+        };
+        let dx = s.x - ns.x;
+        let dz = s.z - ns.z;
+        let depth = dx * sy + dz * cy;
+        if depth > 0.32 && depth < 18.0 {
+            order.push((depth, s));
+            let _ = name;
+        }
+    }
     order.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
     for (depth, s) in order {
         let dx = s.x - ns.x;
@@ -1697,7 +2225,8 @@ fn draw_sprites(
         let bot = horizon + ((cam_y - lift) / depth) * rows as f32 * 0.20;
         let top = bot - spr_h;
         let width = match s.kind {
-            0 => (2.4 / depth).ceil() as i32,
+            0 => (3.1 / depth).ceil() as i32,
+            13 => (1.8 / depth).ceil() as i32,
             4 => (1.6 / depth).ceil() as i32,
             7 => (4.2 / depth).ceil() as i32,
             _ => 1,
@@ -1713,28 +2242,59 @@ fn draw_sprites(
             let (glyph, color) = match s.kind {
                 0 => {
                     let body = if dc == 0 { '=' } else { '#' };
+                    let paint = car_color(s.x, s.z);
+                    let lamp = depth < 6.0 && dc == 0;
                     (
                         if depth < 4.0 { body } else { 'H' },
-                        fogged(ORANGE, depth),
+                        fogged(if lamp { Color32::from_rgb(255, 244, 214) } else { paint }, depth),
                     )
                 }
                 1 => (
                     if depth < 5.0 { 'i' } else { '!' },
-                    fogged(CREAM, depth),
+                    fogged(coat_color(s.x, s.z), depth),
+                ),
+                2 => (
+                    'I',
+                    fogged(Color32::from_rgb(255, 214, 150), depth),
                 ),
                 3 => ('*', fogged(CYAN, depth * 0.6)),
-                4 => ('A', fogged(ORANGE, depth)),
+                4 => (
+                    'A',
+                    fogged(
+                        match hash2(s.x as i32, s.z as i32) % 4 {
+                            0 => Color32::from_rgb(190, 48, 60),
+                            1 => Color32::from_rgb(220, 170, 50),
+                            2 => Color32::from_rgb(40, 140, 130),
+                            _ => Color32::from_rgb(70, 110, 190),
+                        },
+                        depth,
+                    ),
+                ),
                 9 => (
                     if dc == 0 { 'Y' } else { '"' },
-                    fogged(MUTED, depth),
+                    fogged(Color32::from_rgb(40, 130, 60), depth),
                 ),
-                10 => ('*', fogged(ORANGE, depth * 0.7)),
+                10 => (
+                    '*',
+                    fogged(
+                        match hash2(s.x as i32, s.z as i32) % 4 {
+                            0 => Color32::from_rgb(230, 80, 120),
+                            1 => Color32::from_rgb(240, 200, 60),
+                            2 => Color32::from_rgb(240, 240, 245),
+                            _ => Color32::from_rgb(120, 90, 200),
+                        },
+                        depth * 0.7,
+                    ),
+                ),
                 11 => ('^', fogged(CYAN, depth * 0.5)),
                 12 => ('n', fogged(DIM, depth)),
+                13 => ('o', fogged(Color32::from_rgb(80, 200, 140), depth)),
+                14 => ('T', fogged(Color32::from_rgb(255, 196, 80), depth)),
                 5 => ('#', fogged(DIM, depth)),
-                6 => ('*', fogged(ORANGE, depth * 0.5)),
+                6 => ('*', fogged(Color32::from_rgb(255, 210, 140), depth * 0.5)),
                 7 => ('=', fogged(CYAN, depth * 0.4)),
-                8 => ('O', fogged(ORANGE, depth)),
+                8 => ('O', fogged(Color32::from_rgb(255, 236, 200), depth)),
+                20 => ('@', fogged(crate::theme::ACID, depth * 0.5)),
                 _ => ('I', fogged(CYAN, depth)),
             };
             let r0 = top.max(0.0) as i32;
@@ -1749,13 +2309,29 @@ fn draw_sprites(
                 };
                 blit(painter, atlas, inner, c, row, cw, ch, gch, color);
             }
+            if s.kind == 20 {
+                if let Some((name, _, _, _)) = ns.people.iter().find(|p| (p.1 - s.x).abs() < 0.2 && (p.2 - s.z).abs() < 0.2) {
+                    let label = if name.chars().count() > 12 {
+                        name.chars().take(12).collect::<String>()
+                    } else {
+                        name.clone()
+                    };
+                    painter.text(
+                        Pos2::new(inner.left() + col as f32 * cw, inner.top() + top.max(0.0) * ch - ch),
+                        Align2::CENTER_BOTTOM,
+                        label,
+                        FontId::new(ch.max(10.0), theme::mono()),
+                        crate::theme::ACID,
+                    );
+                }
+            }
         }
     }
 }
 
 fn draw_radar(ns: &Netspace, painter: &egui::Painter, rect: Rect, rich: bool) {
     painter.rect_filled(rect, 0.0, TITLE);
-    painter.rect_stroke(rect, 0.0, Stroke::new(2.0, ORANGE), StrokeKind::Inside);
+    painter.rect_stroke(rect, 0.0, Stroke::new(1.5, CYAN), StrokeKind::Inside);
     painter.rect_stroke(
         rect.shrink(3.0),
         0.0,
@@ -1768,7 +2344,7 @@ fn draw_radar(ns: &Netspace, painter: &egui::Painter, rect: Rect, rich: bool) {
         Align2::LEFT_TOP,
         if rich { "NETMAP" } else { "RADAR" },
         FontId::new(13.0, theme::display()),
-        ORANGE,
+        CYAN,
     );
     painter.text(
         inner.right_top(),
@@ -1794,21 +2370,21 @@ fn draw_radar(ns: &Netspace, painter: &egui::Painter, rect: Rect, rich: bool) {
             let wz = pz + mz - cells / 2;
             let c = ns.at(wx, wz);
             let col = if c.h > 0.2 {
+                let body = facade_body(
+                    hash2(wx.div_euclid(LOT), wz.div_euclid(LOT)) % 8,
+                    c.facade,
+                );
                 if c.ice {
                     mix(CYAN, BG, 0.15)
-                } else if c.facade == 4 {
-                    mix(ORANGE, CYAN, 0.25)
-                } else if c.facade == 13 {
-                    mix(MUTED, ORANGE, 0.35)
                 } else {
-                    mix(ORANGE, BG, 0.08)
+                    mix(body, BG, 0.28)
                 }
             } else {
                 match c.kind {
                     Kind::Plaza => mix(CYAN, BG, 0.35),
-                    Kind::Park => mix(MUTED, BG, 0.15),
-                    Kind::Garden => mix(MUTED, ORANGE, 0.55),
-                    Kind::Market => mix(ORANGE, BG, 0.35),
+                    Kind::Park => mix(Color32::from_rgb(46, 140, 72), BG, 0.35),
+                    Kind::Garden => mix(Color32::from_rgb(80, 160, 70), BG, 0.4),
+                    Kind::Market => mix(Color32::from_rgb(190, 120, 48), BG, 0.35),
                     Kind::Trench | Kind::Canal => mix(CYAN, BG, 0.4),
                     Kind::Avenue => mix(DIM, BG, 0.08),
                     Kind::Street => mix(DIM, BG, 0.28),
@@ -1872,7 +2448,7 @@ fn draw_radar(ns: &Netspace, painter: &egui::Painter, rect: Rect, rich: bool) {
         Stroke::NONE,
     ));
     let n_pos = grid.center_top() + Vec2::new(0.0, 10.0);
-    painter.text(n_pos, Align2::CENTER_CENTER, "N", FontId::new(11.0, theme::mono()), ORANGE);
+    painter.text(n_pos, Align2::CENTER_CENTER, "N", FontId::new(11.0, theme::mono()), CYAN);
     painter.text(grid.center_bottom() + Vec2::new(0.0, -10.0), Align2::CENTER_CENTER, "S", FontId::new(10.0, theme::mono()), DIM);
     painter.text(grid.left_center() + Vec2::new(10.0, 0.0), Align2::CENTER_CENTER, "W", FontId::new(10.0, theme::mono()), DIM);
     painter.text(grid.right_center() + Vec2::new(-10.0, 0.0), Align2::CENTER_CENTER, "E", FontId::new(10.0, theme::mono()), DIM);
@@ -1895,7 +2471,7 @@ fn draw_radar(ns: &Netspace, painter: &egui::Painter, rect: Rect, rich: bool) {
         Align2::RIGHT_BOTTOM,
         if rich { "YOU · FOV" } else { "YOU" },
         FontId::new(11.0, theme::mono()),
-        ORANGE,
+        theme::ACID,
     );
 }
 

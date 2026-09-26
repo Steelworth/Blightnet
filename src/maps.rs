@@ -147,7 +147,7 @@ pub fn ui(
             board.pan = Vec2::ZERO;
         }
         if is_gm {
-            ui.label(RichText::new("DRAW").color(ORANGE).family(theme::mono()).small());
+            ui.label(RichText::new("DRAW").color(CYAN).family(theme::mono()).small());
             if theme::neon_btn_color(ui, "Ink", ORANGE, board.tool == DrawTool::Ink).clicked() {
                 board.tool = if board.tool == DrawTool::Ink {
                     DrawTool::Off
@@ -594,8 +594,47 @@ fn wrap_hint(ui: &mut egui::Ui, is_gm: bool) {
     );
 }
 
-pub fn drag_source(ui: &mut egui::Ui, id: impl std::hash::Hash, spec: TokenSpec, add: impl FnOnce(&mut egui::Ui)) {
-    let _ = ui.dnd_drag_source(egui::Id::new(("tok", id)), spec, |ui| add(ui));
+pub fn drag_source(
+    ui: &mut egui::Ui,
+    id: impl std::hash::Hash,
+    spec: impl FnOnce() -> TokenSpec,
+    add: impl FnOnce(&mut egui::Ui),
+) -> egui::Response {
+    drag_click(ui, id, spec, add)
+}
+
+/// Drag after the pointer moves. A press and release without that move is a click.
+/// The payload is built only while a drag is actually in progress.
+pub fn drag_click<P>(
+    ui: &mut egui::Ui,
+    id: impl std::hash::Hash,
+    payload: impl FnOnce() -> P,
+    add: impl FnOnce(&mut egui::Ui),
+) -> egui::Response
+where
+    P: std::any::Any + Send + Sync,
+{
+    let id = egui::Id::new(("tok", id));
+    let ctx = ui.ctx().clone();
+    if ctx.is_being_dragged(id) {
+        egui::DragAndDrop::set_payload(&ctx, payload());
+        let layer_id = egui::LayerId::new(egui::Order::Tooltip, id);
+        let inner = ui.scope_builder(egui::UiBuilder::new().layer_id(layer_id), add);
+        if let Some(pointer) = ctx.pointer_interact_pos() {
+            let delta = pointer - inner.response.rect.center();
+            ctx.transform_layer_shapes(
+                layer_id,
+                egui::emath::TSTransform::from_translation(delta),
+            );
+        }
+        inner.response
+    } else {
+        let inner = ui.scope(add);
+        let drag = ui
+            .interact(inner.response.rect, id, Sense::click_and_drag())
+            .on_hover_cursor(egui::CursorIcon::Grab);
+        drag | inner.response
+    }
 }
 
 #[cfg(test)]

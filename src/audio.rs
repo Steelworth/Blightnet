@@ -6,6 +6,95 @@ use std::fs::File;
 use std::io::BufReader;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex};
+use std::time::Duration;
+
+const TAP_N: usize = 512;
+
+/// Last samples from the local deck. The audio thread writes; the UI reads.
+/// Nothing here is sent to other seats.
+pub struct DeckTap {
+    buf: Mutex<[f32; TAP_N]>,
+    write: AtomicUsize,
+}
+
+impl DeckTap {
+    fn new() -> Arc<Self> {
+        Arc::new(Self {
+            buf: Mutex::new([0.0; TAP_N]),
+            write: AtomicUsize::new(0),
+        })
+    }
+
+    fn push_block(&self, samples: &[f32]) {
+        let Ok(mut buf) = self.buf.lock() else {
+            return;
+        };
+        let mut w = self.write.load(Ordering::Relaxed);
+        for &s in samples {
+            buf[w % TAP_N] = s;
+            w = w.wrapping_add(1);
+        }
+        self.write.store(w, Ordering::Relaxed);
+    }
+
+    pub fn latest(&self) -> [f32; 128] {
+        let Ok(buf) = self.buf.lock() else {
+            return [0.0; 128];
+        };
+        let w = self.write.load(Ordering::Relaxed);
+        let mut out = [0.0; 128];
+        for i in 0..128 {
+            let idx = w.wrapping_sub(128 - i) % TAP_N;
+            out[i] = buf[idx];
+        }
+        out
+    }
+
+    fn clear(&self) {
+        if let Ok(mut buf) = self.buf.lock() {
+            *buf = [0.0; TAP_N];
+        }
+        self.write.store(0, Ordering::Relaxed);
+    }
+}
+
+struct DeckTee<I> {
+    inner: I,
+    tap: Arc<DeckTap>,
+    scratch: [f32; 64],
+    filled: usize,
+}
+
+impl<I: Iterator<Item = f32>> Iterator for DeckTee<I> {
+    type Item = f32;
+    fn next(&mut self) -> Option<f32> {
+        let sample = self.inner.next()?;
+        self.scratch[self.filled] = sample;
+        self.filled += 1;
+        if self.filled == self.scratch.len() {
+            self.tap.push_block(&self.scratch);
+            self.filled = 0;
+        }
+        Some(sample)
+    }
+}
+
+impl<I: Source<Item = f32>> Source for DeckTee<I> {
+    fn current_frame_len(&self) -> Option<usize> {
+        self.inner.current_frame_len()
+    }
+    fn channels(&self) -> u16 {
+        self.inner.channels()
+    }
+    fn sample_rate(&self) -> u32 {
+        self.inner.sample_rate()
+    }
+    fn total_duration(&self) -> Option<Duration> {
+        self.inner.total_duration()
+    }
+}
 
 #[derive(Clone, Debug)]
 pub struct AudioDev {
@@ -29,10 +118,12 @@ pub struct Mixer {
     pub master: f32,
     voices: HashMap<String, Voice>,
     root: PathBuf,
+    radio_tap: Arc<DeckTap>,
     talk: Option<Sink>,
     clip: Option<Sink>,
     deck: Option<Sink>,
     deck_vol: f32,
+    tap: Arc<DeckTap>,
 }
 
 fn junk_device(name: &str) -> bool {
@@ -318,7 +409,44 @@ impl Mixer {
             clip: None,
             deck: None,
             deck_vol: 0.7,
+            tap: DeckTap::new(),
+            radio_tap: DeckTap::new(),
         })
+    }
+
+    pub fn deck_wave(&self) -> [f32; 128] {
+        if self.deck_live() {
+            self.tap.latest()
+        } else {
+            [0.0; 128]
+        }
+    }
+
+    /// Bars for the player. A deck file wins. A station uses the radio tap.
+    pub fn viz_wave(&self) -> [f32; 128] {
+        if self.deck_live() {
+            return self.deck_wave();
+        } else if self.is_on("__radio") {
+            self.radio_tap.latest()
+        } else {
+            [0.0; 128]
+        }
+    }
+
+    fn append_voice<S>(&self, sink: &Sink, id: &str, source: S)
+    where
+        S: Source<Item = f32> + Send + 'static,
+    {
+        if id == "__radio" {
+            sink.append(DeckTee {
+                inner: source,
+                tap: Arc::clone(&self.radio_tap),
+                scratch: [0.0; 64],
+                filled: 0,
+            });
+        } else {
+            sink.append(source);
+        }
     }
 
     pub fn play_pcm(&mut self, samples: Vec<f32>, rate: u32) {
@@ -326,17 +454,24 @@ impl Mixer {
             return;
         }
         if let Some(sink) = self.talk.as_ref() {
-            if sink.len() >= 8 {
+            if sink.len() >= 6 {
                 return;
             }
             let buf = SamplesBuffer::new(1, rate, samples);
             sink.append(buf);
+            if sink.is_paused() && sink.len() >= 2 {
+                sink.play();
+            }
             return;
         }
         if let Ok(sink) = Sink::try_new(&self.handle) {
             sink.set_volume(self.master.clamp(0.2, 1.0));
+            let primed = samples.len() >= 480;
+            sink.pause();
             sink.append(SamplesBuffer::new(1, rate, samples));
-            sink.play();
+            if primed {
+                sink.play();
+            }
             self.talk = Some(sink);
         }
     }
@@ -389,10 +524,16 @@ impl Mixer {
         self.deck_stop();
         let file = File::open(path).map_err(|e| format!("{}: {e}", path.display()))?;
         let dec = Decoder::new(BufReader::new(file))
-            .map_err(|e| format!("decode {}: {e}", path.display()))?;
+            .map_err(|e| format!("decode {}: {e}", path.display()))?
+            .convert_samples::<f32>();
         let sink = Sink::try_new(&self.handle).map_err(|e| e.to_string())?;
         sink.set_volume((self.deck_vol * self.master).clamp(0.0, 1.0));
-        sink.append(dec);
+        sink.append(DeckTee {
+            inner: dec,
+            tap: Arc::clone(&self.tap),
+            scratch: [0.0; 64],
+            filled: 0,
+        });
         sink.play();
         self.deck = Some(sink);
         Ok(())
@@ -402,6 +543,7 @@ impl Mixer {
         if let Some(s) = self.deck.take() {
             s.stop();
         }
+        self.tap.clear();
     }
 
     pub fn deck_pause(&mut self) {
@@ -446,6 +588,9 @@ impl Mixer {
         if let Some(v) = self.voices.remove(id) {
             v.sink.stop();
         }
+        if id == "__radio" {
+            self.radio_tap.clear();
+        }
     }
 
     pub fn silence(&mut self) {
@@ -479,6 +624,32 @@ impl Mixer {
             .collect()
     }
 
+    pub fn play_once(&mut self, id: &str, path: &std::path::Path, vol: f32) -> Result<(), String> {
+        self.stop(id);
+        let file = File::open(path).map_err(|e| format!("{}: {e}", path.display()))?;
+        let dec = Decoder::new(BufReader::new(file))
+            .map_err(|e| format!("decode: {e}"))?
+            .convert_samples::<f32>();
+        let sink = Sink::try_new(&self.handle).map_err(|e| e.to_string())?;
+        let vol = vol.clamp(0.0, 1.0);
+        sink.set_volume((vol * self.master).clamp(0.0, 1.0));
+        self.append_voice(&sink, id, dec);
+        sink.play();
+        self.voices.insert(
+            id.to_string(),
+            Voice {
+                sink,
+                volume: vol,
+                presence: 1.0,
+            },
+        );
+        Ok(())
+    }
+
+    pub fn voice_done(&self, id: &str) -> bool {
+        self.voices.get(id).map(|v| v.sink.empty()).unwrap_or(true)
+    }
+
     pub fn play(&mut self, id: &str, rel: &str, vol: f32) -> Result<(), String> {
         if self.voices.contains_key(id) {
             self.set_volume(id, vol);
@@ -486,11 +657,14 @@ impl Mixer {
         }
         let path: PathBuf = self.root.join(rel);
         let file = File::open(&path).map_err(|e| format!("{}: {e}", path.display()))?;
-        let dec = Decoder::new(BufReader::new(file)).map_err(|e| format!("decode {rel}: {e}"))?;
+        let dec = Decoder::new(BufReader::new(file))
+            .map_err(|e| format!("decode {rel}: {e}"))?
+            .convert_samples::<f32>()
+            .repeat_infinite();
         let sink = Sink::try_new(&self.handle).map_err(|e| e.to_string())?;
         let vol = vol.clamp(0.0, 1.0);
         sink.set_volume((vol * self.master).clamp(0.0, 1.0));
-        sink.append(dec.repeat_infinite());
+        self.append_voice(&sink, id, dec);
         sink.play();
         self.voices.insert(
             id.to_string(),

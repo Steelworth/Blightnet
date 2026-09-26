@@ -66,6 +66,10 @@ impl TexCache {
         self.order.retain(|k| k != key);
     }
 
+    pub fn get_key(&self, key: &str) -> Option<TextureHandle> {
+        self.map.get(key).cloned()
+    }
+
     fn evict(&mut self) {
         if self.order.len() < CAP {
             return;
