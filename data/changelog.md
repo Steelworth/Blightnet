@@ -15,7 +15,7 @@ The deck writes here so you can see what changed after an update. Newest first. 
 - RECON is a local case desk for people and companies. Files stay in data/recon.json. Delete asks twice.
 - Invites stay blightnet:// from node to node. No Cloudflare. Contact quality is a short round trip: clear, steady, slow, or poor.
 - Linux can launch Blightnet-x86_64.AppImage. Keep audio/, assets/, and data/ beside the image.
-- Rescan devices looks for mics, speakers, and cameras. Update pulls from GitHub.
+- Rescan devices looks for mics, speakers, and cameras. Update downloads main over HTTPS, keeps local edits, and works on a folder that was only unzipped.
 - After Online, Host still offers a local table and an internet table. The invite names the port that is listening. Join stays on the Join panel until you are in.
 - A voice or video call can add more contacts and crew members. Hang up drops you. The call ends when the last person leaves.
 - Place, Calendar, and Calc are table rail buttons. Place shows the painting. Calendar is a month. Calc stays on this computer.

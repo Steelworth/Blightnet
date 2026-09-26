@@ -13,7 +13,7 @@ use rand::Rng;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::sync::mpsc::Receiver;
+use std::sync::mpsc::{self, Receiver, TryRecvError};
 use std::time::{Duration, Instant};
 
 /// Wake at most every 16.67ms. Do not sleep on the UI thread to enforce this.
@@ -307,6 +307,7 @@ pub struct Blightnet {
     calc_op: Option<char>,
     calc_entry: String,
     calc_fresh: bool,
+    update_rx: Option<Receiver<Result<String, String>>>,
     recon: Vec<crate::recon::Dossier>,
     recon_i: usize,
     recon_q: String,
@@ -663,6 +664,7 @@ impl Blightnet {
             calc_op: None,
             calc_entry: "0".into(),
             calc_fresh: true,
+            update_rx: None,
             recon: crate::recon::load(&root),
             recon_i: 0,
             recon_q: String::new(),
@@ -2656,27 +2658,42 @@ impl Blightnet {
     }
 
     fn do_update(&mut self) {
+        if self.update_rx.is_some() {
+            self.chat.push("Update is already running.".into());
+            return;
+        }
         let root = self.root.clone();
-        let out = std::process::Command::new("git")
-            .args(["-C"])
-            .arg(&root)
-            .args(["pull", "--ff-only", "origin", "main"])
-            .output();
-        match out {
-            Ok(o) if o.status.success() => {
-                let text = String::from_utf8_lossy(&o.stdout);
+        let (tx, rx) = mpsc::channel();
+        self.update_rx = Some(rx);
+        self.status = "Updating…".into();
+        self.chat.push("Updating from GitHub…".into());
+        std::thread::spawn(move || {
+            let _ = tx.send(github_update(&root));
+        });
+    }
+
+    fn poll_update(&mut self) {
+        let Some(rx) = self.update_rx.take() else {
+            return;
+        };
+        match rx.try_recv() {
+            Ok(Ok(text)) => {
                 self.chat.push(format!(
-                    "Pulled from GitHub.\n{}\nRestart Blightnet to run the new build.",
-                    text.trim()
+                    "Pulled from GitHub.\n{text}\nRestart Blightnet to run the new build."
                 ));
                 self.status = "Update pulled".into();
             }
-            Ok(o) => {
-                let err = String::from_utf8_lossy(&o.stderr);
-                self.chat.push(format!("Git pull failed. {}", err.trim()));
+            Ok(Err(err)) => {
+                self.chat.push(format!("Update failed. {err}"));
+                self.status = "Update failed".into();
             }
-            Err(_) => {
-                self.chat.push("Git is not on PATH. Install Git, then press UPDATE again.".into());
+            Err(TryRecvError::Empty) => {
+                self.update_rx = Some(rx);
+                self.status = "Updating…".into();
+            }
+            Err(TryRecvError::Disconnected) => {
+                self.chat.push("Update failed. Git stopped.".into());
+                self.status = "Update failed".into();
             }
         }
     }
@@ -3139,7 +3156,7 @@ impl Blightnet {
 
     fn call_targets(&self) -> Vec<String> {
         let mut v = Vec::new();
-        let mut push = |v: &mut Vec<String>, id: &str| {
+        let push = |v: &mut Vec<String>, id: &str| {
             if !id.is_empty()
                 && id != self.net.self_id
                 && !self.call_drop.iter().any(|d| d == id)
@@ -3808,6 +3825,7 @@ impl eframe::App for Blightnet {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.tick_fps();
         self.poll_net();
+        self.poll_update();
         self.poll_meters();
         self.poll_probe();
         self.poll_radio();
@@ -9853,6 +9871,95 @@ fn sheet_sig(rows: &[Character]) -> u64 {
     h.finish()
 }
 
+const GITHUB_REPO: &str = "https://github.com/Steelworth/Blightnet.git";
+
+fn git_at(root: &Path, args: &[&str]) -> Result<String, String> {
+    let out = std::process::Command::new("git")
+        .current_dir(root)
+        .args(["-c", "safe.directory=*"])
+        .args(args)
+        .env("GIT_TERMINAL_PROMPT", "0")
+        .env_remove("LD_LIBRARY_PATH")
+        .env_remove("LD_PRELOAD")
+        .stdin(std::process::Stdio::null())
+        .output()
+        .map_err(|_| "Git is not on PATH. Install Git, then press Update again.".to_string())?;
+    let err = String::from_utf8_lossy(&out.stderr).trim().to_string();
+    let ok = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    let mut text = String::new();
+    if !ok.is_empty() {
+        text.push_str(&ok);
+    }
+    if !err.is_empty() {
+        if !text.is_empty() {
+            text.push('\n');
+        }
+        text.push_str(&err);
+    }
+    if out.status.success() {
+        Ok(if text.is_empty() {
+            "Already up to date.".into()
+        } else {
+            text
+        })
+    } else if text.is_empty() {
+        Err(format!("Git exited with {}.", out.status))
+    } else {
+        Err(text)
+    }
+}
+
+fn local_edits_block(msg: &str) -> bool {
+    let m = msg.to_lowercase();
+    m.contains("local changes")
+        || m.contains("would be overwritten")
+        || m.contains("please commit your changes")
+        || m.contains("please move or remove")
+}
+
+fn github_update(root: &Path) -> Result<String, String> {
+    github_update_from(root, GITHUB_REPO)
+}
+
+fn github_update_from(root: &Path, url: &str) -> Result<String, String> {
+    if !root.join("data").join("mixer-catalog.json").is_file() {
+        return Err("This folder is not a Blightnet deck.".into());
+    }
+    if !root.join(".git").exists() {
+        git_at(root, &["init", "-b", "main"])?;
+        let _ = git_at(root, &["remote", "remove", "origin"]);
+        git_at(root, &["remote", "add", "origin", url])?;
+        git_at(root, &["fetch", "--depth", "1", "origin", "main"])?;
+        git_at(root, &["checkout", "-f", "-B", "main", "FETCH_HEAD"])?;
+        return Ok("Downloaded the latest Blightnet.".into());
+    }
+    let fetched = match git_at(root, &["fetch", url, "main"]) {
+        Ok(text) => text,
+        Err(https_err) => match git_at(root, &["fetch", "origin", "main"]) {
+            Ok(text) => text,
+            Err(origin_err) => {
+                return Err(format!("{https_err}\n{origin_err}"));
+            }
+        },
+    };
+    match git_at(root, &["merge", "--ff-only", "FETCH_HEAD"]) {
+        Ok(merged) => Ok(format!("{fetched}\n{merged}")),
+        Err(err) if local_edits_block(&err) => {
+            let _ = git_at(root, &["stash", "push", "-u", "-m", "blightnet-update"]);
+            let merged = git_at(root, &["merge", "--ff-only", "FETCH_HEAD"])?;
+            match git_at(root, &["stash", "pop"]) {
+                Ok(_) => Ok(format!(
+                    "{merged}\nYour local edits were set aside and put back."
+                )),
+                Err(pop) => Ok(format!(
+                    "{merged}\nThe update is in. Your local edits are still in the git stash. {pop}"
+                )),
+            }
+        }
+        Err(err) => Err(err),
+    }
+}
+
 fn pack_recon(root: &Path, file: &crate::recon::Dossier) -> String {
     let mut portrait_b64 = String::new();
     let mut ext = String::new();
@@ -10780,6 +10887,72 @@ mod tests {
         assert_eq!(log[0].1, vec!["alpha", "beta"]);
         assert_eq!(log[1].0, "2026-09-18");
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn update_downloads_without_a_git_checkout_and_past_local_edits() {
+        let base = std::env::temp_dir().join(format!("bn-upd-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        let bare = base.join("bare");
+        let seed = base.join("seed");
+        let work = base.join("work");
+        let fresh = base.join("fresh");
+        let run = |dir: &Path, args: &[&str]| {
+            let out = std::process::Command::new("git")
+                .current_dir(dir)
+                .args(args)
+                .env("GIT_AUTHOR_NAME", "Ada")
+                .env("GIT_AUTHOR_EMAIL", "ada@example.com")
+                .env("GIT_COMMITTER_NAME", "Ada")
+                .env("GIT_COMMITTER_EMAIL", "ada@example.com")
+                .output()
+                .expect("git");
+            assert!(
+                out.status.success(),
+                "{} {}",
+                args.join(" "),
+                String::from_utf8_lossy(&out.stderr)
+            );
+        };
+        std::fs::create_dir_all(&bare).unwrap();
+        run(&bare, &["init", "--bare", "-b", "main"]);
+        std::fs::create_dir_all(seed.join("data")).unwrap();
+        std::fs::write(seed.join("data/mixer-catalog.json"), "{}").unwrap();
+        std::fs::write(seed.join("hello.txt"), "v1").unwrap();
+        run(&seed, &["init", "-b", "main"]);
+        run(&seed, &["add", "."]);
+        run(&seed, &["commit", "-m", "v1"]);
+        run(&seed, &["remote", "add", "origin", bare.to_str().unwrap()]);
+        run(&seed, &["push", "origin", "main"]);
+        run(&base, &["clone", bare.to_str().unwrap(), "work"]);
+        std::fs::write(seed.join("hello.txt"), "v2").unwrap();
+        run(&seed, &["add", "hello.txt"]);
+        run(&seed, &["commit", "-m", "v2"]);
+        run(&seed, &["push", "origin", "main"]);
+        std::fs::write(work.join("hello.txt"), "local edit").unwrap();
+        let url = bare.to_str().unwrap();
+        let updated = github_update_from(&work, url).expect("update behind a local edit");
+        assert!(
+            updated.contains("v2") || updated.contains("Fast-forward") || updated.contains("stash") || updated.contains("Updating"),
+            "{updated}"
+        );
+        let head = std::process::Command::new("git")
+            .current_dir(&work)
+            .args(["rev-parse", "HEAD"])
+            .output()
+            .unwrap();
+        let want = std::process::Command::new("git")
+            .current_dir(&seed)
+            .args(["rev-parse", "HEAD"])
+            .output()
+            .unwrap();
+        assert_eq!(head.stdout, want.stdout, "{updated}");
+        std::fs::create_dir_all(fresh.join("data")).unwrap();
+        std::fs::write(fresh.join("data/mixer-catalog.json"), "{}").unwrap();
+        github_update_from(&fresh, url).expect("update a folder that is not a git repo");
+        let hello = std::fs::read_to_string(fresh.join("hello.txt")).unwrap_or_default();
+        assert_eq!(hello, "v2", "fresh download did not get the file");
+        let _ = std::fs::remove_dir_all(&base);
     }
 
     #[test]
