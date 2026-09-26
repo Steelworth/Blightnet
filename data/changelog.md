@@ -16,6 +16,14 @@ The deck writes here so you can see what changed after an update. Newest first. 
 - Invites stay blightnet:// from node to node. No Cloudflare. Contact quality is a short round trip: clear, steady, slow, or poor.
 - Linux can launch Blightnet-x86_64.AppImage. Keep audio/, assets/, and data/ beside the image.
 - Rescan devices looks for mics, speakers, and cameras. Update pulls from GitHub.
+- After Online, Host still offers a local table and an internet table. The invite names the port that is listening. Join stays on the Join panel until you are in.
+- A voice or video call can add more contacts and crew members. Hang up drops you. The call ends when the last person leaves.
+- Place, Calendar, and Calc are table rail buttons. Place shows the painting. Calendar is a month. Calc stays on this computer.
+- Recon files, nethooks you wrote, and character sheets have Send. Pick one contact or one crew. Pinned lessons do not send. Private notes stay here.
+- The HTML and CSS lessons name what the painter keeps and what it cuts.
+- ROTN answers on this computer with no other service. A model file is optional.
+- Netspace streets, sidewalks, parks, water, and sky use ordinary colors. Acid and cyan stay on your own marks.
+- New photographs for the castle, tavern, dungeon, forest, Hearthsong city, and Night City, each with morning, day, evening, and night.
 
 ## 2026-09-19
 

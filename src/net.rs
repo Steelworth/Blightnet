@@ -179,6 +179,16 @@ pub enum Wire {
     /// Blackjack or chess. `game` is "bj" or "chess". `body` is the table state.
     #[serde(rename = "pit")]
     Pit { from: String, game: String, body: String },
+    /// One copied entry. `kind` is recon, nethook, or sheet. `body` is JSON.
+    #[serde(rename = "share")]
+    Share {
+        from: String,
+        name: String,
+        #[serde(default)]
+        to: Option<String>,
+        kind: String,
+        body: String,
+    },
 }
 
 pub enum NetEvent {
@@ -278,6 +288,12 @@ pub enum NetEvent {
     Pit { from: String, game: String, body: String },
     Probe { from: String, n: u64 },
     ProbeBack { from: String, n: u64 },
+    Share {
+        from: String,
+        name: String,
+        kind: String,
+        body: String,
+    },
 }
 
 pub(crate) enum Cmd {
@@ -573,6 +589,26 @@ impl NetHub {
 
     pub fn send_voice(&self, action: &str, to: Option<String>) {
         self.send_voice_ex(action, to, None);
+    }
+
+    pub fn send_call_roster(&self, to: &str, ids: &str) {
+        let _ = self.tx.send(Cmd::Send(Wire::Voice {
+            from: self.self_id.clone(),
+            name: ids.to_string(),
+            action: "roster".into(),
+            to: Some(to.to_string()),
+            crew: None,
+        }));
+    }
+
+    pub fn send_share(&self, to: &str, kind: &str, label: &str, body: &str) {
+        let _ = self.tx.send(Cmd::Send(Wire::Share {
+            from: self.self_id.clone(),
+            name: label.to_string(),
+            to: Some(to.to_string()),
+            kind: kind.to_string(),
+            body: body.to_string(),
+        }));
     }
 
     pub fn send_voice_ex(&self, action: &str, to: Option<String>, crew: Option<String>) {
@@ -954,12 +990,14 @@ pub(crate) fn run_hub(
                 stop = Arc::new(AtomicBool::new(false));
                 clients = Arc::new(Mutex::new(HashMap::new()));
                 guest_tx = None;
+                listening = false;
+                internet_on = false;
                 if let Some(mut c) = relay_child.take() {
                     let _ = c.kill();
                 }
-                match TcpListener::bind(("0.0.0.0", DEFAULT_PORT))
-                    .or_else(|_| TcpListener::bind(("0.0.0.0", 0)))
-                {
+                // Online already holds 8766. Wait until that accept thread drops it
+                // so the invite names the port friends will actually reach.
+                match bind_table_listener() {
                     Ok(listener) => {
                         let _ = listener.set_nonblocking(true);
                         let port = listener.local_addr().map(|a| a.port()).unwrap_or(DEFAULT_PORT);
@@ -1259,6 +1297,19 @@ pub(crate) fn run_hub(
             }
         }
     }
+}
+
+fn bind_table_listener() -> std::io::Result<TcpListener> {
+    for _ in 0..8 {
+        match TcpListener::bind(("0.0.0.0", DEFAULT_PORT)) {
+            Ok(listener) => return Ok(listener),
+            Err(e) if e.kind() == std::io::ErrorKind::AddrInUse => {
+                thread::sleep(Duration::from_millis(40));
+            }
+            Err(e) => return Err(e),
+        }
+    }
+    TcpListener::bind(("0.0.0.0", 0))
 }
 
 fn spawn_accept(
@@ -1755,6 +1806,21 @@ pub(crate) fn host_incoming(
                         });
                         broadcast(&clients, &msg, Some(&cid));
                     }
+                    Wire::Share {
+                        from,
+                        name,
+                        to,
+                        kind,
+                        body,
+                    } => {
+                        let _ = ev_tx.send(NetEvent::Share {
+                            from: from.clone(),
+                            name: name.clone(),
+                            kind: kind.clone(),
+                            body: body.clone(),
+                        });
+                        relay_to(&clients, &host_id, &to, Some(&cid), &msg);
+                    }
                     _ => {}
                 }
 }
@@ -2243,6 +2309,25 @@ pub(crate) fn guest_incoming(msg: Wire, self_id: &str, ev_tx: &Sender<NetEvent>)
         Wire::ProbeBack { from, n } => {
             if from != self_id {
                 let _ = ev_tx.send(NetEvent::ProbeBack { from, n });
+            }
+        }
+        Wire::Share {
+            from,
+            name,
+            to,
+            kind,
+            body,
+        } => {
+            if from != self_id {
+                let mine = to.as_deref().map(|id| id == self_id).unwrap_or(true);
+                if mine {
+                    let _ = ev_tx.send(NetEvent::Share {
+                        from,
+                        name,
+                        kind,
+                        body,
+                    });
+                }
             }
         }
         _ => {}
@@ -2745,6 +2830,87 @@ mod tests {
         let _ = std::fs::remove_dir_all(&a);
         let _ = std::fs::remove_dir_all(&b);
         assert!(saw, "host did not receive guest chat");
+    }
+
+    #[test]
+    fn online_then_host_lets_a_guest_join() {
+        let a = std::env::temp_dir().join(format!("bn-on-host-{}", rand::random::<u32>()));
+        let b = std::env::temp_dir().join(format!("bn-on-guest-{}", rand::random::<u32>()));
+        std::fs::create_dir_all(&a).unwrap();
+        std::fs::create_dir_all(&b).unwrap();
+        let mut host = NetHub::new("Host".into(), &a);
+        host.go_online();
+        let mut online = false;
+        for _ in 0..80 {
+            for ev in host.poll() {
+                if matches!(ev, NetEvent::Online { .. }) {
+                    online = true;
+                }
+            }
+            if online {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(25));
+        }
+        assert!(online, "host node did not go online");
+        host.host(false, a.clone());
+        let mut invite = String::new();
+        for _ in 0..80 {
+            let _ = host.poll();
+            if host.role == Role::Host && host.table_key.len() == 16 {
+                invite = host.paste_link();
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(25));
+        }
+        assert_eq!(host.role, Role::Host);
+        assert!(
+            invite.starts_with("blightnet://"),
+            "invite was {invite}"
+        );
+        assert!(
+            invite.contains(&format!(":{}", host.port)),
+            "invite {invite} does not name listening port {}",
+            host.port
+        );
+        let mut guest = NetHub::new("Guest".into(), &b);
+        guest.go_online();
+        for _ in 0..40 {
+            let _ = guest.poll();
+            std::thread::sleep(std::time::Duration::from_millis(25));
+        }
+        guest.join(&invite);
+        let mut joined = false;
+        for _ in 0..80 {
+            let _ = host.poll();
+            let _ = guest.poll();
+            if guest.role == Role::Guest {
+                joined = true;
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(25));
+        }
+        assert!(joined, "guest did not join {invite}");
+        guest.send_chat("from the other seat", None, false);
+        let mut saw = false;
+        for _ in 0..80 {
+            for ev in host.poll() {
+                if let NetEvent::Chat { text, .. } = ev {
+                    if text.contains("from the other seat") {
+                        saw = true;
+                    }
+                }
+            }
+            if saw {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(25));
+        }
+        drop(guest);
+        drop(host);
+        let _ = std::fs::remove_dir_all(&a);
+        let _ = std::fs::remove_dir_all(&b);
+        assert!(saw, "host did not receive the guest");
     }
 
     #[test]

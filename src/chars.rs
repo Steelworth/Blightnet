@@ -710,6 +710,7 @@ pub fn ui_sheet(
     roll: &mut Option<crate::dice::Roll>,
     names: &crate::names::Names,
     zoom: &mut Option<PathBuf>,
+    send: &mut Option<String>,
 ) {
     if is_gm {
         let drop = ui.interact(ui.clip_rect(), egui::Id::new("sheet-drop"), egui::Sense::hover());
@@ -734,6 +735,13 @@ pub fn ui_sheet(
     ui.add_space(6.0);
     sheet_card(ui, "DESK", |ui| {
         ui.horizontal_wrapped(|ui| {
+            if theme::neon_btn(ui, "Send").clicked() {
+                if let Some(c) = chars.get(*char_i) {
+                    if let Ok(body) = serde_json::to_string(c) {
+                        *send = Some(body);
+                    }
+                }
+            }
             if theme::neon_btn(ui, "+ New").clicked() {
                 chars.push(Character::new(if blight { "blight" } else { "hearthsong" }));
                 *char_i = chars.len() - 1;

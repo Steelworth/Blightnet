@@ -232,6 +232,20 @@ const HTML_DOC: &str = r#"<h1>HTML on the grid</h1>
 &lt;li&gt;Rumors&lt;/li&gt;
 &lt;/ul&gt;
 &lt;blockquote&gt;Ask for Ada.&lt;/blockquote&gt;</pre>
+<h2>Lesson 12 — what the painter actually draws</h2>
+<ul>
+<li>h1 is the acid title. Use one.</li>
+<li>h2 and h3 are smaller cyan titles.</li>
+<li>p is a cream paragraph. A new idea is a new p.</li>
+<li>ul and li are a list. The order is not the point.</li>
+<li>strong is the word you would tap. em is a lean inside a line.</li>
+<li>code is a short mark. pre keeps your line breaks.</li>
+<li>blockquote is drawn in the warning color.</li>
+<li>table, tr, and td sit cells side by side. Keep it short.</li>
+<li>hr is a line between parts. br is one break.</li>
+<li>img, audio, and video only work with nh-file:// after you attach the file.</li>
+</ul>
+<p>script, iframe, object, and embed are removed. A javascript: link is cut. A style rule cannot load a file with url( or @import. A tag that is not in this list is skipped and the words inside it stay.</p>
 <h2>If you do not want to type tags</h2>
 <p>Open your page, press Build, and add a heading, a paragraph, a list, a picture. The preview is the same painter. Press Code when you want the tags.</p>
 "#;
@@ -284,6 +298,12 @@ blockquote { color: #ff1744; font-size: 16px; }
 <li>td is a table cell</li>
 </ul>
 <p>If you style a name that is not on the page, nothing changes. If you misspell the name, nothing changes. Look at the preview.</p>
+<h2>Lesson 6 — only three settings stick</h2>
+<p>The painter keeps color, background or background-color, and font-size. Each color is six hex digits. font-size is a number and px. margin, padding, display, position, font-family, text-align, border, width, and height are ignored. If you write them, the preview does not change.</p>
+<pre>&lt;style&gt;
+p { color: #f4efe4; background: #12160c; font-size: 16px; margin: 20px; }
+&lt;/style&gt;</pre>
+<p>That paragraph is cream, 16px, on a dark slab. The margin is thrown away. The desk colors are #d6ff3f acid, #4de8ff cyan, #f4efe4 cream, #ff4fd8 hot pink, #ff1744 neon red.</p>
 <h2>What is refused</h2>
 <ul>
 <li>url( ) would fetch a picture or a font. It is cut.</li>

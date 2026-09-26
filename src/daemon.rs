@@ -198,6 +198,12 @@ enum IpcEvent {
     Pit { from: String, game: String, body: String },
     Probe { from: String, n: u64 },
     ProbeBack { from: String, n: u64 },
+    Share {
+        from: String,
+        name: String,
+        kind: String,
+        body: String,
+    },
     NetPos {
         from: String,
         name: String,
@@ -532,6 +538,17 @@ fn event_out(ev: &NetEvent) -> IpcEvent {
             from: from.clone(),
             n: *n,
         },
+        NetEvent::Share {
+            from,
+            name,
+            kind,
+            body,
+        } => IpcEvent::Share {
+            from: from.clone(),
+            name: name.clone(),
+            kind: kind.clone(),
+            body: body.clone(),
+        },
         NetEvent::NetPos { from, name, x, z, yaw } => IpcEvent::NetPos {
             from: from.clone(),
             name: name.clone(),
@@ -688,6 +705,17 @@ fn event_in(ev: IpcEvent) -> NetEvent {
         IpcEvent::Pit { from, game, body } => NetEvent::Pit { from, game, body },
         IpcEvent::Probe { from, n } => NetEvent::Probe { from, n },
         IpcEvent::ProbeBack { from, n } => NetEvent::ProbeBack { from, n },
+        IpcEvent::Share {
+            from,
+            name,
+            kind,
+            body,
+        } => NetEvent::Share {
+            from,
+            name,
+            kind,
+            body,
+        },
     }
 }
 

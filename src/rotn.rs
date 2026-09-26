@@ -224,9 +224,12 @@ pub fn answer(root: &Path, ask: &str, memory: &str, desk: &Desk) -> String {
     }
     let lead = format!("{} — {}. ", soul.name, soul.voice);
     if bits.is_empty() {
-        return format!(
-            "{lead}Press Hour, Table, Place, Rumor, Job, or NPC. Or ask in your own words. Nothing here is sent away."
-        );
+        let door = if desk.inside { "inside" } else { "outside" };
+        bits.push(format!(
+            "{} at {}, {}. Date {}. Clock {}. Scene {}.",
+            desk.world, desk.place, door, desk.date, desk.clock, desk.scene
+        ));
+        bits.push("Ask for the hour, the table, a rumor, a job, or a person.".into());
     }
     format!("{lead}{}", bits.join(" "))
 }
@@ -310,7 +313,7 @@ fn prompt_of(root: &Path, ask: &str, memory: &str, desk: &Desk) -> String {
 
 fn run_model(root: &Path, model: &Path, ask: &str, memory: &str, desk: &Desk) -> String {
     let Some(bin) = runner_path() else {
-        return "No llama-cli on this computer. The Hour, Table, Place, Rumor, Job, and NPC buttons still work.".into();
+        return answer(root, ask, memory, desk);
     };
     let prompt = prompt_of(root, ask, memory, desk);
     let mut cmd = std::process::Command::new(bin);
@@ -466,35 +469,18 @@ fn spawn_ask(rotn: &mut Rotn, root: &Path, ask: String, desk: Desk) {
     rotn.log.push((false, "…thinking".into()));
     let memory = rotn.memory.clone();
     let root = root.to_path_buf();
-    if rotn.engine_server {
-        let addr = rotn.server.clone();
-        let model = rotn
-            .server_models
-            .get(rotn.server_pick)
-            .cloned()
-            .unwrap_or_default();
-        thread::spawn(move || {
-            let reply = if model.is_empty() {
-                "Press Rescan and pick a model. DeepSeek and Kimi show up here after you start them on this computer.".into()
-            } else {
-                ask_server(&addr, &model, &root, &ask, &memory, &desk)
-            };
-            let _ = tx.send(reply);
-        });
-    } else {
-        let model = rotn
-            .models
-            .get(rotn.pick)
-            .map(|m| PathBuf::from(&m.path));
-        thread::spawn(move || {
-            let reply = if let Some(path) = model {
-                run_model(&root, &path, &ask, &memory, &desk)
-            } else {
-                "No model file yet. The buttons on the left still answer.".into()
-            };
-            let _ = tx.send(reply);
-        });
-    }
+    let model = rotn
+        .models
+        .get(rotn.pick)
+        .map(|m| PathBuf::from(&m.path));
+    thread::spawn(move || {
+        let reply = if let Some(path) = model.filter(|_| runner_path().is_some()) {
+            run_model(&root, &path, &ask, &memory, &desk)
+        } else {
+            answer(&root, &ask, &memory, &desk)
+        };
+        let _ = tx.send(reply);
+    });
 }
 
 pub fn paint(ui: &mut egui::Ui, root: &Path, rotn: &mut Rotn, desk: &Desk) {
@@ -519,7 +505,7 @@ pub fn paint(ui: &mut egui::Ui, root: &Path, rotn: &mut Rotn, desk: &Desk) {
     );
     wrap_text_local(
         ui,
-        "You do not need a model. If you want longer answers, start DeepSeek or Kimi on this computer with Ollama, press Rescan, and pick the name. An address on the internet is refused.",
+        "No other service. The fixer answers from this computer. A model file in data/models is optional, and only if llama-cli is on this machine. Nothing is sent away.",
     );
     ui.add_space(6.0);
     if let Some(rx) = rotn.pending.take() {
@@ -607,11 +593,7 @@ pub fn paint(ui: &mut egui::Ui, root: &Path, rotn: &mut Rotn, desk: &Desk) {
             let ask = rotn.input.trim().to_string();
             rotn.input.clear();
             rotn.log.push((true, ask.clone()));
-            let use_model = if rotn.engine_server {
-                !rotn.server_models.is_empty()
-            } else {
-                runner_path().is_some() && !rotn.models.is_empty()
-            };
+            let use_model = runner_path().is_some() && !rotn.models.is_empty();
             if use_model {
                 spawn_ask(rotn, root, ask, desk_owned(desk));
             } else {
@@ -650,31 +632,6 @@ fn rotn_side(side: &mut egui::Ui, root: &Path, rotn: &mut Rotn, desk: &Desk) {
             }
         }
     });
-    side.label(RichText::new("ENGINE").family(theme::mono()).size(11.0).color(theme::ACID));
-    side.horizontal_wrapped(|ui| {
-        if theme::neon_btn_color(ui, "File", CYAN, !rotn.engine_server).clicked() {
-            rotn.engine_server = false;
-        }
-        if theme::neon_btn_color(ui, "Server", CYAN, rotn.engine_server).clicked() {
-            rotn.engine_server = true;
-        }
-    });
-    if rotn.engine_server {
-        side.horizontal_wrapped(|ui| {
-            if theme::neon_btn(ui, "Ollama").clicked() {
-                rotn.server = "127.0.0.1:11434".into();
-            }
-            if theme::neon_btn(ui, "llama.cpp").clicked() {
-                rotn.server = "127.0.0.1:8080".into();
-            }
-        });
-        side.add(
-            egui::TextEdit::singleline(&mut rotn.server)
-                .hint_text("127.0.0.1:11434")
-                .desired_width(side.available_width()),
-        );
-        wrap_text_local(side, "Only this computer. DeepSeek and Kimi appear after you start them here.");
-    }
     side.label(RichText::new("MODELS").family(theme::mono()).size(11.0).color(theme::ACID));
     wrap_text_local(side, "Add a .gguf, .bin, or .onnx. It is copied into data/models. The file stays on this machine.");
     if theme::neon_btn(side, "Add model").clicked() {
@@ -692,29 +649,9 @@ fn rotn_side(side: &mut egui::Ui, root: &Path, rotn: &mut Rotn, desk: &Desk) {
     }
     if theme::neon_btn(side, "Rescan").clicked() {
         rotn.loaded = runner_path().is_some();
-        if rotn.engine_server {
-            match list_server(&rotn.server) {
-                Ok(names) => {
-                    rotn.server_models = names;
-                    rotn.server_pick = rotn.server_pick.min(rotn.server_models.len().saturating_sub(1));
-                }
-                Err(e) => rotn.log.push((false, e)),
-            }
-        } else {
-            rotn.models = read_models(root);
-        }
+        rotn.models = read_models(root);
     }
     egui::ScrollArea::vertical().id_salt("rotn-models").max_height(160.0).show(side, |ui| {
-        if rotn.engine_server {
-            for (i, name) in rotn.server_models.iter().enumerate() {
-                if theme::wide_btn(ui, name, "on this computer", rotn.server_pick == i).clicked() {
-                    rotn.server_pick = i;
-                }
-            }
-            if rotn.server_models.is_empty() {
-                ui.label(RichText::new("Press Rescan. The buttons still work.").color(DIM).size(12.0));
-            }
-        } else {
             for (i, m) in rotn.models.iter().enumerate() {
                 let mb = m.bytes as f32 / (1024.0 * 1024.0);
                 let sub = format!("{mb:.1} MB");
@@ -723,9 +660,8 @@ fn rotn_side(side: &mut egui::Ui, root: &Path, rotn: &mut Rotn, desk: &Desk) {
                 }
             }
             if rotn.models.is_empty() {
-                ui.label(RichText::new("No model file yet. The buttons still work.").color(DIM).size(12.0));
+                ui.label(RichText::new("No model file. The fixer still answers.").color(DIM).size(12.0));
             }
-        }
     });
     side.label(RichText::new("MEMORY").family(theme::mono()).size(11.0).color(CYAN));
     let mem = side.add(

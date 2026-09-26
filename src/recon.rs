@@ -315,6 +315,7 @@ pub fn paint(
     tex: &mut crate::images::TexCache,
     zoom: &mut Option<PathBuf>,
     blight: bool,
+    share: &mut Option<Dossier>,
 ) -> bool {
     let mut changed = false;
     let rect = ui.available_rect_before_wrap();
@@ -373,7 +374,7 @@ pub fn paint(
                 return;
             }
             *index = (*index).min(files.len() - 1);
-            if paint_file(ui, root, files, index, arm, tex, zoom, blight) {
+            if paint_file(ui, root, files, index, arm, tex, zoom, blight, share) {
                 changed = true;
             }
         });
@@ -455,6 +456,7 @@ fn paint_file(
     tex: &mut crate::images::TexCache,
     zoom: &mut Option<PathBuf>,
     blight: bool,
+    share: &mut Option<Dossier>,
 ) -> bool {
     let i = *index;
     if i >= files.len() {
@@ -741,6 +743,12 @@ fn paint_file(
     }
 
     ui.add_space(12.0);
+    if theme::neon_btn(ui, "Send").clicked() {
+        if let Some(file) = files.get(i) {
+            *share = Some(file.clone());
+        }
+    }
+    ui.add_space(6.0);
     let armed = *arm == id;
     if theme::neon_btn_color(ui, if armed { "Delete this file" } else { "Delete" }, KILL, armed)
         .clicked()

@@ -1427,71 +1427,57 @@ fn floor_tex(
     let (mut glyph, mut col) = match c.kind {
         Kind::Avenue => {
             let lane = (gx - 0.5).abs() < 0.04 || (gz - 0.5).abs() < 0.04;
+            let asphalt = Color32::from_rgb(32, 34, 38);
             if cross && ((gx * 8.0) as i32 + (gz * 8.0) as i32) % 2 == 0 {
-                ('#', fogged(CREAM, d))
+                ('#', fogged(Color32::from_rgb(210, 206, 190), d))
             } else if lane {
-                ('=', fogged(CREAM, d))
-            } else if n % 17 == 0 {
-                ('*', fogged(ORANGE, d * 1.2))
-            } else if n % 29 == 0 {
-                ('H', fogged(ORANGE, d))
-            } else if (gx - 0.25).abs() < 0.03 || (gx - 0.75).abs() < 0.03 {
-                (':', fogged(MUTED, d))
+                ('=', fogged(Color32::from_rgb(196, 168, 72), d))
             } else {
-                ('.', fogged(DIM, d))
+                ('.', fogged(asphalt, d))
             }
         }
         Kind::Street => {
             let dash = ((ix + iz) % 2 == 0)
                 && ((gx - 0.5).abs() < 0.05 || (gz - 0.5).abs() < 0.05);
             if dash {
-                (':', fogged(MUTED, d))
+                (':', fogged(Color32::from_rgb(196, 168, 72), d))
             } else {
-                ('.', fogged(DIM, d))
+                ('.', fogged(Color32::from_rgb(28, 30, 34), d))
             }
         }
         Kind::Alley => {
-            let wet = n % 3 == 0;
-            (
-                if wet { '~' } else { '.' },
-                fogged(if wet { CYAN } else { DIM }, d),
-            )
+            ('.', fogged(Color32::from_rgb(22, 24, 28), d))
         }
         Kind::Trench => {
-            let flow = ((ix + iz) % 3).abs();
-            (
-                if flow == 0 { '~' } else { '=' },
-                fogged(CYAN, d * 0.7),
-            )
+            ('~', fogged(Color32::from_rgb(18, 42, 58), d))
         }
         Kind::Sidewalk => {
-            if n % 18 == 0 {
-                ('#', fogged(CYAN, d))
-            } else if gx < 0.07 || gz < 0.07 {
-                ('+', fogged(MUTED, d))
-            } else if n % 9 == 0 {
-                (',', fogged(ORANGE, d * 1.3))
-            } else if n % 14 == 0 {
-                ('o', fogged(DIM, d))
-            } else if n % 21 == 0 {
-                ('~', fogged(CYAN, d * 1.1))
-            } else if n % 11 == 0 {
-                ('+', fogged(ORANGE, d * 1.4))
-            } else {
-                (':', fogged(MUTED, d))
-            }
+            let curb = gx < 0.07 || gz < 0.07;
+            (
+                ':',
+                fogged(
+                    if curb {
+                        Color32::from_rgb(120, 118, 112)
+                    } else {
+                        Color32::from_rgb(168, 164, 156)
+                    },
+                    d,
+                ),
+            )
         }
         Kind::Plaza => {
             let tile = (ix + iz) % 2 == 0;
-            let rose = (ix - MAP / 2).abs() <= 1 && (iz - MAP / 2).abs() <= 1;
-            if rose {
-                ('*', fogged(CYAN, d * 0.5))
-            } else {
-                (
-                    if tile { '+' } else { '#' },
-                    fogged(if tile { CYAN } else { ORANGE }, d),
-                )
-            }
+            (
+                '+',
+                fogged(
+                    if tile {
+                        Color32::from_rgb(150, 146, 138)
+                    } else {
+                        Color32::from_rgb(132, 128, 120)
+                    },
+                    d,
+                ),
+            )
         }
         Kind::Park => {
             let g = n % 3;
@@ -1527,19 +1513,7 @@ fn floor_tex(
                 fogged(ink, d),
             )
         }
-        Kind::Canal => {
-            let flow = ((ix * 2 + iz) % 3).abs();
-            (
-                if flow == 0 {
-                    '~'
-                } else if flow == 1 {
-                    '='
-                } else {
-                    '-'
-                },
-                fogged(CYAN, d * 0.55),
-            )
-        }
+        Kind::Canal => ('~', fogged(Color32::from_rgb(16, 48, 68), d)),
         Kind::Market => {
             let stall = n % 4 == 0;
             let ink = match n % 5 {
@@ -1554,10 +1528,10 @@ fn floor_tex(
                 fogged(ink, d),
             )
         }
-        Kind::Solid => ('.', fogged(ORANGE, d * 1.4)),
+        Kind::Solid => ('.', fogged(Color32::from_rgb(48, 46, 44), d)),
     };
     if d < 10.5 && lamp_lit(fx, fz, lamps) {
-        col = mix(col, CYAN, 0.28);
+        col = mix(col, Color32::from_rgb(255, 176, 90), 0.28);
         if glyph == '.' {
             glyph = ':';
         }
@@ -1610,47 +1584,15 @@ fn ceiling_tex(fx: f32, fz: f32, d: f32, t: f32, lamp: Option<Color32>) -> (char
 }
 
 fn sky_tex(col: i32, row: i32, t: f32, near_horizon: bool) -> (char, Color32) {
-    let _ = t;
+    let _ = (col, t);
     let n = hash3(col, row, 0);
-    if n % 5 == 0 {
-        return ('|', mix(CYAN, BG, 0.72));
-    }
-    if n % 7 == 0 {
-        return ('|', mix(CYAN, BG, 0.62));
-    }
-    if near_horizon {
-        let ch = match n % 7 {
-            0 => '|',
-            1 => 'H',
-            2 => '!',
-            3 => '=',
-            4 => '#',
-            _ => '`',
-        };
-        return (ch, mix(Color32::from_rgb(40, 70, 120), Color32::from_rgb(6, 10, 28), 0.35));
-    }
-    if n % 37 == 0 {
-        ('*', CYAN)
-    } else if n % 23 == 0 {
-        (
-            '.',
-            match n % 5 {
-                0 => Color32::from_rgb(255, 220, 160),
-                1 => Color32::from_rgb(160, 190, 255),
-                2 => Color32::from_rgb(255, 160, 190),
-                _ => Color32::from_rgb(190, 235, 200),
-            },
-        )
-    } else if n % 61 == 0 {
-        ('+', mix(CYAN, BG, 0.5))
-    } else if row < 2 {
-        ('`', DIM)
-    } else if n % 47 == 0 {
-        ('-', mix(MUTED, BG, 0.4))
-    } else if n % 89 == 0 {
-        ('o', mix(ORANGE, BG, 0.7))
+    let top = Color32::from_rgb(8, 14, 28);
+    let low = Color32::from_rgb(28, 36, 52);
+    let sky = if near_horizon { low } else { mix(top, low, (row as f32 / 18.0).clamp(0.0, 1.0)) };
+    if n % 97 == 0 {
+        ('*', Color32::from_rgb(230, 226, 210))
     } else {
-        (' ', Color32::from_rgb(6, 10, 28))
+        (' ', sky)
     }
 }
 
@@ -2151,11 +2093,10 @@ fn blit(
     glyph: char,
     color: Color32,
 ) {
-    let Some(g) = atlas.get(glyph) else {
-        return;
-    };
+    let _ = (atlas, glyph);
     let pos = Pos2::new(inner.left() + col as f32 * cw, inner.top() + row as f32 * ch);
-    painter.galley_with_override_text_color(pos, g, color);
+    let rect = egui::Rect::from_min_size(pos, egui::Vec2::new(cw + 0.6, ch + 0.6));
+    painter.rect_filled(rect, 0.0, color);
 }
 
 fn draw_sprites(

@@ -117,6 +117,9 @@ enum Overlay {
     Scenes,
     Mix,
     Board,
+    Place,
+    Calendar,
+    Calc,
     Log,
     Notes,
 }
@@ -213,6 +216,9 @@ pub struct Blightnet {
     media_at: Instant,
     incoming: Option<(String, String)>,
     call_id: Option<String>,
+    call_with: Vec<String>,
+    call_drop: Vec<String>,
+    call_add: bool,
     whisper_to: Option<String>,
     mic_rx: Option<Receiver<Vec<f32>>>,
     mic_rate: u32,
@@ -296,6 +302,11 @@ pub struct Blightnet {
     term: Option<crate::term::Shell>,
     term_filter: String,
     term_cmds: Vec<String>,
+    share_pick: Option<(String, String, String)>,
+    calc_acc: Option<f64>,
+    calc_op: Option<char>,
+    calc_entry: String,
+    calc_fresh: bool,
     recon: Vec<crate::recon::Dossier>,
     recon_i: usize,
     recon_q: String,
@@ -561,6 +572,9 @@ impl Blightnet {
             media_at: Instant::now(),
             incoming: None,
             call_id: None,
+            call_with: Vec::new(),
+            call_drop: Vec::new(),
+            call_add: false,
             whisper_to: None,
             mic_rx: None,
             mic_rate: 48000,
@@ -644,6 +658,11 @@ impl Blightnet {
             term: None,
             term_filter: String::new(),
             term_cmds: Vec::new(),
+            share_pick: None,
+            calc_acc: None,
+            calc_op: None,
+            calc_entry: "0".into(),
+            calc_fresh: true,
             recon: crate::recon::load(&root),
             recon_i: 0,
             recon_q: String::new(),
@@ -1568,6 +1587,20 @@ impl Blightnet {
             .unwrap_or_else(|| self.place.clone())
     }
 
+    fn painting_for(&self, id: &str) -> PathBuf {
+        let dir = if self.blight {
+            "assets/places-blight"
+        } else {
+            "assets/places"
+        };
+        let timed = self.root.join(dir).join(format!("{id}-{}.jpg", self.time));
+        if timed.is_file() {
+            timed
+        } else {
+            self.root.join(dir).join(format!("{id}-day.jpg"))
+        }
+    }
+
     fn painting_path(&self) -> PathBuf {
         let dir = if self.blight {
             "assets/places-blight"
@@ -1619,18 +1652,22 @@ impl Blightnet {
 
     fn do_join(&mut self, addr: &str) {
         let Some(inv) = crate::crypt::parse_invite(addr) else {
-            self.err = "Need a blightnet:// invite from Host.".into();
+            let msg = "Need a blightnet:// invite from Host.".to_string();
+            self.err = msg.clone();
+            self.chat.push(msg);
             return;
         };
         if !self.node_live {
-            self.chat.push("Press Online first. The node stays off until you ask.".into());
+            let msg = "Press Online first. The node stays off until you ask.".to_string();
+            self.err = msg.clone();
+            self.chat.push(msg);
             self.status = "Node offline".into();
             return;
         }
+        self.err.clear();
         self.net.join(addr);
         let shown = crate::crypt::encode_invite(&inv.key, &inv.addrs);
         self.chat.push(format!("Joining {shown}…"));
-        self.shell = ShellPanel::Chat;
     }
 
     fn leave_table(&mut self) {
@@ -2110,9 +2147,13 @@ impl Blightnet {
                     self.shell = ShellPanel::Host;
                 }
                 NetEvent::Joined { addr } => {
+                    self.err.clear();
                     self.chat.push(format!("Joined {addr}"));
                     self.status = "Joined".into();
                     self.page = Page::Table;
+                    if self.shell == ShellPanel::Join {
+                        self.shell = ShellPanel::None;
+                    }
                     self.announce_hooks();
                     self.net.send_map_marks_ask();
                     self.net.send_map_tokens_ask();
@@ -2167,26 +2208,37 @@ impl Blightnet {
                                 self.shell = ShellPanel::Voice;
                             }
                         }
+                        "roster" if to.as_deref() == Some(&self.net.self_id) => {
+                            self.apply_roster(&name);
+                        }
                         "accept" => {
-                            self.call_id = Some(from);
+                            self.remember_party(&from);
                             if crew.is_some() {
                                 self.call_crew = crew.clone();
                             }
                             self.voice_on = true;
                             self.ensure_mic();
+                            self.push_roster();
                             self.chat.push(format!("{name} picked up."));
                         }
                         "decline" | "hangup" => {
                             self.remote_vid.remove(&from);
-                            if self.call_crew.is_none()
-                                && (self.call_id.as_deref() == Some(&from)
-                                    || self.incoming.as_ref().map(|i| i.0.as_str())
-                                        == Some(from.as_str()))
-                            {
-                                self.end_call_local();
-                            } else if action == "decline" {
+                            self.call_with.retain(|id| id != &from);
+                            if self.call_id.as_deref() == Some(&from) {
+                                self.call_id = None;
+                            }
+                            if !self.call_drop.contains(&from) {
+                                self.call_drop.push(from.clone());
+                            }
+                            if action == "decline" {
                                 self.incoming = None;
                                 self.incoming_video = None;
+                            }
+                            if self.call_targets().is_empty()
+                                && self.incoming.is_none()
+                                && self.incoming_video.is_none()
+                            {
+                                self.end_call_local();
                             }
                             self.chat.push(format!("{name}: {action}"));
                         }
@@ -2228,6 +2280,16 @@ impl Blightnet {
                     let files = self.files();
                     let _ = self.mixer.apply_scene(&layers, &files);
                     self.refresh_presence();
+                }
+                NetEvent::Share {
+                    from,
+                    name,
+                    kind,
+                    body,
+                } => {
+                    if from != self.net.self_id {
+                        self.take_share(&name, &kind, &body);
+                    }
                 }
                 NetEvent::Error(e) => {
                     self.err = e.clone();
@@ -2300,7 +2362,7 @@ impl Blightnet {
                             self.shell = ShellPanel::Video;
                         }
                         "accept" => {
-                            self.call_id = Some(from.clone());
+                            self.remember_party(&from);
                             if crew.is_some() {
                                 self.call_crew = crew;
                             }
@@ -2308,19 +2370,28 @@ impl Blightnet {
                             self.voice_on = true;
                             self.ensure_mic();
                             self.start_cam();
+                            self.push_roster();
                             self.chat.push(format!("{name} joined the video call."));
                             self.shell = ShellPanel::Video;
                         }
                         "decline" | "hangup" => {
                             self.remote_vid.remove(&from);
-                            if self.call_crew.is_none()
-                                && (self.incoming_video.as_ref().map(|i| i.0.as_str())
-                                    == Some(from.as_str())
-                                    || self.call_id.as_deref() == Some(&from))
+                            self.call_with.retain(|id| id != &from);
+                            if self.call_id.as_deref() == Some(&from) {
+                                self.call_id = None;
+                            }
+                            if !self.call_drop.contains(&from) {
+                                self.call_drop.push(from.clone());
+                            }
+                            if action == "decline" {
+                                self.incoming_video = None;
+                                self.incoming = None;
+                            }
+                            if self.call_targets().is_empty()
+                                && self.incoming.is_none()
+                                && self.incoming_video.is_none()
                             {
                                 self.end_call_local();
-                            } else if action == "decline" {
-                                self.incoming_video = None;
                             }
                             self.chat.push(format!("{name}: video {action}"));
                         }
@@ -3067,22 +3138,141 @@ impl Blightnet {
     }
 
     fn call_targets(&self) -> Vec<String> {
+        let mut v = Vec::new();
+        let mut push = |v: &mut Vec<String>, id: &str| {
+            if !id.is_empty()
+                && id != self.net.self_id
+                && !self.call_drop.iter().any(|d| d == id)
+                && !v.iter().any(|x| x == id)
+            {
+                v.push(id.to_string());
+            }
+        };
         if let Some(cid) = &self.call_crew {
-            self.crews
-                .iter()
-                .find(|c| &c.id == cid)
-                .map(|c| {
-                    c.members
+            if let Some(c) = self.crews.iter().find(|c| &c.id == cid) {
+                for id in &c.members {
+                    push(&mut v, id);
+                }
+            }
+        }
+        if let Some(id) = &self.call_id {
+            push(&mut v, id);
+        }
+        for id in &self.call_with {
+            push(&mut v, id);
+        }
+        v
+    }
+
+    fn remember_party(&mut self, id: &str) {
+        if id.is_empty() || id == self.net.self_id {
+            return;
+        }
+        self.call_drop.retain(|d| d != id);
+        if !self.call_with.iter().any(|x| x == id) {
+            self.call_with.push(id.to_string());
+        }
+        if self.call_id.is_none() {
+            self.call_id = Some(id.to_string());
+        }
+    }
+
+    fn push_roster(&self) {
+        let mut ids = self.call_targets();
+        ids.insert(0, self.net.self_id.clone());
+        let packed = ids.join(",");
+        for id in self.call_targets() {
+            self.net.send_call_roster(&id, &packed);
+        }
+    }
+
+    fn add_person_to_call(&mut self, id: String, video: bool) {
+        if id == self.net.self_id {
+            return;
+        }
+        self.remember_party(&id);
+        self.voice_on = true;
+        self.ensure_mic();
+        if video {
+            self.video_on = true;
+            if !self.cam_on {
+                self.start_cam();
+            }
+            self.net
+                .send_video("invite", Some(id.clone()), self.call_crew.clone());
+        }
+        self.net
+            .send_voice_ex("invite", Some(id.clone()), self.call_crew.clone());
+        self.push_roster();
+        let name = self
+            .contacts
+            .iter()
+            .find(|c| c.id == id)
+            .map(|c| c.name.clone())
+            .unwrap_or(id);
+        self.chat.push(format!("Added {name} to the call."));
+    }
+
+    fn ui_call_people(&mut self, ui: &mut egui::Ui, video: bool) {
+        let names: Vec<String> = self
+            .call_targets()
+            .into_iter()
+            .map(|id| {
+                self.contacts
+                    .iter()
+                    .find(|c| c.id == id)
+                    .map(|c| c.name.clone())
+                    .unwrap_or(id)
+            })
+            .collect();
+        if !names.is_empty() {
+            wrap_text(ui, &format!("On the call: {}", names.join(", ")), CYAN, 12.0);
+        }
+        if theme::neon_btn_color(ui, "Add", CYAN, self.call_add).clicked() {
+            self.call_add = !self.call_add;
+        }
+        if !self.call_add {
+            return;
+        }
+        let have = self.call_targets();
+        let mut choices: Vec<(String, String)> = self
+            .contacts
+            .iter()
+            .map(|c| (c.id.clone(), c.name.clone()))
+            .collect();
+        for crew in &self.crews {
+            for id in &crew.members {
+                if !choices.iter().any(|(have_id, _)| have_id == id) {
+                    let name = self
+                        .contacts
                         .iter()
-                        .filter(|id| *id != &self.net.self_id)
-                        .cloned()
-                        .collect()
-                })
-                .unwrap_or_default()
-        } else if let Some(id) = &self.call_id {
-            vec![id.clone()]
-        } else {
-            vec![]
+                        .find(|c| &c.id == id)
+                        .map(|c| c.name.clone())
+                        .unwrap_or_else(|| id.clone());
+                    choices.push((id.clone(), format!("{name} · {}", crew.name)));
+                }
+            }
+        }
+        for (id, name) in choices {
+            if id == self.net.self_id || have.iter().any(|x| x == &id) {
+                continue;
+            }
+            if theme::wide_btn(ui, &name, "ADD TO CALL", false).clicked() {
+                self.add_person_to_call(id, video);
+            }
+        }
+    }
+
+    fn apply_roster(&mut self, packed: &str) {
+        for id in packed.split(',') {
+            let id = id.trim();
+            if !id.is_empty() {
+                self.remember_party(id);
+            }
+        }
+        if !self.call_targets().is_empty() {
+            self.voice_on = true;
+            self.ensure_mic();
         }
     }
 
@@ -3225,6 +3415,9 @@ impl Blightnet {
 
     fn end_call_local(&mut self) {
         self.call_id = None;
+        self.call_with.clear();
+        self.call_drop.clear();
+        self.call_add = false;
         self.call_crew = None;
         self.incoming = None;
         self.incoming_video = None;
@@ -3249,6 +3442,8 @@ impl Blightnet {
     }
 
     fn start_video_to(&mut self, id: String, crew: Option<String>) {
+        self.call_with.clear();
+        self.call_drop.clear();
         self.call_id = Some(id.clone());
         self.call_crew = crew.clone();
         self.video_on = true;
@@ -3276,14 +3471,15 @@ impl Blightnet {
         let Some((id, _, crew)) = self.incoming_video.clone() else {
             if let Some((id, _)) = self.incoming.clone() {
                 self.net.send_voice("accept", Some(id.clone()));
-                self.call_id = Some(id);
+                self.remember_party(&id);
                 self.incoming = None;
                 self.voice_on = true;
                 self.ensure_mic();
+                self.push_roster();
             }
             return;
         };
-        self.call_id = Some(id.clone());
+        self.remember_party(&id);
         self.call_crew = crew.clone();
         self.incoming = None;
         self.incoming_video = None;
@@ -3304,7 +3500,172 @@ impl Blightnet {
             self.net.send_video("accept", Some(id.clone()), None);
             self.net.send_voice("accept", Some(id));
         }
+        self.push_roster();
         self.shell = ShellPanel::Video;
+    }
+
+    fn open_share(&mut self, kind: &str, label: &str, body: String) {
+        if body.is_empty() {
+            return;
+        }
+        if !self.node_live {
+            self.chat
+                .push("Press Online first. Then you can send it.".into());
+            return;
+        }
+        self.share_pick = Some((kind.to_string(), label.to_string(), body));
+    }
+
+    fn dispatch_share(&mut self, who: &str) {
+        let Some((kind, label, body)) = self.share_pick.clone() else {
+            return;
+        };
+        let mut ids = Vec::new();
+        if let Some(c) = self.contacts.iter().find(|c| c.id == who) {
+            ids.push(c.id.clone());
+        } else if let Some(crew) = self.crews.iter().find(|c| c.id == who) {
+            ids.extend(crew.members.clone());
+        }
+        ids.retain(|id| id != &self.net.self_id);
+        ids.sort();
+        ids.dedup();
+        if ids.is_empty() {
+            self.chat.push("That person is not on this deck.".into());
+            return;
+        }
+        for id in &ids {
+            self.net.send_share(id, &kind, &label, &body);
+        }
+        self.chat
+            .push(format!("Sent {label} to {}.", ids.len()));
+        self.share_pick = None;
+    }
+
+    fn take_share(&mut self, from_name: &str, kind: &str, body: &str) {
+        match kind {
+            "recon" => {
+                let pack: serde_json::Value = match serde_json::from_str(body) {
+                    Ok(v) => v,
+                    Err(_) => return,
+                };
+                let Some(mut file) = pack
+                    .get("file")
+                    .and_then(|v| serde_json::from_value::<crate::recon::Dossier>(v.clone()).ok())
+                else {
+                    return;
+                };
+                file.id = format!("rc-{:08x}", rand::random::<u32>());
+                file.file_no = format!("R-{:04}", crate::recon::next_no(&self.recon));
+                let b64 = pack
+                    .get("portrait_b64")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("");
+                if !b64.is_empty() {
+                    if let Ok(bytes) =
+                        base64::Engine::decode(&base64::engine::general_purpose::STANDARD, b64)
+                    {
+                        let ext = pack
+                            .get("ext")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("png");
+                        let rel = format!("data/recon/{}.{}", file.id, ext);
+                        let path = self.root.join(&rel);
+                        if std::fs::create_dir_all(self.root.join("data/recon")).is_ok()
+                            && std::fs::write(&path, bytes).is_ok()
+                        {
+                            file.portrait = rel;
+                        }
+                    }
+                } else {
+                    file.portrait.clear();
+                }
+                let title = file.title();
+                self.recon.push(file);
+                crate::recon::save(&self.root, &self.recon);
+                self.recon_i = self.recon.len() - 1;
+                self.chat
+                    .push(format!("{from_name} sent the file {title}."));
+                self.page = Page::Recon;
+            }
+            "nethook" => {
+                let Ok(mut hook) = serde_json::from_str::<crate::nethook::Nethook>(body) else {
+                    return;
+                };
+                if hook.pinned() {
+                    return;
+                }
+                hook.id = format!("nh-{:08x}", rand::random::<u32>());
+                hook.owner_id = self.net.self_id.clone();
+                hook.owner_name = self.handle.clone();
+                hook.posted = false;
+                hook.files.clear();
+                let title = hook.title.clone();
+                crate::nethook::save_one(&self.root, &hook);
+                self.nethooks.push(hook);
+                self.hook_i = self.nethooks.len() - 1;
+                self.chat
+                    .push(format!("{from_name} sent the page {title}."));
+                self.page = Page::Nethooks;
+            }
+            "sheet" => {
+                let Ok(mut sheet) = serde_json::from_str::<crate::chars::Character>(body) else {
+                    return;
+                };
+                sheet.id = format!("ch-{:08x}", rand::random::<u32>());
+                let title = sheet.name.clone();
+                self.chars.push(sheet);
+                self.char_i = self.chars.len() - 1;
+                crate::chars::save(&self.root, &self.chars);
+                self.chat
+                    .push(format!("{from_name} sent the sheet {title}."));
+            }
+            _ => {}
+        }
+    }
+
+    fn ui_share_pick(&mut self, ctx: &egui::Context) {
+        if self.share_pick.is_none() {
+            return;
+        }
+        let label = self
+            .share_pick
+            .as_ref()
+            .map(|(_, label, _)| label.clone())
+            .unwrap_or_default();
+        let mut chosen = None;
+        let mut close = false;
+        egui::Window::new("Send")
+            .collapsible(false)
+            .resizable(false)
+            .show(ctx, |ui| {
+                wrap_text(
+                    ui,
+                    &format!("Send {label} to one contact or one crew."),
+                    CREAM,
+                    13.0,
+                );
+                for c in &self.contacts.clone() {
+                    if theme::wide_btn(ui, &c.name, "CONTACT", false).clicked() {
+                        chosen = Some(c.id.clone());
+                    }
+                }
+                for crew in &self.crews.clone() {
+                    if theme::wide_btn(ui, &crew.name, "CREW", false).clicked() {
+                        chosen = Some(crew.id.clone());
+                    }
+                }
+                if self.contacts.is_empty() && self.crews.is_empty() {
+                    wrap_text(ui, "Save a contact or a crew first.", DIM, 12.0);
+                }
+                if theme::neon_btn_color(ui, "Cancel", KILL, false).clicked() {
+                    close = true;
+                }
+            });
+        if let Some(id) = chosen {
+            self.dispatch_share(&id);
+        } else if close {
+            self.share_pick = None;
+        }
     }
 
     fn broadcast_mix(&mut self) {
@@ -3575,6 +3936,7 @@ impl Blightnet {
                     self.ui_dock(&mut dock_ui);
                 }
                 self.ui_zoom(ui.ctx());
+                self.ui_share_pick(ui.ctx());
                 let mut st = ui.new_child(
                     egui::UiBuilder::new()
                         .max_rect(status)
@@ -4873,37 +5235,15 @@ impl Blightnet {
             11.0,
         );
         ui.add_space(8.0);
-        if self.net.role == Role::Idle {
-            ui.label(
-                RichText::new("LOCAL NETWORK")
-                    .family(theme::mono())
-                    .size(11.0)
-                    .color(theme::ACID),
+        if self.net.role == Role::Guest {
+            wrap_text(
+                ui,
+                "You are already at a table. Leave it before you host.",
+                CREAM,
+                13.0,
             );
-            ui.label(
-                RichText::new(
-                    "Same house or the same Wi-Fi. Friends paste the blightnet:// invite into Join.",
-                )
-                .color(CREAM)
-                .small(),
-            );
-            if theme::neon_btn(ui, "Host on local network").clicked() {
-                self.start_host(false);
-            }
-            ui.add_space(10.0);
-            ui.label(
-                RichText::new("INTERNET")
-                    .family(theme::mono())
-                    .size(11.0)
-                    .color(theme::ACID),
-            );
-            ui.label(
-                RichText::new("Other networks. Your node punches UDP to their node and maps TCP/UDP if the router allows it. Copy the invite. No Cloudflare.")
-                    .color(CREAM)
-                    .small(),
-            );
-            if theme::neon_btn(ui, "Host on the internet").clicked() {
-                self.start_host(true);
+            if theme::neon_btn_color(ui, "Leave table", KILL, true).clicked() {
+                self.leave_table();
             }
         } else if self.net.role == Role::Host {
             ui.label(
@@ -4956,6 +5296,38 @@ impl Blightnet {
             if theme::neon_btn_color(ui, "Leave table", KILL, true).clicked() {
                 self.leave_table();
             }
+        } else if self.node_live {
+            ui.label(
+                RichText::new("LOCAL NETWORK")
+                    .family(theme::mono())
+                    .size(11.0)
+                    .color(theme::ACID),
+            );
+            ui.label(
+                RichText::new(
+                    "Same house or the same Wi-Fi. Friends paste the blightnet:// invite into Join.",
+                )
+                .color(CREAM)
+                .small(),
+            );
+            if theme::neon_btn(ui, "Host on local network").clicked() {
+                self.start_host(false);
+            }
+            ui.add_space(10.0);
+            ui.label(
+                RichText::new("INTERNET")
+                    .family(theme::mono())
+                    .size(11.0)
+                    .color(theme::ACID),
+            );
+            ui.label(
+                RichText::new("Other networks. Your node punches UDP to their node and maps TCP/UDP if the router allows it. Copy the invite. No Cloudflare.")
+                    .color(CREAM)
+                    .small(),
+            );
+            if theme::neon_btn(ui, "Host on the internet").clicked() {
+                self.start_host(true);
+            }
         }
     }
 
@@ -4968,6 +5340,16 @@ impl Blightnet {
             .color(MUTED)
             .small(),
         );
+        wrap_text(
+            ui,
+            if self.node_live {
+                "NODE is ACTIVE. Paste the invite, then Connect."
+            } else {
+                "NODE is OFFLINE. Press Online in the command bar to start it."
+            },
+            MUTED,
+            11.0,
+        );
         ui.add(
             egui::TextEdit::singleline(&mut self.join_in)
                 .hint_text("blightnet://invite@192.168.0.12:8766,1.2.3.4:8766")
@@ -4979,6 +5361,9 @@ impl Blightnet {
                 self.do_join(&addr);
             }
         });
+        if !self.err.is_empty() {
+            wrap_text(ui, &self.err.clone(), KILL, 13.0);
+        }
     }
 
     fn ui_chat_panel(&mut self, ui: &mut egui::Ui) {
@@ -5306,10 +5691,11 @@ impl Blightnet {
             ui.horizontal(|ui| {
                 if theme::neon_btn(ui, "Accept").clicked() {
                     self.net.send_voice("accept", Some(id.clone()));
-                    self.call_id = Some(id.clone());
+                    self.remember_party(&id);
                     self.incoming = None;
                     self.voice_on = true;
                     self.ensure_mic();
+                    self.push_roster();
                 }
                 if theme::neon_btn_color(ui, "Decline", KILL, true).clicked() {
                     self.net.send_voice("decline", Some(id.clone()));
@@ -5317,7 +5703,8 @@ impl Blightnet {
                 }
             });
         }
-        if self.call_id.is_some() || self.call_crew.is_some() {
+        if self.call_id.is_some() || self.call_crew.is_some() || !self.call_with.is_empty() {
+            self.ui_call_people(ui, false);
             if theme::neon_btn_color(ui, "Hang up", KILL, true).clicked() {
                 self.hang_up();
             }
@@ -5335,6 +5722,9 @@ impl Blightnet {
             ui.horizontal(|ui| {
                 ui.label(RichText::new(&p.name).color(CREAM));
                 if theme::neon_btn(ui, "Call").clicked() {
+                    self.call_with.clear();
+                    self.call_drop.clear();
+                    self.call_crew = None;
                     self.net.send_voice("invite", Some(p.id.clone()));
                     self.call_id = Some(p.id.clone());
                     self.chat.push(format!("Calling {}…", p.name));
@@ -5449,6 +5839,7 @@ impl Blightnet {
                     self.hang_up();
                 }
             });
+            self.ui_call_people(ui, true);
             ui.add_space(6.0);
             ui.label(
                 RichText::new("YOU")
@@ -5662,7 +6053,9 @@ impl Blightnet {
                 if tiles {
                     self.ui_tiled_panels(&mut main_ui, pal);
                 } else {
-                    self.ui_table_sky(&mut main_ui, pal);
+                    let rest = main_ui.available_rect_before_wrap();
+                    main_ui.allocate_rect(rest, egui::Sense::hover());
+                    main_ui.painter().rect_filled(rest, 0.0, theme::BG);
                 }
                 self.ui_dice_fx(&mut main_ui);
                 if nrail > 0 && right.width() > 160.0 {
@@ -5789,6 +6182,9 @@ impl Blightnet {
                 Overlay::Scenes => self.ui_scenes_panel(&mut child, pal),
                 Overlay::Mix => self.ui_mix_panel(&mut child, pal),
                 Overlay::Board => self.ui_table_board(&mut child),
+                Overlay::Place => self.ui_place_tile(&mut child),
+                Overlay::Calendar => self.ui_calendar_tile(&mut child),
+                Overlay::Calc => self.ui_calc_tile(&mut child),
                 Overlay::None => {}
             }
         }
@@ -5865,15 +6261,24 @@ impl Blightnet {
                                 .size(10.0)
                                 .color(CYAN),
                         );
-                        ui.label(
-                            RichText::new(format!(
-                                "{:04}-{:02}-{:02}",
-                                self.cal_y, self.cal_m, self.cal_d
-                            ))
-                            .family(theme::mono())
-                            .size(10.0)
-                            .color(theme::ACID),
-                        );
+                        if ui
+                            .add(
+                                egui::Button::new(
+                                    RichText::new(format!(
+                                        "{:04}-{:02}-{:02}",
+                                        self.cal_y, self.cal_m, self.cal_d
+                                    ))
+                                    .family(theme::mono())
+                                    .size(10.0)
+                                    .color(theme::ACID),
+                                )
+                                .frame(false),
+                            )
+                            .on_hover_text("Open the calendar.")
+                            .clicked()
+                        {
+                            self.toggle_overlay(Overlay::Calendar);
+                        }
                     });
                     if self.is_gm
                         && theme::neon_btn_color(ui, "Run clock", theme::HOT, self.clock_run)
@@ -5988,6 +6393,19 @@ impl Blightnet {
                         }
                         if theme::rail_row(ui, "Mix", self.panel_on(Overlay::Mix), false).clicked() {
                             self.toggle_overlay(Overlay::Mix);
+                        }
+                        if theme::rail_row(ui, "Place", self.panel_on(Overlay::Place), false).clicked()
+                        {
+                            self.toggle_overlay(Overlay::Place);
+                        }
+                        if theme::rail_row(ui, "Calendar", self.panel_on(Overlay::Calendar), false)
+                            .clicked()
+                        {
+                            self.toggle_overlay(Overlay::Calendar);
+                        }
+                        if theme::rail_row(ui, "Calc", self.panel_on(Overlay::Calc), false).clicked()
+                        {
+                            self.toggle_overlay(Overlay::Calc);
                         }
                     });
                     let overlay_cat = self.overlay_cat;
@@ -6639,6 +7057,162 @@ impl Blightnet {
         }
     }
 
+    fn ui_place_tile(&mut self, ui: &mut egui::Ui) {
+        let rect = ui.available_rect_before_wrap();
+        ui.allocate_rect(rect, egui::Sense::hover());
+        let path = self.painting_path();
+        images::paint_cover(ui, &mut self.tex, &path, rect);
+        ui.painter().text(
+            rect.left_top() + Vec2::new(12.0, 10.0),
+            egui::Align2::LEFT_TOP,
+            format!("{}  ·  {}", self.place_name(), period_label(self.time)),
+            egui::FontId::new(14.0, theme::display()),
+            theme::ACID,
+        );
+    }
+
+    fn ui_calendar_tile(&mut self, ui: &mut egui::Ui) {
+        let month = [
+            "", "January", "February", "March", "April", "May", "June", "July", "August",
+            "September", "October", "November", "December",
+        ];
+        let name = month.get(self.cal_m as usize).copied().unwrap_or("");
+        ui.horizontal_wrapped(|ui| {
+            if self.is_gm && theme::neon_btn(ui, "◀").clicked() {
+                self.advance_month(-1);
+            }
+            ui.label(
+                RichText::new(format!("{name} {}", self.cal_y))
+                    .family(theme::display())
+                    .size(22.0)
+                    .color(theme::ACID),
+            );
+            if self.is_gm && theme::neon_btn(ui, "▶").clicked() {
+                self.advance_month(1);
+            }
+        });
+        ui.horizontal(|ui| {
+            for day in ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] {
+                ui.add_sized(
+                    [36.0, 18.0],
+                    egui::Label::new(
+                        RichText::new(day)
+                            .family(theme::mono())
+                            .size(11.0)
+                            .color(CYAN),
+                    ),
+                );
+            }
+        });
+        let first = weekday_sun0(self.cal_y, self.cal_m, 1);
+        let dim = days_in_month(self.cal_y, self.cal_m as i32) as u32;
+        let mut day = 1u32;
+        for week in 0..6 {
+            if day > dim {
+                break;
+            }
+            ui.horizontal(|ui| {
+                for col in 0..7 {
+                    let slot = week * 7 + col;
+                    if slot < first || day > dim {
+                        ui.add_sized([36.0, 32.0], egui::Label::new(""));
+                    } else {
+                        let n = day;
+                        let on = n == self.cal_d;
+                        if theme::neon_btn_color(ui, &n.to_string(), CYAN, on).clicked() && self.is_gm
+                        {
+                            self.cal_d = n;
+                            save_calendar(&self.root, self.cal_y, self.cal_m, self.cal_d);
+                            self.restock_vendor();
+                        }
+                        day += 1;
+                    }
+                }
+            });
+        }
+        if !self.is_gm {
+            wrap_text(ui, "The gamemaster sets the day.", DIM, 12.0);
+        }
+    }
+
+    fn ui_calc_tile(&mut self, ui: &mut egui::Ui) {
+        ui.label(
+            RichText::new(&self.calc_entry)
+                .family(theme::mono())
+                .size(28.0)
+                .color(CREAM),
+        );
+        let keys = [
+            ["7", "8", "9", "÷"],
+            ["4", "5", "6", "×"],
+            ["1", "2", "3", "−"],
+            ["0", ".", "C", "+"],
+            ["=", "", "", ""],
+        ];
+        for row in keys {
+            ui.horizontal(|ui| {
+                for key in row {
+                    if key.is_empty() {
+                        continue;
+                    }
+                    if theme::neon_btn(ui, key).clicked() {
+                        self.calc_press(key);
+                    }
+                }
+            });
+        }
+        wrap_text(ui, "This calculator stays on this computer.", DIM, 11.0);
+    }
+
+    fn calc_press(&mut self, key: &str) {
+        match key {
+            "C" => {
+                self.calc_acc = None;
+                self.calc_op = None;
+                self.calc_entry = "0".into();
+                self.calc_fresh = true;
+            }
+            "÷" | "×" | "−" | "+" => {
+                let n = self.calc_entry.parse::<f64>().unwrap_or(0.0);
+                if let (Some(acc), Some(op)) = (self.calc_acc, self.calc_op) {
+                    self.calc_acc = Some(calc_apply(acc, op, n));
+                    self.calc_entry = fmt_calc(self.calc_acc.unwrap_or(0.0));
+                } else {
+                    self.calc_acc = Some(n);
+                }
+                self.calc_op = Some(key.chars().next().unwrap_or('+'));
+                self.calc_fresh = true;
+            }
+            "=" => {
+                let n = self.calc_entry.parse::<f64>().unwrap_or(0.0);
+                if let (Some(acc), Some(op)) = (self.calc_acc, self.calc_op) {
+                    let out = calc_apply(acc, op, n);
+                    self.calc_entry = fmt_calc(out);
+                    self.calc_acc = Some(out);
+                    self.calc_op = None;
+                    self.calc_fresh = true;
+                }
+            }
+            "." => {
+                if self.calc_fresh {
+                    self.calc_entry = "0.".into();
+                    self.calc_fresh = false;
+                } else if !self.calc_entry.contains('.') {
+                    self.calc_entry.push('.');
+                }
+            }
+            d if d.chars().all(|c| c.is_ascii_digit()) => {
+                if self.calc_fresh || self.calc_entry == "0" {
+                    self.calc_entry = d.to_string();
+                    self.calc_fresh = false;
+                } else if self.calc_entry.len() < 16 {
+                    self.calc_entry.push_str(d);
+                }
+            }
+            _ => {}
+        }
+    }
+
     fn ui_table_sky(&mut self, ui: &mut egui::Ui, pal: theme::Palette) {
         let _ = pal;
         let avail = ui.available_height();
@@ -7157,12 +7731,40 @@ impl Blightnet {
                         .collect();
                     ui.horizontal_wrapped(|ui| {
                         for (id, name) in &sets {
-                            if theme::neon_btn_color(ui, name, CYAN, self.place == *id).clicked() {
+                            let on = self.place == *id;
+                            let path = self.painting_for(id);
+                            let (rect, resp) = ui.allocate_exact_size(
+                                Vec2::new(148.0, 84.0),
+                                egui::Sense::click(),
+                            );
+                            theme::fill_chamfer(
+                                ui,
+                                rect,
+                                6.0,
+                                PANEL,
+                                egui::Stroke::new(if on { 2.0 } else { 1.0 }, if on { theme::ACID } else { theme::fade(CYAN, 90) }),
+                            );
+                            let mut pic = ui.new_child(
+                                egui::UiBuilder::new()
+                                    .max_rect(rect.shrink(4.0))
+                                    .layout(egui::Layout::top_down(egui::Align::Min)),
+                            );
+                            images::paint_cover(&mut pic, &mut self.tex, &path, rect.shrink(4.0));
+                            ui.painter().text(
+                                rect.left_bottom() + Vec2::new(8.0, -6.0),
+                                egui::Align2::LEFT_BOTTOM,
+                                name,
+                                egui::FontId::new(11.0, theme::ui_font()),
+                                if on { theme::ACID } else { CREAM },
+                            );
+                            if resp.clicked() {
                                 self.place = id.clone();
                                 self.broadcast_mix();
+                                if !self.panel_on(Overlay::Place) {
+                                    self.toggle_overlay(Overlay::Place);
+                                }
                             }
                         }
-
                     });
                 }
             });
@@ -7431,6 +8033,7 @@ impl Blightnet {
                 &mut self.roll,
                 &self.names,
                 &mut self.zoom_path,
+                &mut None,
             );
             self.remote_chars.insert(id, chars);
             if self.zoom_path.is_some() {
@@ -7449,6 +8052,7 @@ impl Blightnet {
             }
         }
         let sheet_before = sheet_sig(&self.chars);
+        let mut sheet_send = None;
         crate::chars::ui_sheet(
             ui,
             &self.root,
@@ -7464,7 +8068,16 @@ impl Blightnet {
             &mut self.roll,
             &self.names,
             &mut self.zoom_path,
+            &mut sheet_send,
         );
+        if let Some(body) = sheet_send {
+            let label = self
+                .chars
+                .get(self.char_i)
+                .map(|c| c.name.clone())
+                .unwrap_or_else(|| "Sheet".into());
+            self.open_share("sheet", &label, body);
+        }
         if self.zoom_path.is_some() {
             self.zoom_key = None;
         }
@@ -7906,6 +8519,7 @@ impl Blightnet {
     }
 
     fn ui_recon(&mut self, ui: &mut egui::Ui) {
+        let mut sent = None;
         let changed = crate::recon::paint(
             ui,
             &self.root,
@@ -7916,7 +8530,12 @@ impl Blightnet {
             &mut self.tex,
             &mut self.zoom_path,
             self.blight,
+            &mut sent,
         );
+        if let Some(file) = sent {
+            let label = file.title();
+            self.open_share("recon", &label, pack_recon(&self.root, &file));
+        }
         if self.recon.is_empty() {
             self.recon_i = 0;
         } else if self.recon_i >= self.recon.len() {
@@ -8466,6 +9085,14 @@ impl Blightnet {
         let html = self.nethooks[self.hook_i].html.clone();
         let mut gone = false;
         ui.horizontal_wrapped(|ui| {
+            if owned && !pinned && theme::neon_btn(ui, "Send").clicked() {
+                if let Some(h) = self.nethooks.get(self.hook_i) {
+                    if let Ok(body) = serde_json::to_string(h) {
+                        let label = h.title.clone();
+                        self.open_share("nethook", &label, body);
+                    }
+                }
+            }
             if owned && theme::neon_btn(ui, "Edit").clicked() {
                 self.hook_draft_title = title.clone();
                 self.hook_draft_html = html.clone();
@@ -9226,6 +9853,30 @@ fn sheet_sig(rows: &[Character]) -> u64 {
     h.finish()
 }
 
+fn pack_recon(root: &Path, file: &crate::recon::Dossier) -> String {
+    let mut portrait_b64 = String::new();
+    let mut ext = String::new();
+    if !file.portrait.is_empty() {
+        if let Ok(bytes) = std::fs::read(root.join(&file.portrait)) {
+            if bytes.len() < 4_000_000 {
+                portrait_b64 =
+                    base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &bytes);
+                ext = std::path::Path::new(&file.portrait)
+                    .extension()
+                    .and_then(|s| s.to_str())
+                    .unwrap_or("png")
+                    .to_string();
+            }
+        }
+    }
+    serde_json::json!({
+        "file": file,
+        "portrait_b64": portrait_b64,
+        "ext": ext,
+    })
+    .to_string()
+}
+
 fn brief_bytes(n: u64) -> String {
     const G: f64 = 1024.0 * 1024.0 * 1024.0;
     const M: f64 = 1024.0 * 1024.0;
@@ -9760,6 +10411,46 @@ fn clock_from_period(period: &str) -> u32 {
         "evening" => 18 * 60 + 30,
         "night" => 23 * 60,
         _ => 13 * 60,
+    }
+}
+
+fn weekday_sun0(y: i32, m: u32, d: u32) -> usize {
+    let mut y = y;
+    let mut m = m as i32;
+    if m < 3 {
+        m += 12;
+        y -= 1;
+    }
+    let k = y % 100;
+    let j = y / 100;
+    let h = (d as i32 + (13 * (m + 1)) / 5 + k + k / 4 + j / 4 - 2 * j).rem_euclid(7);
+    ((h + 6) % 7) as usize
+}
+
+fn calc_apply(a: f64, op: char, b: f64) -> f64 {
+    match op {
+        '+' => a + b,
+        '−' | '-' => a - b,
+        '×' | '*' => a * b,
+        '÷' | '/' => {
+            if b.abs() < f64::EPSILON {
+                0.0
+            } else {
+                a / b
+            }
+        }
+        _ => b,
+    }
+}
+
+fn fmt_calc(n: f64) -> String {
+    if (n - n.round()).abs() < 1e-9 {
+        format!("{:.0}", n.round())
+    } else {
+        format!("{n:.4}")
+            .trim_end_matches('0')
+            .trim_end_matches('.')
+            .to_string()
     }
 }
 
