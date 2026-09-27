@@ -123,10 +123,11 @@ fn same_place(path: &Path, other: &Path) -> bool {
 }
 
 pub fn protected(path: &Path, app_root: &Path) -> bool {
-    if is_fs_root(path) {
+    if is_fs_root(path) || same_place(path, app_root) {
         return true;
     }
-    same_place(path, app_root)
+    // A parent of this install would take the program with it.
+    app_root.starts_with(path)
 }
 
 pub fn dir_has_child(path: &Path) -> bool {
@@ -184,5 +185,23 @@ mod tests {
         remove_path(&sub, &dir).unwrap();
         assert!(!sub.exists());
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_parent_of_the_install_stays() {
+        let parent = std::env::temp_dir().join(format!("bn-guard-{}", std::process::id()));
+        let app = parent.join("blightnet");
+        let _ = std::fs::remove_dir_all(&parent);
+        std::fs::create_dir_all(&app).unwrap();
+        assert!(protected(&parent, &app));
+        assert!(protected(&app, &app));
+        assert!(remove_path(&parent, &app).is_err());
+        assert!(parent.is_dir());
+        assert!(app.is_dir());
+        let file = create_file(&app, "note.txt").unwrap();
+        assert!(!protected(&file, &app));
+        remove_path(&file, &app).unwrap();
+        assert!(!file.exists());
+        let _ = std::fs::remove_dir_all(&parent);
     }
 }

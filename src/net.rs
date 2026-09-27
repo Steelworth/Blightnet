@@ -264,6 +264,7 @@ pub enum NetEvent {
         size: u64,
     },
     FileChunk { id: String, data: Vec<u8> },
+    FileStop { id: String },
     FileDone { id: String },
     MapMark { mark: crate::maps::Mark },
     MapMarkDel { id: String },
@@ -1004,6 +1005,13 @@ pub struct SendTick {
 pub enum SendNote {
     Tick(SendTick),
     Finished(Result<(), String>),
+}
+
+fn chunk_or_stop(id: String, data: impl AsRef<str>) -> NetEvent {
+    match base64::Engine::decode(&base64::engine::general_purpose::STANDARD, data.as_ref()) {
+        Ok(bytes) => NetEvent::FileChunk { id, data: bytes },
+        Err(_) => NetEvent::FileStop { id },
+    }
 }
 
 pub fn stream_file(
@@ -1827,15 +1835,7 @@ pub(crate) fn host_incoming(
                         relay_like_image(&clients, &host_id, to, Some(&cid), &msg);
                     }
                     Wire::FileChunk { id, to, data } => {
-                        let bytes = base64::Engine::decode(
-                            &base64::engine::general_purpose::STANDARD,
-                            data,
-                        )
-                        .unwrap_or_default();
-                        let _ = ev_tx.send(NetEvent::FileChunk {
-                            id: id.clone(),
-                            data: bytes,
-                        });
+                        let _ = ev_tx.send(chunk_or_stop(id.clone(), data));
                         relay_like_image(&clients, &host_id, to, Some(&cid), &msg);
                     }
                     Wire::FileDone { id, to } => {
@@ -2367,9 +2367,7 @@ pub(crate) fn guest_incoming(msg: Wire, self_id: &str, ev_tx: &Sender<NetEvent>)
             }
         }
         Wire::FileChunk { id, data, .. } => {
-            let bytes = base64::Engine::decode(&base64::engine::general_purpose::STANDARD, data)
-                .unwrap_or_default();
-            let _ = ev_tx.send(NetEvent::FileChunk { id, data: bytes });
+            let _ = ev_tx.send(chunk_or_stop(id, data));
         }
         Wire::FileDone { id, .. } => {
             let _ = ev_tx.send(NetEvent::FileDone { id });
@@ -3110,6 +3108,18 @@ mod tests {
         assert!(saw_sheet, "guest did not receive sheets");
         assert!(saw_tok, "guest did not receive tokens");
         assert!(saw_ask, "guest did not receive map-image-ask");
+    }
+
+    #[test]
+    fn a_bad_chunk_stops_the_file() {
+        match chunk_or_stop("f1".into(), "!!!!") {
+            NetEvent::FileStop { id } => assert_eq!(id, "f1"),
+            _ => panic!("a bad chunk should stop the file"),
+        }
+        match chunk_or_stop("f1".into(), "YQ==") {
+            NetEvent::FileChunk { data, .. } => assert_eq!(data, b"a"),
+            _ => panic!("a real chunk should stay"),
+        }
     }
 
     #[test]

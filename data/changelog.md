@@ -4,6 +4,9 @@ The deck writes here so you can see what changed after an update. Newest first. 
 
 ## 2026-09-27
 
+- TREE will not delete a folder that contains this Blightnet install. The disk root and this folder stay. A file inside the install can still be removed.
+- A download that goes quiet for about 20 seconds is deleted, and the clock leaves the status line. A chunk that is not valid stops the transfer at once. A finished file stays.
+- If the boot sound device opens and the rest of the load fails, that device is let go. The error stays on the plate in red.
 - The intro is the loading screen. The glass plate comes up at once. Catalog, devices, records, and the city load behind it. Each line appears when that step finishes. One cyan scan follows the bar and does not repeat.
 - The front desk opens when the load has succeeded. On a fast machine the plate stays up for about a second and a half. A click or a key skips that hold and still waits if the load is not finished. A failed load stays on the plate in red. The node stays off until Online.
 - The window is a still hologram. A cyan grid sits behind the pages. Panels are dark glass with a red edge, a cyan line on top, and a cyan stroke shifted one pixel. That shift does not move.

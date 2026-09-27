@@ -18,6 +18,7 @@ use std::time::{Duration, Instant};
 
 /// Wake at most every 16.67ms. Do not sleep on the UI thread to enforce this.
 const FRAME: Duration = Duration::from_nanos(16_666_667);
+const RECV_QUIET: Duration = Duration::from_secs(20);
 const BOOT_HOLD: f32 = 1.6;
 const BOOT_SKIP: f32 = 0.2;
 const BOOT_STEPS: u32 = 5;
@@ -420,6 +421,7 @@ struct FileIn {
     path: PathBuf,
     file: Option<std::fs::File>,
     started: Instant,
+    touched: Instant,
 }
 
 struct LiveSend {
@@ -2611,6 +2613,18 @@ impl Blightnet {
         );
     }
 
+    fn sweep_quiet_files(&mut self) {
+        let quiet: Vec<String> = self
+            .file_in
+            .iter()
+            .filter(|(_, f)| recv_is_quiet(f.touched.elapsed()))
+            .map(|(id, _)| id.clone())
+            .collect();
+        for id in quiet {
+            self.fail_recv(&id, "The file stopped.");
+        }
+    }
+
     fn fail_recv(&mut self, id: &str, msg: &str) {
         if let Some(f) = self.file_in.remove(id) {
             drop(f.file);
@@ -3139,6 +3153,7 @@ impl Blightnet {
                             path,
                             file: Some(file),
                             started: Instant::now(),
+                            touched: Instant::now(),
                         },
                     );
                 }
@@ -3150,6 +3165,7 @@ impl Blightnet {
                             Some(file) => match std::io::Write::write_all(file, &data) {
                                 Ok(()) => {
                                     f.got += data.len() as u64;
+                                    f.touched = Instant::now();
                                     wrote = true;
                                 }
                                 Err(_) => failed = true,
@@ -3162,6 +3178,9 @@ impl Blightnet {
                     } else if failed {
                         self.fail_recv(&id, "The disk is full.");
                     }
+                }
+                NetEvent::FileStop { id } => {
+                    self.fail_recv(&id, "The file stopped.");
                 }
                 NetEvent::FileDone { id } => {
                     if let Some(mut f) = self.file_in.remove(&id) {
@@ -5705,6 +5724,7 @@ impl Blightnet {
 
 impl eframe::App for Blightnet {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        self.sweep_quiet_files();
         self.tick_fps();
         self.poll_net();
         self.poll_update();
@@ -13184,6 +13204,10 @@ fn write_picture(img: &image::DynamicImage, dest: &Path) -> Result<(), String> {
     }
 }
 
+fn recv_is_quiet(elapsed: Duration) -> bool {
+    elapsed >= RECV_QUIET
+}
+
 fn boot_open(elapsed: f32, ready: bool, skip: bool) -> bool {
     if !ready {
         return false;
@@ -13304,11 +13328,19 @@ impl Launch {
                         }
                     }
                 }
-                Ok(BootMsg::Failed(err)) => self.err = err,
+                Ok(BootMsg::Failed(err)) => {
+                    self.err = err;
+                    if self.app.is_none() {
+                        self.mixer = None;
+                    }
+                }
                 Err(TryRecvError::Empty) => break,
                 Err(TryRecvError::Disconnected) => {
                     if self.app.is_none() && self.err.is_empty() {
                         self.err = "The load stopped.".into();
+                    }
+                    if self.app.is_none() {
+                        self.mixer = None;
                     }
                     break;
                 }
@@ -13880,6 +13912,13 @@ mod tests {
             Some(62.5)
         );
         assert!(parse_ffmpeg_duration("no clock here").is_none());
+    }
+
+    #[test]
+    fn a_quiet_download_is_dropped() {
+        assert!(!recv_is_quiet(Duration::from_secs(19)));
+        assert!(recv_is_quiet(Duration::from_secs(20)));
+        assert!(recv_is_quiet(Duration::from_secs(21)));
     }
 
     #[test]
