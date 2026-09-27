@@ -4,6 +4,7 @@ The deck writes here so you can see what changed after an update. Newest first. 
 
 ## 2026-09-27
 
+- A tab stays open after you click it. The bar is one row again.
 - TREE will not delete a folder that contains this Blightnet install. The disk root and this folder stay. A file inside the install can still be removed.
 - A download that goes quiet for about 20 seconds is deleted, and the clock leaves the status line. A chunk that is not valid stops the transfer at once. A finished file stays.
 - If the boot sound device opens and the rest of the load fails, that device is let go. The error stays on the plate in red.

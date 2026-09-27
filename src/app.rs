@@ -6106,6 +6106,41 @@ impl Blightnet {
         }
     }
 
+    fn command_page_tabs(&mut self, ui: &mut egui::Ui) {
+        ui.spacing_mut().item_spacing = Vec2::new(4.0, 0.0);
+        ui.horizontal(|ui| {
+            if tab(ui, "INDEX", matches!(self.page, Page::Index)).clicked() {
+            self.page = Page::Index;
+        }
+        if tab(ui, "TABLE", self.page == Page::Table).clicked() {
+            self.page = Page::Table;
+        }
+            if tab(ui, "NETHOOKS", self.page == Page::Nethooks).clicked() {
+                self.page = Page::Nethooks;
+                self.hook_edit = false;
+            }
+            if tab(ui, "NETSPACE", self.page == Page::Netspace).clicked() {
+                self.page = Page::Netspace;
+                self.jack_at = Instant::now();
+            }
+            if tab(ui, "ROTN", self.page == Page::Rotn).clicked() {
+                self.page = Page::Rotn;
+            }
+            if tab(ui, "TERMINAL", self.page == Page::Terminal).clicked() {
+                self.page = Page::Terminal;
+            }
+            if tab(ui, "RECON", self.page == Page::Recon).clicked() {
+                self.page = Page::Recon;
+            }
+            if tab(ui, "TREE", self.page == Page::Tree).clicked() {
+                self.page = Page::Tree;
+            }
+            if self.player_full && tab(ui, "PLAYER", self.page == Page::Player).clicked() {
+                self.page = Page::Player;
+            }
+        });
+    }
+
     fn draw_command_bar(&mut self, ui: &mut egui::Ui) {
         let h = 44.0;
         let (rect, _) = ui.allocate_exact_size(
@@ -6203,47 +6238,7 @@ impl Blightnet {
                     .layout(egui::Layout::left_to_right(egui::Align::Center)),
             );
             tabs.set_clip_rect(mid);
-            egui::ScrollArea::horizontal()
-                .id_salt("cmd-tabs")
-                .auto_shrink([false, true])
-                .scroll_bar_visibility(
-                    egui::containers::scroll_area::ScrollBarVisibility::AlwaysHidden,
-                )
-                .show(&mut tabs, |ui| {
-                    ui.horizontal(|ui| {
-                        ui.spacing_mut().item_spacing = Vec2::new(4.0, 0.0);
-                        let index_on = matches!(self.page, Page::Index);
-                        if tab(ui, "INDEX", index_on).clicked() {
-                            self.page = Page::Index;
-                        }
-                        if tab(ui, "TABLE", self.page == Page::Table).clicked() {
-                            self.page = Page::Table;
-                        }
-                        if tab(ui, "NETHOOKS", self.page == Page::Nethooks).clicked() {
-                            self.page = Page::Nethooks;
-                            self.hook_edit = false;
-                        }
-                        if tab(ui, "NETSPACE", self.page == Page::Netspace).clicked() {
-                            self.page = Page::Netspace;
-                            self.jack_at = Instant::now();
-                        }
-                        if tab(ui, "ROTN", self.page == Page::Rotn).clicked() {
-                            self.page = Page::Rotn;
-                        }
-                        if tab(ui, "TERMINAL", self.page == Page::Terminal).clicked() {
-                            self.page = Page::Terminal;
-                        }
-                        if tab(ui, "RECON", self.page == Page::Recon).clicked() {
-                            self.page = Page::Recon;
-                        }
-                        if tab(ui, "TREE", self.page == Page::Tree).clicked() {
-                            self.page = Page::Tree;
-                        }
-                        if self.player_full && tab(ui, "PLAYER", self.page == Page::Player).clicked() {
-                            self.page = Page::Player;
-                        }
-                    });
-                });
+            self.command_page_tabs(&mut tabs);
         });
     }
 
@@ -13492,7 +13487,6 @@ impl eframe::App for Launch {
         }
         if self.err.is_empty() && boot_open(t, self.app.is_some(), self.skip) {
             if let Some(app) = self.app.as_mut() {
-                app.page = Page::Index;
                 app.update(ctx, frame);
             }
             return;
