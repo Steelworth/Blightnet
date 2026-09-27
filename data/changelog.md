@@ -2,6 +2,16 @@
 
 The deck writes here so you can see what changed after an update. Newest first. One heading per day. Edit this file only when a build is about to be pushed to GitHub.
 
+## 2026-09-27
+
+- The tutorial walks the whole desk. Each card opens that part of the window: the front desk, host and join, the table tools, talk, the player, the folders, the shell, recon, pages, the city, and the fixer.
+- TREE is a tab for the folders on this computer. Open a folder, make a file or a folder, and delete asks again. The top of the disk and this Blightnet folder stay. Nothing in the tree is sent to the table.
+- The terminal scrolls, lists the commands on this computer, and stays in this folder. Nothing typed there is sent.
+- The player plays video with sound. A gif loops. The seek bar shows time left and jumps when you let go. Shuffle on the player is its own list. It is not the mix Shuffle.
+- A still picture can be rotated, flipped, cropped, and shifted in brightness and contrast. Save copy writes a new file. Save over asks twice.
+- Text files can be read and edited in the player. Tags show the file. Save tags and Clear tags ask again. Restore last puts the previous copy back.
+- Send a file of any size from the player or from chat. It streams. The status line shows about how long it will take, and how long is left. A transfer that stops is deleted.
+
 ## 2026-09-26
 
 - Command bar tabs are INDEX, TABLE, NETHOOKS, NETSPACE, ROTN, TERMINAL, and RECON. CHAT, CONTACTS, VOICE, VIDEO, and PLAYER stay pinned on that row.

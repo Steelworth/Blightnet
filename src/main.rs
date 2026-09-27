@@ -5,6 +5,7 @@ mod chars;
 mod chess;
 mod crypt;
 mod daemon;
+mod deskfile;
 mod dice;
 mod images;
 mod maps;
@@ -19,6 +20,7 @@ mod netspace;
 mod sys;
 mod term;
 mod theme;
+mod tree;
 mod video;
 
 use app::Blightnet;

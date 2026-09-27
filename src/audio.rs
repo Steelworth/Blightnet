@@ -1,14 +1,38 @@
 use rodio::buffer::SamplesBuffer;
-use rodio::{Decoder, OutputStream, OutputStreamHandle, Sink, Source};
 use rodio::cpal::traits::{DeviceTrait, HostTrait};
+use rodio::source::{SamplesConverter, SkipDuration};
+use rodio::{Decoder, OutputStream, OutputStreamHandle, Sink, Source};
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::BufReader;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::mpsc::Receiver;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
+
+type DeckDec = SamplesConverter<Decoder<BufReader<File>>, f32>;
+
+enum Prepared {
+    Direct(DeckDec),
+    Skipped(SkipDuration<DeckDec>),
+}
+
+struct DeckLoaded {
+    src: Prepared,
+    len: Option<f32>,
+    base: f32,
+    pause: bool,
+    path: PathBuf,
+}
+
+pub struct DeckReady {
+    pub path: PathBuf,
+    pub len: Option<f32>,
+    pub base: f32,
+    pub pause: bool,
+}
 
 const TAP_N: usize = 512;
 
@@ -122,6 +146,9 @@ pub struct Mixer {
     talk: Option<Sink>,
     clip: Option<Sink>,
     deck: Option<Sink>,
+    film: Option<Sink>,
+    deck_rx: Option<Receiver<Result<DeckLoaded, String>>>,
+    deck_known_len: Option<f32>,
     deck_vol: f32,
     tap: Arc<DeckTap>,
 }
@@ -392,6 +419,29 @@ fn output_stream(name: Option<&str>) -> Result<(OutputStream, OutputStreamHandle
     OutputStream::try_default().map_err(|e| format!("audio device: {e}"))
 }
 
+fn load_deck_at(path: &Path, at: Duration, pause: bool) -> Result<DeckLoaded, String> {
+    let file = File::open(path).map_err(|e| format!("{}: {e}", path.display()))?;
+    let mut dec = Decoder::new(BufReader::new(file))
+        .map_err(|e| format!("decode {}: {e}", path.display()))?
+        .convert_samples::<f32>();
+    let len = dec
+        .total_duration()
+        .map(|d| d.as_secs_f32())
+        .filter(|n| n.is_finite() && *n > 0.05);
+    let src = if dec.try_seek(at).is_ok() {
+        Prepared::Direct(dec)
+    } else {
+        Prepared::Skipped(dec.skip_duration(at))
+    };
+    Ok(DeckLoaded {
+        src,
+        len,
+        base: at.as_secs_f32().max(0.0),
+        pause,
+        path: path.to_path_buf(),
+    })
+}
+
 impl Mixer {
     pub fn new(root: PathBuf) -> Result<Self, String> {
         Self::with_output(root, None)
@@ -408,6 +458,9 @@ impl Mixer {
             talk: None,
             clip: None,
             deck: None,
+            film: None,
+            deck_rx: None,
+            deck_known_len: None,
             deck_vol: 0.7,
             tap: DeckTap::new(),
             radio_tap: DeckTap::new(),
@@ -518,15 +571,44 @@ impl Mixer {
         if let Some(s) = self.deck.as_ref() {
             s.set_volume((self.deck_vol * m).clamp(0.0, 1.0));
         }
+        if let Some(s) = self.film.as_ref() {
+            s.set_volume((self.deck_vol * m).clamp(0.0, 1.0));
+        }
     }
 
     pub fn deck_play_path(&mut self, path: &Path) -> Result<(), String> {
+        self.deck_play_at(path, Duration::ZERO, false)
+    }
+
+    pub fn deck_play_at(&mut self, path: &Path, at: Duration, pause: bool) -> Result<(), String> {
         self.deck_stop();
+        self.deck_known_len = None;
+        if at < Duration::from_millis(40) {
+            return self.start_decoder(path, pause);
+        }
+        let path = path.to_path_buf();
+        let (tx, rx) = std::sync::mpsc::channel();
+        self.deck_rx = Some(rx);
+        std::thread::spawn(move || {
+            let _ = tx.send(load_deck_at(&path, at, pause));
+        });
+        Ok(())
+    }
+
+    fn start_decoder(&mut self, path: &Path, pause: bool) -> Result<(), String> {
         let file = File::open(path).map_err(|e| format!("{}: {e}", path.display()))?;
         let dec = Decoder::new(BufReader::new(file))
             .map_err(|e| format!("decode {}: {e}", path.display()))?
             .convert_samples::<f32>();
-        let sink = Sink::try_new(&self.handle).map_err(|e| e.to_string())?;
+        self.deck_known_len = dec.total_duration().map(|d| d.as_secs_f32());
+        self.append_direct(dec, pause);
+        Ok(())
+    }
+
+    fn append_direct(&mut self, dec: DeckDec, pause: bool) {
+        let Ok(sink) = Sink::try_new(&self.handle) else {
+            return;
+        };
         sink.set_volume((self.deck_vol * self.master).clamp(0.0, 1.0));
         sink.append(DeckTee {
             inner: dec,
@@ -534,12 +616,84 @@ impl Mixer {
             scratch: [0.0; 64],
             filled: 0,
         });
-        sink.play();
+        if pause {
+            sink.pause();
+        } else {
+            sink.play();
+        }
         self.deck = Some(sink);
-        Ok(())
+    }
+
+    fn append_skipped(&mut self, dec: SkipDuration<DeckDec>, pause: bool) {
+        let Ok(sink) = Sink::try_new(&self.handle) else {
+            return;
+        };
+        sink.set_volume((self.deck_vol * self.master).clamp(0.0, 1.0));
+        sink.append(DeckTee {
+            inner: dec,
+            tap: Arc::clone(&self.tap),
+            scratch: [0.0; 64],
+            filled: 0,
+        });
+        if pause {
+            sink.pause();
+        } else {
+            sink.play();
+        }
+        self.deck = Some(sink);
+    }
+
+    pub fn poll_deck_ready(&mut self) -> Option<Result<DeckReady, String>> {
+        let rx = self.deck_rx.take()?;
+        match rx.try_recv() {
+            Ok(Ok(loaded)) => {
+                let ready = DeckReady {
+                    path: loaded.path,
+                    len: loaded.len,
+                    base: loaded.base,
+                    pause: loaded.pause,
+                };
+                self.deck_known_len = loaded.len;
+                match loaded.src {
+                    Prepared::Direct(dec) => self.append_direct(dec, loaded.pause),
+                    Prepared::Skipped(dec) => self.append_skipped(dec, loaded.pause),
+                }
+                Some(Ok(ready))
+            }
+            Ok(Err(err)) => Some(Err(err)),
+            Err(std::sync::mpsc::TryRecvError::Empty) => {
+                self.deck_rx = Some(rx);
+                None
+            }
+            Err(std::sync::mpsc::TryRecvError::Disconnected) => None,
+        }
+    }
+
+    pub fn take_known_len(&mut self) -> Option<f32> {
+        let len = self.deck_known_len.take()?;
+        (len.is_finite() && len > 0.05).then_some(len)
+    }
+
+    pub fn deck_try_seek(&self, at: Duration) -> bool {
+        self.deck.as_ref().and_then(|s| s.try_seek(at).ok()).is_some()
+    }
+
+    pub fn deck_pos(&self) -> f32 {
+        self.deck
+            .as_ref()
+            .map(|s| s.get_pos().as_secs_f32())
+            .unwrap_or(0.0)
+    }
+
+    pub fn deck_paused(&self) -> bool {
+        self.deck
+            .as_ref()
+            .map(|s| s.is_paused() && !s.empty())
+            .unwrap_or(false)
     }
 
     pub fn deck_stop(&mut self) {
+        self.deck_rx = None;
         if let Some(s) = self.deck.take() {
             s.stop();
         }
@@ -572,10 +726,43 @@ impl Mixer {
         }
     }
 
+    pub fn deck_loading(&self) -> bool {
+        self.deck_rx.is_some()
+    }
+
     pub fn set_deck_vol(&mut self, v: f32) {
         self.deck_vol = v.clamp(0.0, 1.0);
+        let vol = (self.deck_vol * self.master).clamp(0.0, 1.0);
         if let Some(s) = self.deck.as_ref() {
-            s.set_volume((self.deck_vol * self.master).clamp(0.0, 1.0));
+            s.set_volume(vol);
+        }
+        if let Some(s) = self.film.as_ref() {
+            s.set_volume(vol);
+        }
+    }
+
+    pub fn film_start(&mut self) {
+        self.film_stop();
+        if let Ok(sink) = Sink::try_new(&self.handle) {
+            sink.set_volume((self.deck_vol * self.master).clamp(0.0, 1.0));
+            sink.play();
+            self.film = Some(sink);
+        }
+    }
+
+    pub fn film_push(&mut self, pcm: Vec<f32>) {
+        let Some(sink) = self.film.as_ref() else {
+            return;
+        };
+        if pcm.is_empty() || sink.len() >= 24 {
+            return;
+        }
+        sink.append(SamplesBuffer::new(1, 48_000, pcm));
+    }
+
+    pub fn film_stop(&mut self) {
+        if let Some(s) = self.film.take() {
+            s.stop();
         }
     }
 

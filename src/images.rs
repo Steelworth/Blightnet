@@ -39,6 +39,34 @@ impl TexCache {
         self.put_bytes(ctx, key, bytes)
     }
 
+    pub fn put_rgb(
+        &mut self,
+        ctx: &egui::Context,
+        key: &str,
+        w: u32,
+        h: u32,
+        rgb: &[u8],
+        gen: u64,
+    ) -> Option<TextureHandle> {
+        if w == 0 || h == 0 || rgb.len() < (w as usize) * (h as usize) * 3 {
+            return None;
+        }
+        if self.sig.get(key) == Some(&gen) {
+            return self.map.get(key).cloned();
+        }
+        let color = ColorImage::from_rgb([w as usize, h as usize], &rgb[..(w as usize) * (h as usize) * 3]);
+        self.sig.insert(key.to_string(), gen);
+        if let Some(tex) = self.map.get_mut(key) {
+            tex.set(color, TextureOptions::LINEAR);
+            return Some(tex.clone());
+        }
+        self.evict();
+        let tex = ctx.load_texture(key.to_string(), color, TextureOptions::LINEAR);
+        self.order.push_back(key.to_string());
+        self.map.insert(key.to_string(), tex.clone());
+        Some(tex)
+    }
+
     pub fn put_bytes(&mut self, ctx: &egui::Context, key: &str, bytes: &[u8]) -> Option<TextureHandle> {
         if bytes.is_empty() {
             return None;
@@ -82,7 +110,12 @@ impl TexCache {
             let Some(old) = self.order.pop_front() else {
                 return;
             };
-            if old.starts_with("local-") || old.starts_with("cam-") || old.starts_with("scr-") {
+            if old.starts_with("local-")
+                || old.starts_with("cam-")
+                || old.starts_with("scr-")
+                || old == "media-stage"
+                || old == "pic-stage"
+            {
                 self.order.push_back(old);
                 continue;
             }

@@ -11,7 +11,7 @@ use eframe::egui::{self, Color32, FontId, Rect, RichText, Vec2};
 use rand::seq::SliceRandom;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{self, Receiver, TryRecvError};
 use std::time::{Duration, Instant};
@@ -21,11 +21,86 @@ const FRAME: Duration = Duration::from_nanos(16_666_667);
 const COMBAT_MARK: &str = "\u{2060}C|";
 const FILE_CAP: usize = 96 * 1024 * 1024;
 const MAP_WIRE: &str = "__table-map";
+const FILM_W: u32 = 960;
+const FILM_H: u32 = 540;
+const FILM_BYTES: usize = (FILM_W as usize) * (FILM_H as usize) * 3;
 
 struct MediaJob {
     gen: u64,
     ok: bool,
     msg: String,
+}
+
+struct FilmSlot {
+    rgb: std::sync::Mutex<Option<(u64, Vec<u8>)>>,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Default)]
+struct PicEdit {
+    turns: u8,
+    flip: bool,
+    bright: i32,
+    contrast: i32,
+    left: i32,
+    top: i32,
+    right: i32,
+    bottom: i32,
+}
+
+struct PicDesk {
+    edit: PicEdit,
+    arm: bool,
+    for_path: Option<PathBuf>,
+    dirty: bool,
+    gen: u64,
+    mark: Instant,
+}
+
+struct PicDone {
+    gen: u64,
+    body: Result<PicBody, String>,
+}
+
+enum PicBody {
+    Preview(Vec<u8>),
+    Saved(PathBuf),
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum TextMove {
+    Index(usize),
+    Next,
+    Prev,
+}
+
+struct GifDone {
+    gen: u64,
+    path: PathBuf,
+    set: Result<crate::deskfile::GifSet, String>,
+}
+
+enum TagMsg {
+    Read(Result<(PathBuf, crate::deskfile::TagSet), String>),
+    Wrote(Result<(), String>),
+}
+
+impl PicDesk {
+    fn blank() -> Self {
+        Self {
+            edit: PicEdit::default(),
+            arm: false,
+            for_path: None,
+            dirty: false,
+            gen: 0,
+            mark: Instant::now(),
+        }
+    }
+
+    fn fresh(path: PathBuf) -> Self {
+        let mut desk = Self::blank();
+        desk.for_path = Some(path);
+        desk
+    }
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -56,7 +131,245 @@ enum Page {
     Player,
     Terminal,
     Recon,
+    Tree,
 }
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum TourOpen {
+    None,
+    Panel(Overlay),
+    Games,
+    Book,
+    Seat,
+}
+
+struct TourStep {
+    title: &'static str,
+    body: &'static str,
+    page: Page,
+    dock: ShellPanel,
+    open: TourOpen,
+}
+
+const TOUR: &[TourStep] = &[
+    TourStep {
+        title: "INDEX",
+        body: "The front desk. The world name switches Hearthsong and Blight. The mix goes quiet and Place resets. 01 opens the table. The tiles open Contacts, this manual, Chat, Voice, Blackjack, Video, and Nethooks. Stamp a Handle in the command bar. The deck log is what has already shipped.",
+        page: Page::Index,
+        dock: ShellPanel::None,
+        open: TourOpen::None,
+    },
+    TourStep {
+        title: "ONLINE",
+        body: "Online in the command bar starts the node. Press it again to stop it. The meters show CPU, GPU, memory, and free disk. Update pulls the latest build. Rescan devices looks for mics, speakers, and cameras. Closing the window leaves the node running. INDEX 00 shuts the window and the node. daemon-stop does the same from a terminal.",
+        page: Page::Index,
+        dock: ShellPanel::None,
+        open: TourOpen::None,
+    },
+    TourStep {
+        title: "HOST",
+        body: "After Online, Host offers a local table or an internet table. Copy the blightnet:// invite. Host does not start the node by itself. Leave drops the table. The node keeps running until you press Online again, or INDEX 00.",
+        page: Page::Index,
+        dock: ShellPanel::Host,
+        open: TourOpen::None,
+    },
+    TourStep {
+        title: "JOIN",
+        body: "Join pastes the blightnet:// invite the host copied, then Connect. Join does not start the node. Press Online first. The same invite is refused if it is a web address.",
+        page: Page::Index,
+        dock: ShellPanel::Join,
+        open: TourOpen::None,
+    },
+    TourStep {
+        title: "TABLE",
+        body: "The world name, the place, and the clock stay on top. Morning, Day, Evening, and Night set the hour. Outside and Inside change the painting. Player and GM choose who runs the day. Fade out, Fade in, and Silence are this table's loudness. The Local slider is only this computer. On Blight, the painting carries the radio. The left rail is Net, Stage, Sheet, Seat, Books, Gear, and More.",
+        page: Page::Table,
+        dock: ShellPanel::None,
+        open: TourOpen::None,
+    },
+    TourStep {
+        title: "SCENES",
+        body: "Scenes are looks for this world. Pick one to set the place and the mix. A star is a mix you saved. Save this mix keeps the one playing now. Search finds a name.",
+        page: Page::Table,
+        dock: ShellPanel::None,
+        open: TourOpen::Panel(Overlay::Scenes),
+    },
+    TourStep {
+        title: "MIX",
+        body: "Mix is the table's own sound. Check a layer to play it, and the slider is that layer. Shuffle here picks table music. It is not the player's Shuffle. Add sound on the rail brings in a file from this computer.",
+        page: Page::Table,
+        dock: ShellPanel::None,
+        open: TourOpen::Panel(Overlay::Mix),
+    },
+    TourStep {
+        title: "PLACE",
+        body: "Place is the painting for where you are, at morning, day, evening, and night. The place name on the top bar opens the same picture. Switching worlds resets it.",
+        page: Page::Table,
+        dock: ShellPanel::None,
+        open: TourOpen::Panel(Overlay::Place),
+    },
+    TourStep {
+        title: "CALENDAR",
+        body: "The date on the top bar opens this month. Only the gamemaster changes the day. A new day restocks the stall. The watch on the top bar opens the clock. Run clock moves it while you are the GM. Past midnight the day rolls.",
+        page: Page::Table,
+        dock: ShellPanel::None,
+        open: TourOpen::Panel(Overlay::Calendar),
+    },
+    TourStep {
+        title: "CALC",
+        body: "Calc is a calculator on this computer. The keys never go to the table.",
+        page: Page::Table,
+        dock: ShellPanel::None,
+        open: TourOpen::Panel(Overlay::Calc),
+    },
+    TourStep {
+        title: "SEAT",
+        body: "Sheet and Seat open this character. Click the name again to close. Other people at the table are buttons under Seat. Dice, hits, and rests go to the log. Private notes stay on this computer.",
+        page: Page::Table,
+        dock: ShellPanel::None,
+        open: TourOpen::Seat,
+    },
+    TourStep {
+        title: "BOOKS",
+        body: "Books are the lists for this world. Hearthsong has Bestiary, NPCs, and Gods. Blight has Datashard, Faces, Corps, Gangs, and Lore. This card opens the first book. Search finds a name. Drag a row onto a map.",
+        page: Page::Table,
+        dock: ShellPanel::None,
+        open: TourOpen::Book,
+    },
+    TourStep {
+        title: "ARMORY",
+        body: "Armory is the full gear list. The gamemaster drags an item onto a sheet. Everyone else can look. Search finds a name.",
+        page: Page::Table,
+        dock: ShellPanel::None,
+        open: TourOpen::Panel(Overlay::Armory),
+    },
+    TourStep {
+        title: "STALL",
+        body: "The stall is Vendors on Hearthsong and Night Market on Blight. Stock is shuffled for the buyer, and nothing above their level is out. Players buy here. A new day restocks it.",
+        page: Page::Table,
+        dock: ShellPanel::None,
+        open: TourOpen::Panel(Overlay::Vendors),
+    },
+    TourStep {
+        title: "MAPS",
+        body: "Maps are for the gamemaster. Ink, Circle, and Square fog the board. Erase removes a mark. Clear drawings wipes them. Grid, cell size, and Fit frame the board. Drag a token. Alt-drag pans. Marks go to everyone at the table. Drop a picture onto the table to hang it as the map.",
+        page: Page::Table,
+        dock: ShellPanel::None,
+        open: TourOpen::Panel(Overlay::Maps),
+    },
+    TourStep {
+        title: "LOG",
+        body: "Log is the shared roll list. Dice, hits, and rests land here. Everyone at the table sees it. Press Log again to close.",
+        page: Page::Table,
+        dock: ShellPanel::None,
+        open: TourOpen::Panel(Overlay::Log),
+    },
+    TourStep {
+        title: "NOTES",
+        body: "Notes are private. They stay on this computer and never go to the table. Press Notes again to close.",
+        page: Page::Table,
+        dock: ShellPanel::None,
+        open: TourOpen::Panel(Overlay::Notes),
+    },
+    TourStep {
+        title: "GAMES",
+        body: "21 is the house game, also on the INDEX tile. On Blight, More adds Chess beside 21. This card opens the games for the world you are in.",
+        page: Page::Table,
+        dock: ShellPanel::None,
+        open: TourOpen::Games,
+    },
+    TourStep {
+        title: "CHAT",
+        body: "Chat sits in the dock. Pick Table, a contact, or a crew. Send text, a picture, audio, video, a voice note, or any file. A file streams, with no size cap. The status line shows about how long it will take, and how long is left. Wipe chat clears the log. The log stays until you wipe it.",
+        page: Page::Table,
+        dock: ShellPanel::Chat,
+        open: TourOpen::None,
+    },
+    TourStep {
+        title: "CONTACTS",
+        body: "Contacts are people you save. Add them, message them, call them, or start video when Online. Create crew groups several people. Join table uses a saved address. A filled dot means they are online.",
+        page: Page::Table,
+        dock: ShellPanel::Contacts,
+        open: TourOpen::None,
+    },
+    TourStep {
+        title: "VOICE",
+        body: "Voice is table talk, or a private call from Contacts. Table voice and Mute are here. Mic send is how loud you go out, and it stays on this computer. The mic starts when you turn table voice on. Go Online first.",
+        page: Page::Table,
+        dock: ShellPanel::Voice,
+        open: TourOpen::None,
+    },
+    TourStep {
+        title: "AUDIO",
+        body: "Audio page is the same mic send, on its own screen. Listen levels here never change someone else's table. Voice on the top row is where calls live.",
+        page: Page::Audio,
+        dock: ShellPanel::None,
+        open: TourOpen::None,
+    },
+    TourStep {
+        title: "VIDEO",
+        body: "Video calls a contact or a whole crew. Pick a camera, or Rescan cameras. On a call you can send the camera, share the screen, mute, or hang up. Accept answers an incoming call. Go Online first.",
+        page: Page::Table,
+        dock: ShellPanel::Video,
+        open: TourOpen::None,
+    },
+    TourStep {
+        title: "PLAYER",
+        body: "The player is this computer's library. Stations sit at the top: acid means this deck is playing it, cyan is on air, red is off air. Then songs, video, pictures, gifs, PDF pages, and text. Shuffle and the seek bar are for audio and video. A gif loops. Pause holds the frame. A still picture can be rotated, flipped, cropped, and shifted in brightness and contrast. Save copy writes a new file. Save over asks twice. Tags show the file. Save tags and Clear tags ask again. Restore last puts the backup back. Text can be edited. Send picks contacts and streams a file of any size. The status line shows about how long, and how long is left. None of this changes the table mix.",
+        page: Page::Player,
+        dock: ShellPanel::None,
+        open: TourOpen::None,
+    },
+    TourStep {
+        title: "TREE",
+        body: "TREE is the folders on this computer. This deck, Home, Computer, and Up. Open a folder to read it. A media file opens in the player. New file and New folder write here. Delete asks again, and a folder that is not empty asks once more. The top of the disk and this Blightnet folder stay. Nothing here is sent to the table.",
+        page: Page::Tree,
+        dock: ShellPanel::None,
+        open: TourOpen::None,
+    },
+    TourStep {
+        title: "TERMINAL",
+        body: "A real shell in this Blightnet folder. The wheel scrolls back. Typing returns to the live end. The list is every command on this computer. Click types the name. Enter runs it. Filter and Rescan narrow the list. Nothing typed here is sent to the table.",
+        page: Page::Terminal,
+        dock: ShellPanel::None,
+        open: TourOpen::None,
+    },
+    TourStep {
+        title: "RECON",
+        body: "Files on people and companies. Fill the form and keep a portrait, or a mark for a company. Send reaches one contact or a crew when Online. Delete asks again. The file stays on this computer until you send it.",
+        page: Page::Recon,
+        dock: ShellPanel::None,
+        open: TourOpen::None,
+    },
+    TourStep {
+        title: "NETHOOKS",
+        body: "Pages you can show the table: a handout, a rumor, or a job. The preview is live. Learn HTML and Learn CSS are pinned lessons. Post to table, then the next card opens Board. Take down removes it. Private notes never become a page.",
+        page: Page::Nethooks,
+        dock: ShellPanel::None,
+        open: TourOpen::None,
+    },
+    TourStep {
+        title: "BOARD",
+        body: "Board is what has been posted to this table. Open it from More on the left rail. If nothing is posted, write a page in NETHOOKS and press Post to table.",
+        page: Page::Table,
+        dock: ShellPanel::None,
+        open: TourOpen::Panel(Overlay::Board),
+    },
+    TourStep {
+        title: "NETSPACE",
+        body: "A city you walk. WASD moves. Drag looks. Shift runs. Q and E turn. C auto-walks. M is the map. E is a booth. F is a door. Click looks at a mark. The NETSPACE tab or Jack-in on Blight opens it. When Online, other seats show under their handles. Acid and cyan stay on your own marks.",
+        page: Page::Netspace,
+        dock: ShellPanel::None,
+        open: TourOpen::None,
+    },
+    TourStep {
+        title: "ROTN",
+        body: "The fixer knows this table and answers here. Hour, Table, and Place are the facts. Rumor, Job, and NPC are made up. You can type a question. Post rumor and Post job turn the last answer into a page you can put on the Board. Reroll soul makes a new fixer. Add model is optional and stays on this computer. None of that is sent away.",
+        page: Page::Rotn,
+        dock: ShellPanel::None,
+        open: TourOpen::None,
+    },
+];
 
 #[derive(Clone, PartialEq, Eq)]
 enum ChatTarget {
@@ -100,7 +413,20 @@ struct FileIn {
     mime: String,
     filename: String,
     size: u64,
-    buf: Vec<u8>,
+    got: u64,
+    path: PathBuf,
+    file: Option<std::fs::File>,
+    started: Instant,
+}
+
+struct LiveSend {
+    filename: String,
+    who: String,
+    index: u32,
+    count: u32,
+    done: u64,
+    total: u64,
+    started: Instant,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -197,6 +523,11 @@ pub struct Blightnet {
     media_offset: f32,
     media_started: Instant,
     media_stamp: Option<std::time::SystemTime>,
+    media_audio: Option<std::process::Child>,
+    media_slot: Option<std::sync::Arc<FilmSlot>>,
+    media_arx: Option<std::sync::mpsc::Receiver<Vec<f32>>>,
+    pic: PicDesk,
+    pic_rx: Option<std::sync::mpsc::Receiver<PicDone>>,
     vendor_stock: Vec<serde_json::Value>,
     custom: Vec<Layer>,
     kit_filter: String,
@@ -297,6 +628,48 @@ pub struct Blightnet {
     deck_i: usize,
     deck_on: bool,
     deck_vol: f32,
+    deck_shuffle: bool,
+    deck_bag: Vec<usize>,
+    deck_note: String,
+    deck_base: f32,
+    seek_drag: Option<f32>,
+    len_cache: HashMap<PathBuf, f32>,
+    len_miss: HashSet<PathBuf>,
+    len_rx: Option<std::sync::mpsc::Receiver<(PathBuf, Option<f32>)>>,
+    len_pending: Option<PathBuf>,
+    tree_at: PathBuf,
+    tree_rows: Vec<crate::tree::Entry>,
+    tree_err: String,
+    tree_sel: Option<PathBuf>,
+    tree_name: String,
+    tree_arm: Option<PathBuf>,
+    tree_deep: bool,
+    tree_drives: bool,
+    tree_loaded: bool,
+    text_body: String,
+    text_for: Option<PathBuf>,
+    text_dirty: bool,
+    text_hold: Option<TextMove>,
+    gif_frames: Vec<crate::deskfile::GifFrame>,
+    gif_for: Option<PathBuf>,
+    gif_i: usize,
+    gif_acc: f32,
+    gif_run: bool,
+    gif_note: String,
+    gif_gen: u64,
+    gif_rx: Option<std::sync::mpsc::Receiver<GifDone>>,
+    tags_open: bool,
+    tags_for: Option<PathBuf>,
+    tags: crate::deskfile::TagSet,
+    tags_arm: u8,
+    tags_note: String,
+    tags_gen: u64,
+    tags_rx: Option<std::sync::mpsc::Receiver<(u64, TagMsg)>>,
+    send_path: Option<PathBuf>,
+    send_ids: HashSet<String>,
+    send_rx: Option<std::sync::mpsc::Receiver<crate::net::SendNote>>,
+    send_live: Option<LiveSend>,
+    recv_focus: Option<String>,
     rotn: crate::rotn::Rotn,
     chess: crate::chess::Game,
     term: Option<crate::term::Shell>,
@@ -554,6 +927,11 @@ impl Blightnet {
             media_offset: 0.0,
             media_started: Instant::now(),
             media_stamp: None,
+            media_audio: None,
+            media_slot: None,
+            media_arx: None,
+            pic: PicDesk::blank(),
+            pic_rx: None,
             vendor_stock: vec![],
             custom: vec![],
             kit_filter: String::new(),
@@ -654,6 +1032,48 @@ impl Blightnet {
             deck_i: 0,
             deck_on: false,
             deck_vol: 0.7,
+            deck_shuffle: false,
+            deck_bag: Vec::new(),
+            deck_note: String::new(),
+            deck_base: 0.0,
+            seek_drag: None,
+            len_cache: HashMap::new(),
+            len_miss: HashSet::new(),
+            len_rx: None,
+            len_pending: None,
+            tree_at: root.clone(),
+            tree_rows: Vec::new(),
+            tree_err: String::new(),
+            tree_sel: None,
+            tree_name: String::new(),
+            tree_arm: None,
+            tree_deep: false,
+            tree_drives: false,
+            tree_loaded: false,
+            text_body: String::new(),
+            text_for: None,
+            text_dirty: false,
+            text_hold: None,
+            gif_frames: Vec::new(),
+            gif_for: None,
+            gif_i: 0,
+            gif_acc: 0.0,
+            gif_run: false,
+            gif_note: String::new(),
+            gif_gen: 0,
+            gif_rx: None,
+            tags_open: false,
+            tags_for: None,
+            tags: crate::deskfile::TagSet::default(),
+            tags_arm: 0,
+            tags_note: String::new(),
+            tags_gen: 0,
+            tags_rx: None,
+            send_path: None,
+            send_ids: HashSet::new(),
+            send_rx: None,
+            send_live: None,
+            recv_focus: None,
             rotn: crate::rotn::Rotn::load(&root),
             chess: crate::chess::Game::new(),
             term: None,
@@ -1956,23 +2376,98 @@ impl Blightnet {
         let Some(path) = dlg.pick_file() else {
             return;
         };
-        let Ok(bytes) = std::fs::read(&path) else {
+        if !path.is_file() {
             self.chat.push("Could not read that file.".into());
             return;
-        };
-        if bytes.len() > FILE_CAP {
-            self.chat.push(format!(
-                "That file is too large (max about {} MB).",
-                FILE_CAP / 1_000_000
-            ));
+        }
+        self.spawn_send(path, self.chat_targets());
+    }
+
+    fn chat_targets(&self) -> Vec<(Option<String>, String)> {
+        match &self.chat_target {
+            ChatTarget::Dm(id) => {
+                let name = self
+                    .contacts
+                    .iter()
+                    .find(|c| &c.id == id)
+                    .map(|c| c.name.clone())
+                    .unwrap_or_else(|| id.clone());
+                vec![(Some(id.clone()), name)]
+            }
+            ChatTarget::Crew(cid) => self
+                .crews
+                .iter()
+                .find(|c| &c.id == cid)
+                .map(|c| {
+                    c.members
+                        .iter()
+                        .filter(|id| self.contact_online(id))
+                        .map(|id| {
+                            let name = self
+                                .contacts
+                                .iter()
+                                .find(|c| &c.id == id)
+                                .map(|c| c.name.clone())
+                                .unwrap_or_else(|| id.clone());
+                            (Some(id.clone()), name)
+                        })
+                        .collect()
+                })
+                .unwrap_or_default(),
+            ChatTarget::Table => vec![(None, "the table".into())],
+        }
+    }
+
+    fn spawn_send(&mut self, path: PathBuf, targets: Vec<(Option<String>, String)>) {
+        if self.send_rx.is_some() {
+            self.chat.push("A send is already running.".into());
             return;
         }
-        let mime = mime_of(&path);
-        let filename = path
-            .file_name()
-            .map(|s| s.to_string_lossy().into_owned())
-            .unwrap_or_else(|| "file".into());
-        self.ingest_outgoing(mime, &safe_filename(&filename), bytes);
+        if !self.node_live {
+            self.chat.push("Press Online first. Then you can send it.".into());
+            return;
+        }
+        if targets.is_empty() {
+            self.chat.push("Pick a contact first.".into());
+            return;
+        }
+        let tx = self.net.file_sender();
+        let from = self.net.self_id.clone();
+        let handle = if self.net.handle.trim().is_empty() {
+            self.handle.clone()
+        } else {
+            self.net.handle.clone()
+        };
+        let (evt_tx, evt_rx) = std::sync::mpsc::channel();
+        self.send_rx = Some(evt_rx);
+        self.send_live = None;
+        let count = targets.len() as u32;
+        std::thread::spawn(move || {
+            let filename = path
+                .file_name()
+                .map(|s| safe_filename(&s.to_string_lossy()))
+                .unwrap_or_else(|| "file".into());
+            let mime = mime_of(&path);
+            for (i, (id, who)) in targets.iter().enumerate() {
+                if let Err(err) = crate::net::stream_file(
+                    &tx,
+                    &from,
+                    &handle,
+                    id.clone(),
+                    &path,
+                    mime,
+                    &filename,
+                    who,
+                    i as u32 + 1,
+                    count,
+                    &evt_tx,
+                ) {
+                    let _ = evt_tx.send(crate::net::SendNote::Finished(Err(err)));
+                    return;
+                }
+            }
+            let _ = evt_tx.send(crate::net::SendNote::Finished(Ok(())));
+        });
     }
 
     fn ingest_outgoing(&mut self, mime: &str, filename: &str, bytes: Vec<u8>) {
@@ -2013,6 +2508,35 @@ impl Blightnet {
             return;
         }
         self.ingest_outgoing("audio/wav", "voice.wav", wav);
+    }
+
+    fn remember_inbox(&mut self, key: &str, mime: &str, filename: &str, path: PathBuf) {
+        self.inbox.insert(
+            key.to_string(),
+            InboxFile {
+                mime: mime.into(),
+                filename: filename.into(),
+                path,
+            },
+        );
+    }
+
+    fn fail_recv(&mut self, id: &str, msg: &str) {
+        if let Some(f) = self.file_in.remove(id) {
+            drop(f.file);
+            let _ = std::fs::remove_file(&f.path);
+        }
+        if self.recv_focus.as_deref() == Some(id) {
+            self.recv_focus = None;
+        }
+        self.status = msg.into();
+    }
+
+    fn drop_partials(&mut self) {
+        let ids: Vec<String> = self.file_in.keys().cloned().collect();
+        for id in ids {
+            self.fail_recv(&id, "The file stopped.");
+        }
     }
 
     fn store_inbox(&mut self, key: &str, mime: &str, filename: &str, bytes: &[u8]) {
@@ -2063,8 +2587,8 @@ impl Blightnet {
     }
 
     fn wipe_chat(&mut self) {
+        self.drop_partials();
         self.chat.clear();
-        self.file_in.clear();
         save_chat(&self.root, &self.chat);
         self.chat_saved = 0;
         self.chat.push("Chat wiped.".into());
@@ -2119,6 +2643,7 @@ impl Blightnet {
                     if s.contains("Node link dropped") {
                         self.node_live = false;
                         self.net.daemon = false;
+                        self.drop_partials();
                     }
                     self.status = s;
                 }
@@ -2494,11 +3019,24 @@ impl Blightnet {
                     if from == self.net.self_id {
                         continue;
                     }
-                    if size > FILE_CAP as u64 {
+                    let special = filename.starts_with(MAP_WIRE) || filename.starts_with("__hook|");
+                    if special && size > FILE_CAP as u64 {
                         self.chat.push(format!("{name} sent a file that is too large."));
                         continue;
                     }
-                    self.status = format!("Receiving {filename}…");
+                    let path = self.root.join("data/inbox").join(format!("partial-{id}"));
+                    if std::fs::create_dir_all(self.root.join("data/inbox")).is_err() {
+                        self.status = "The disk is full.".into();
+                        continue;
+                    }
+                    let file = match std::fs::File::create(&path) {
+                        Ok(file) => file,
+                        Err(_) => {
+                            self.status = "The disk is full.".into();
+                            continue;
+                        }
+                    };
+                    self.recv_focus = Some(id.clone());
                     self.file_in.insert(
                         id,
                         FileIn {
@@ -2507,42 +3045,96 @@ impl Blightnet {
                             mime,
                             filename,
                             size,
-                            buf: Vec::with_capacity(size.min(8_000_000) as usize),
+                            got: 0,
+                            path,
+                            file: Some(file),
+                            started: Instant::now(),
                         },
                     );
                 }
                 NetEvent::FileChunk { id, data } => {
+                    let mut failed = false;
+                    let mut wrote = false;
                     if let Some(f) = self.file_in.get_mut(&id) {
-                        if f.buf.len() + data.len() <= FILE_CAP {
-                            f.buf.extend_from_slice(&data);
+                        match f.file.as_mut() {
+                            Some(file) => match std::io::Write::write_all(file, &data) {
+                                Ok(()) => {
+                                    f.got += data.len() as u64;
+                                    wrote = true;
+                                }
+                                Err(_) => failed = true,
+                            },
+                            None => failed = true,
                         }
+                    }
+                    if wrote {
+                        self.recv_focus = Some(id);
+                    } else if failed {
+                        self.fail_recv(&id, "The disk is full.");
                     }
                 }
                 NetEvent::FileDone { id } => {
-                    if let Some(f) = self.file_in.remove(&id) {
+                    if let Some(mut f) = self.file_in.remove(&id) {
+                        f.file.take();
+                        if f.size > 0 && f.got != f.size {
+                            let _ = std::fs::remove_file(&f.path);
+                            self.status = "The file stopped.".into();
+                            if self.recv_focus.as_deref() == Some(id.as_str()) {
+                                self.recv_focus = None;
+                            }
+                            continue;
+                        }
+                        let final_path = self.root.join("data/inbox").join(format!(
+                            "{id}-{}",
+                            crate::deskfile::safe_download_name(&f.filename)
+                        ));
+                        if std::fs::rename(&f.path, &final_path).is_err() {
+                            let _ = std::fs::remove_file(&f.path);
+                            self.status = "The file stopped.".into();
+                            continue;
+                        }
+                        if self.recv_focus.as_deref() == Some(id.as_str()) {
+                            self.recv_focus = None;
+                        }
                         if f.filename.starts_with(MAP_WIRE) {
-                            self.install_map_image(&f.filename, &f.buf);
+                            if let Ok(bytes) = std::fs::read(&final_path) {
+                                self.install_map_image(&f.filename, &bytes);
+                            }
+                            let _ = std::fs::remove_file(&final_path);
                             continue;
                         }
                         if let Some(rest) = f.filename.strip_prefix("__hook|") {
-                            if let Some((id, name)) = rest.split_once('|') {
+                            if let Some((hid, name)) = rest.split_once('|') {
                                 if let Some(name) = crate::nethook::safe_file_name(name) {
-                                    let dir = crate::nethook::file_dir(&self.root, id);
-                                    let _ = std::fs::create_dir_all(&dir);
-                                    let _ = std::fs::write(dir.join(name), &f.buf);
+                                    if let Ok(bytes) = std::fs::read(&final_path) {
+                                        let dir = crate::nethook::file_dir(&self.root, hid);
+                                        let _ = std::fs::create_dir_all(&dir);
+                                        let _ = std::fs::write(dir.join(name), &bytes);
+                                    }
                                 }
                             }
+                            let _ = std::fs::remove_file(&final_path);
                             continue;
                         }
                         let tag = media_tag(&f.mime);
                         let key = id;
-                        self.store_inbox(&key, &f.mime, &f.filename, &f.buf);
+                        self.remember_inbox(&key, &f.mime, &f.filename, final_path.clone());
+                        if is_library_file(Path::new(&f.filename)) {
+                            self.add_deck_paths(vec![final_path.clone()]);
+                            if matches!(media_kind(&final_path), "audio" | "video") {
+                                if let Some(i) = self.deck_list.iter().position(|p| p == &final_path) {
+                                    self.deck_i = i;
+                                    self.deck_base = 0.0;
+                                    self.media_offset = 0.0;
+                                    self.deck_play_current();
+                                }
+                            }
+                        }
                         self.chat.push(format!(
                             "[{tag}:{key}|{}] {}",
                             f.filename,
                             media_caption(tag, &f.name)
                         ));
-                        self.auto_stream(tag, &f.buf);
                         self.status = "File received".into();
                         if f.from != self.net.self_id
                             && !self.contacts.iter().any(|c| c.id == f.from)
@@ -2717,34 +3309,36 @@ impl Blightnet {
     }
 
     fn stop_media_proc(&mut self) {
-        if let Some(mut child) = self.media_child.take() {
-            let _ = child.kill();
-            std::thread::spawn(move || {
-                let _ = child.wait();
-            });
-        }
+        self.media_arx = None;
+        kill_child(&mut self.media_child);
+        kill_child(&mut self.media_audio);
+        self.mixer.film_stop();
     }
 
     fn poll_media_proc(&mut self) {
-        let finished = match self.media_child.as_mut() {
-            Some(child) => match child.try_wait() {
-                Ok(Some(status)) => {
-                    if self.media_run && !status.success() && self.media_msg.is_empty() {
-                        self.media_msg = "The video stopped.".into();
+        let video_done = take_exit(&mut self.media_child);
+        let audio_done = take_exit(&mut self.media_audio);
+        if let Some(status) = audio_done {
+            if self.media_run && self.media_child.is_some() && !status.success() && self.media_msg.is_empty()
+            {
+                self.media_msg = "The picture is playing. The sound did not start.".into();
+            }
+        }
+        if let Some(status) = video_done {
+            if self.media_run {
+                if status.success() {
+                    self.media_offset = 0.0;
+                    if self.media_msg.starts_with("The picture is playing") {
+                        self.media_msg.clear();
                     }
-                    self.media_run = false;
-                    true
+                } else if self.media_msg.is_empty() {
+                    self.media_msg = "The video stopped.".into();
                 }
-                Ok(None) => false,
-                Err(_) => {
-                    self.media_run = false;
-                    true
-                }
-            },
-            None => false,
-        };
-        if finished {
-            self.media_child = None;
+                self.media_run = false;
+                self.media_arx = None;
+                kill_child(&mut self.media_audio);
+                self.mixer.film_stop();
+            }
         }
     }
 
@@ -2785,43 +3379,51 @@ impl Blightnet {
     fn start_video(&mut self, path: &Path) {
         self.stop_media_proc();
         self.media_rx = None;
+        self.media_slot = None;
         let Some(bin) = crate::sys::ffmpeg_bin() else {
             self.media_run = false;
             self.media_msg = "ffmpeg is not on this computer. The video can still open in the system player.".into();
             return;
         };
-        let dest = self.root.join("data/media-frame.png");
-        let _ = std::fs::create_dir_all(self.root.join("data"));
         self.tex.forget("media-stage");
         self.media_stamp = None;
+        self.ask_len(path);
         let sec = format!("{:.2}", self.media_offset.max(0.0));
-        let mut cmd = std::process::Command::new(bin);
-        crate::sys::hide(&mut cmd);
-        cmd.arg("-y")
-            .arg("-ss")
-            .arg(sec)
-            .arg("-re")
-            .arg("-i")
-            .arg(path)
-            .arg("-an")
-            .args(["-vf", "fps=4,scale=960:-2"])
-            .args(["-f", "image2", "-update", "1"])
-            .arg(&dest)
-            .stdin(std::process::Stdio::null())
-            .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null());
-        match cmd.spawn() {
-            Ok(child) => {
-                self.media_child = Some(child);
-                self.media_run = true;
-                self.media_started = Instant::now();
-                self.media_msg.clear();
+        let slot = std::sync::Arc::new(FilmSlot {
+            rgb: std::sync::Mutex::new(None),
+        });
+        let mut video = match spawn_ffmpeg(&bin, &film_video_args(&sec, path)) {
+            Ok(child) => child,
+            Err(err) => {
+                self.media_run = false;
+                self.media_msg = err;
+                return;
+            }
+        };
+        if let Some(out) = video.stdout.take() {
+            let slot_th = std::sync::Arc::clone(&slot);
+            std::thread::spawn(move || pump_film_frames(out, slot_th));
+        }
+        self.media_child = Some(video);
+        self.media_slot = Some(slot);
+        let mut sound_note = String::new();
+        match spawn_ffmpeg(&bin, &film_audio_args(&sec, path)) {
+            Ok(mut audio) => {
+                if let Some(out) = audio.stdout.take() {
+                    let (tx, rx) = std::sync::mpsc::sync_channel(8);
+                    self.media_arx = Some(rx);
+                    std::thread::spawn(move || pump_film_audio(out, tx));
+                }
+                self.media_audio = Some(audio);
+                self.mixer.film_start();
             }
             Err(_) => {
-                self.media_run = false;
-                self.media_msg = "ffmpeg did not start.".into();
+                sound_note = "The picture is playing. The sound did not start.".into();
             }
         }
+        self.media_run = true;
+        self.media_started = Instant::now();
+        self.media_msg = sound_note;
     }
 
     fn pause_video(&mut self) {
@@ -2852,11 +3454,210 @@ impl Blightnet {
                 }
             }
         }
-        self.poll_media_proc();
+        self.poll_pic(ctx);
         let kind = self.current_kind();
-        if kind == "video" || kind == "pdf" {
+        if kind == "video" {
+            self.drain_film_audio();
+            self.pull_film_frame(ctx);
+        }
+        self.poll_media_proc();
+        if kind == "pdf" {
             self.refresh_media_frame(ctx);
         }
+    }
+
+    fn drain_film_audio(&mut self) {
+        let Some(rx) = self.media_arx.take() else {
+            return;
+        };
+        loop {
+            match rx.try_recv() {
+                Ok(pcm) => self.mixer.film_push(pcm),
+                Err(std::sync::mpsc::TryRecvError::Empty) => {
+                    self.media_arx = Some(rx);
+                    return;
+                }
+                Err(std::sync::mpsc::TryRecvError::Disconnected) => return,
+            }
+        }
+    }
+
+    fn pull_film_frame(&mut self, ctx: &egui::Context) {
+        let Some(slot) = self.media_slot.clone() else {
+            return;
+        };
+        let taken = slot.rgb.lock().ok().and_then(|mut guard| guard.take());
+        if let Some((gen, rgb)) = taken {
+            let _ = self.tex.put_rgb(ctx, "media-stage", FILM_W, FILM_H, &rgb, gen);
+        }
+    }
+
+    fn poll_pic(&mut self, ctx: &egui::Context) {
+        if self.current_kind() != "image" {
+            return;
+        }
+        if self.pic.edit == PicEdit::default() {
+            self.pic.dirty = false;
+        }
+        let Some(rx) = self.pic_rx.take() else {
+            if self.pic.dirty && self.pic.mark.elapsed() > Duration::from_millis(180) {
+                self.queue_pic(None);
+            }
+            return;
+        };
+        match rx.try_recv() {
+            Ok(done) => {
+                if done.gen == self.pic.gen {
+                    match done.body {
+                        Ok(PicBody::Preview(bytes)) => {
+                            let _ = self.tex.put_bytes(ctx, "pic-stage", &bytes);
+                        }
+                        Ok(PicBody::Saved(path)) => self.finish_pic_save(path),
+                        Err(err) => self.media_msg = err,
+                    }
+                }
+                if self.pic.dirty && self.pic.mark.elapsed() > Duration::from_millis(180) {
+                    self.queue_pic(None);
+                }
+            }
+            Err(std::sync::mpsc::TryRecvError::Empty) => self.pic_rx = Some(rx),
+            Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                if self.media_msg.is_empty() {
+                    self.media_msg = "The picture edit stopped.".into();
+                }
+            }
+        }
+    }
+
+    fn finish_pic_save(&mut self, path: PathBuf) {
+        let key = path.to_string_lossy().to_string();
+        self.tex.forget(&key);
+        let replaced = self.pic.for_path.as_ref() == Some(&path);
+        if replaced {
+            self.pic.edit = PicEdit::default();
+            self.pic.arm = false;
+            self.pic.dirty = false;
+            self.pic.gen = self.pic.gen.wrapping_add(1);
+            self.tex.forget("pic-stage");
+            self.media_msg = "Replaced the picture.".into();
+            return;
+        }
+        self.pic.arm = false;
+        self.media_msg = format!("Saved a copy: {}", path.display());
+        self.add_deck_paths(vec![path]);
+    }
+
+    fn queue_pic(&mut self, save: Option<PathBuf>) {
+        let Some(src) = self.pic.for_path.clone() else {
+            return;
+        };
+        if save.is_none() && (self.pic_rx.is_some() || self.pic.edit == PicEdit::default()) {
+            self.pic.dirty = false;
+            return;
+        }
+        self.pic_rx = None;
+        self.pic.dirty = false;
+        let edit = self.pic.edit;
+        let gen = self.pic.gen;
+        let (tx, rx) = std::sync::mpsc::channel();
+        self.pic_rx = Some(rx);
+        std::thread::spawn(move || {
+            let body = match bake_picture(&src, &edit, save.as_deref()) {
+                Ok(bytes) => Ok(match save {
+                    Some(path) => PicBody::Saved(path),
+                    None => PicBody::Preview(bytes),
+                }),
+                Err(err) => Err(err),
+            };
+            let _ = tx.send(PicDone { gen, body });
+        });
+    }
+
+    fn note_pic(&mut self, immediate: bool) {
+        self.pic.arm = false;
+        self.pic.dirty = true;
+        self.pic.gen = self.pic.gen.wrapping_add(1);
+        self.pic.mark = if immediate {
+            Instant::now() - Duration::from_secs(2)
+        } else {
+            Instant::now()
+        };
+    }
+
+    fn ui_pic_tools(&mut self, ui: &mut egui::Ui, path: &Path) {
+        ui.horizontal_wrapped(|ui| {
+            if theme::neon_btn(ui, "Rotate").clicked() {
+                self.pic.edit.turns = (self.pic.edit.turns + 1) % 4;
+                self.note_pic(true);
+            }
+            if theme::neon_btn(ui, if self.pic.edit.flip { "Unflip" } else { "Flip" }).clicked() {
+                self.pic.edit.flip = !self.pic.edit.flip;
+                self.note_pic(true);
+            }
+            if theme::neon_btn(ui, "Reset").clicked() {
+                self.pic.edit = PicEdit::default();
+                self.pic.arm = false;
+                self.pic.dirty = false;
+                self.pic.gen = self.pic.gen.wrapping_add(1);
+                self.tex.forget("pic-stage");
+            }
+        });
+        let mut bright = self.pic.edit.bright;
+        if ui
+            .add(egui::Slider::new(&mut bright, -100..=100).text("Brightness"))
+            .changed()
+        {
+            self.pic.edit.bright = bright;
+            self.note_pic(false);
+        }
+        let mut contrast = self.pic.edit.contrast;
+        if ui
+            .add(egui::Slider::new(&mut contrast, -100..=100).text("Contrast"))
+            .changed()
+        {
+            self.pic.edit.contrast = contrast;
+            self.note_pic(false);
+        }
+        wrap_text(ui, "Cut a percent off each edge.", MUTED, 11.0);
+        let mut left = self.pic.edit.left;
+        let mut top = self.pic.edit.top;
+        let mut right = self.pic.edit.right;
+        let mut bottom = self.pic.edit.bottom;
+        if ui.add(egui::Slider::new(&mut left, 0..=40).text("Left")).changed() {
+            self.pic.edit.left = left;
+            self.note_pic(false);
+        }
+        if ui.add(egui::Slider::new(&mut top, 0..=40).text("Top")).changed() {
+            self.pic.edit.top = top;
+            self.note_pic(false);
+        }
+        if ui.add(egui::Slider::new(&mut right, 0..=40).text("Right")).changed() {
+            self.pic.edit.right = right;
+            self.note_pic(false);
+        }
+        if ui.add(egui::Slider::new(&mut bottom, 0..=40).text("Bottom")).changed() {
+            self.pic.edit.bottom = bottom;
+            self.note_pic(false);
+        }
+        ui.horizontal_wrapped(|ui| {
+            if theme::neon_btn(ui, "Save copy").clicked() {
+                let dest = edit_copy_path(path);
+                self.pic.gen = self.pic.gen.wrapping_add(1);
+                self.queue_pic(Some(dest));
+            }
+            let label = if self.pic.arm { "Replace file" } else { "Save over" };
+            if theme::neon_btn_color(ui, label, KILL, self.pic.arm).clicked() {
+                if self.pic.arm {
+                    let dest = path.to_path_buf();
+                    self.pic.arm = false;
+                    self.pic.gen = self.pic.gen.wrapping_add(1);
+                    self.queue_pic(Some(dest));
+                } else {
+                    self.pic.arm = true;
+                    self.media_msg = "Press Replace file to write over this picture.".into();
+                }
+            }
+        });
     }
 
     fn stage_size(ui: &egui::Ui, full: bool) -> Vec2 {
@@ -2877,6 +3678,14 @@ impl Blightnet {
             return;
         };
         let kind = media_kind(&p);
+        if kind == "text" {
+            self.paint_text(ui, &p);
+            return;
+        }
+        if kind == "gif" {
+            self.paint_gif(ui, full, &p);
+            return;
+        }
         if kind == "audio" {
             return;
         }
@@ -2885,14 +3694,29 @@ impl Blightnet {
         }
         let max = Self::stage_size(ui, full);
         if kind == "image" {
+            if self.pic.for_path.as_deref() != Some(p.as_path()) {
+                self.pic = PicDesk::fresh(p.clone());
+                self.pic_rx = None;
+                self.tex.forget("pic-stage");
+            }
             let path = p.clone();
-            if let Some(tex) = self.tex.get(ui.ctx(), &path) {
+            let edited = self.pic.edit != PicEdit::default();
+            if edited {
+                if let Some(tex) = self.tex.get_key("pic-stage") {
+                    let _ = paint_contain(ui, &tex, max);
+                } else if let Some(tex) = self.tex.get(ui.ctx(), &path) {
+                    let _ = paint_contain(ui, &tex, max);
+                } else {
+                    let _ = images::show_fit(ui, &mut self.tex, &path, max);
+                }
+            } else if let Some(tex) = self.tex.get(ui.ctx(), &path) {
                 if paint_contain(ui, &tex, max).clicked() {
-                    self.zoom_path = Some(path);
+                    self.zoom_path = Some(path.clone());
                 }
             } else {
                 let _ = images::show_fit(ui, &mut self.tex, &path, max);
             }
+            self.ui_pic_tools(ui, &path);
         } else if let Some(tex) = self.tex.get_key("media-stage") {
             let _ = paint_contain(ui, &tex, max);
         } else {
@@ -2946,10 +3770,19 @@ impl Blightnet {
             self.media_offset = 0.0;
             self.tex.forget("media-stage");
             self.media_stamp = None;
+            self.gif_run = false;
             if kind == "video" {
                 self.start_video(&p);
             } else if kind == "pdf" {
                 self.queue_pdf(&p);
+            } else if kind == "text" {
+                self.stop_media_proc();
+                self.media_run = false;
+                self.load_text(&p);
+            } else if kind == "gif" {
+                self.stop_media_proc();
+                self.media_run = false;
+                self.load_gif(&p);
             } else {
                 self.stop_media_proc();
                 self.media_run = false;
@@ -2957,14 +3790,26 @@ impl Blightnet {
             }
             return;
         }
+        self.gif_run = false;
         self.stop_media_proc();
         self.media_run = false;
         self.media_rx = None;
         self.media_msg.clear();
-        match self.mixer.deck_play_path(&p) {
+        self.seek_drag = None;
+        let at = Duration::from_secs_f32(self.deck_base.max(0.0));
+        let started = if at < Duration::from_millis(40) {
+            self.mixer.deck_play_path(&p)
+        } else {
+            self.mixer.deck_play_at(&p, at, false)
+        };
+        match started {
             Ok(()) => {
                 self.deck_on = true;
                 self.mixer.set_deck_vol(self.deck_vol);
+                if at < Duration::from_millis(40) {
+                    self.note_len_now(&p);
+                }
+                self.ask_len(&p);
             }
             Err(e) => {
                 self.deck_on = false;
@@ -2988,7 +3833,13 @@ impl Blightnet {
                 }
                 return;
             }
-            "image" | "pdf" => return,
+            "gif" => {
+                if !self.gif_frames.is_empty() {
+                    self.gif_run = !self.gif_run;
+                }
+                return;
+            }
+            "image" | "pdf" | "text" => return,
             _ => {}
         }
         if self.deck_on && self.mixer.deck_live() {
@@ -3008,11 +3859,16 @@ impl Blightnet {
         if self.deck_list.is_empty() {
             return;
         }
-        let keep = force || self.deck_on || self.media_run;
-        self.deck_i = (self.deck_i + 1) % self.deck_list.len();
-        if keep || self.current_kind() != "audio" {
-            self.deck_play_current();
+        if !self.gate_text(TextMove::Next) {
+            return;
         }
+        let keep = force || self.deck_on || self.media_run || self.gif_run;
+        if self.deck_shuffle {
+            self.step_shuffle(keep);
+            return;
+        }
+        self.deck_i = (self.deck_i + 1) % self.deck_list.len();
+        self.cue_from_start(keep);
         save_deck_lib(&self.root, &self.deck_list);
     }
 
@@ -3020,21 +3876,954 @@ impl Blightnet {
         if self.deck_list.is_empty() {
             return;
         }
-        let keep = self.deck_on || self.media_run;
+        if !self.gate_text(TextMove::Prev) {
+            return;
+        }
+        let keep = self.deck_on || self.media_run || self.gif_run;
+        if self.deck_shuffle {
+            self.step_shuffle(keep);
+            return;
+        }
         if self.deck_i == 0 {
             self.deck_i = self.deck_list.len() - 1;
         } else {
             self.deck_i -= 1;
         }
-        if keep || self.current_kind() != "audio" {
-            self.deck_play_current();
-        }
+        self.cue_from_start(keep);
         save_deck_lib(&self.root, &self.deck_list);
     }
 
+    fn gate_text(&mut self, mv: TextMove) -> bool {
+        if self.current_kind() != "text" || !self.text_dirty {
+            self.text_hold = None;
+            return true;
+        }
+        if self.text_hold == Some(mv) {
+            self.text_dirty = false;
+            self.text_hold = None;
+            self.text_for = None;
+            return true;
+        }
+        self.text_hold = Some(mv);
+        self.deck_note = "This text is not saved. Save, or press Discard.".into();
+        false
+    }
+
+    fn cue_from_start(&mut self, keep: bool) {
+        self.deck_base = 0.0;
+        self.media_offset = 0.0;
+        self.seek_drag = None;
+        if keep || self.current_kind() != "audio" {
+            self.deck_play_current();
+        }
+    }
+
+    fn step_shuffle(&mut self, keep: bool) {
+        let playable = self.playable_indices();
+        match draw_shuffle(&mut self.deck_bag, &playable, self.deck_i) {
+            Some(i) => {
+                self.deck_note.clear();
+                self.deck_i = i;
+                self.cue_from_start(keep);
+            }
+            None => {
+                self.deck_note = "Nothing else to shuffle.".into();
+                if self.mixer.deck_done() && !self.mixer.deck_loading() {
+                    self.deck_on = false;
+                }
+            }
+        }
+    }
+
+    fn playable_indices(&self) -> Vec<usize> {
+        self.deck_list
+            .iter()
+            .enumerate()
+            .filter(|(_, p)| matches!(media_kind(p), "audio" | "video"))
+            .map(|(i, _)| i)
+            .collect()
+    }
+
     fn pump_deck(&mut self) {
-        if self.deck_on && self.mixer.deck_done() && !self.deck_list.is_empty() {
+        if self.deck_on
+            && self.mixer.deck_done()
+            && !self.mixer.deck_loading()
+            && !self.deck_list.is_empty()
+        {
             self.deck_next(true);
+        }
+    }
+
+    fn poll_deck_ready(&mut self) {
+        let Some(ready) = self.mixer.poll_deck_ready() else {
+            return;
+        };
+        match ready {
+            Ok(ready) => {
+                self.deck_base = ready.base;
+                if ready.pause {
+                    self.deck_on = false;
+                }
+                if let Some(len) = ready.len {
+                    self.note_len(&ready.path, len);
+                } else {
+                    self.ask_len(&ready.path);
+                }
+            }
+            Err(err) => {
+                self.deck_on = false;
+                self.chat.push(format!("Player: {err}"));
+            }
+        }
+    }
+
+    fn note_len_now(&mut self, path: &Path) {
+        if let Some(len) = self.mixer.take_known_len() {
+            self.note_len(path, len);
+        }
+    }
+
+    fn note_len(&mut self, path: &Path, secs: f32) {
+        if secs.is_finite() && secs > 0.05 {
+            self.len_cache.insert(path.to_path_buf(), secs);
+            self.len_miss.remove(path);
+        }
+    }
+
+    fn ask_len(&mut self, path: &Path) {
+        if self.len_cache.contains_key(path) || self.len_miss.contains(path) {
+            return;
+        }
+        if self.len_pending.as_deref() == Some(path) {
+            return;
+        }
+        let path = path.to_path_buf();
+        let (tx, rx) = std::sync::mpsc::channel();
+        self.len_rx = Some(rx);
+        self.len_pending = Some(path.clone());
+        std::thread::spawn(move || {
+            let secs = probe_media_len(&path);
+            let _ = tx.send((path, secs));
+        });
+    }
+
+    fn poll_len(&mut self) {
+        let Some(rx) = self.len_rx.take() else {
+            return;
+        };
+        match rx.try_recv() {
+            Ok((path, Some(secs))) => {
+                self.len_pending = None;
+                self.note_len(&path, secs);
+                if !self.len_cache.contains_key(&path) {
+                    self.len_miss.insert(path);
+                }
+            }
+            Ok((path, None)) => {
+                self.len_pending = None;
+                self.len_miss.insert(path);
+            }
+            Err(std::sync::mpsc::TryRecvError::Empty) => self.len_rx = Some(rx),
+            Err(std::sync::mpsc::TryRecvError::Disconnected) => self.len_pending = None,
+        }
+    }
+
+    fn audio_head(&self) -> f32 {
+        if let Some(t) = self.seek_drag {
+            return t;
+        }
+        self.deck_base + self.mixer.deck_pos()
+    }
+
+    fn video_head(&self) -> f32 {
+        if let Some(t) = self.seek_drag {
+            return t;
+        }
+        if self.media_run {
+            self.media_offset + self.media_started.elapsed().as_secs_f32()
+        } else {
+            self.media_offset
+        }
+    }
+
+    fn jump_to(&mut self, secs: f32) {
+        let Some(path) = self.deck_list.get(self.deck_i).cloned() else {
+            return;
+        };
+        let len = self.len_cache.get(&path).copied();
+        let secs = match len {
+            Some(len) if len > 0.3 => secs.clamp(0.0, len - 0.25),
+            _ => secs.max(0.0),
+        };
+        match media_kind(&path) {
+            "video" => {
+                let playing = self.media_run;
+                self.media_offset = secs;
+                if playing {
+                    self.start_video(&path);
+                }
+            }
+            "audio" => self.jump_audio(&path, secs),
+            "gif" => self.jump_gif(secs),
+            _ => {}
+        }
+    }
+
+    fn jump_audio(&mut self, path: &Path, secs: f32) {
+        let playing = self.deck_on && self.mixer.deck_live();
+        let paused = self.mixer.deck_paused();
+        if playing && self.mixer.deck_try_seek(Duration::from_secs_f32(secs)) {
+            self.deck_base = 0.0;
+            return;
+        }
+        self.deck_base = secs;
+        if !playing && !paused {
+            self.deck_on = false;
+            return;
+        }
+        if let Err(err) = self.mixer.deck_play_at(path, Duration::from_secs_f32(secs), !playing) {
+            self.deck_on = false;
+            self.chat.push(format!("Player: {err}"));
+            return;
+        }
+        self.deck_on = playing;
+    }
+
+    fn load_text(&mut self, path: &Path) {
+        if self.text_for.as_deref() == Some(path) && !self.text_body.is_empty() {
+            return;
+        }
+        match crate::deskfile::read_text(path) {
+            Ok(body) => {
+                self.text_body = body;
+                self.text_for = Some(path.to_path_buf());
+                self.text_dirty = false;
+                self.deck_note.clear();
+            }
+            Err(err) => {
+                self.text_body.clear();
+                self.text_for = Some(path.to_path_buf());
+                self.text_dirty = false;
+                self.deck_note = err;
+            }
+        }
+    }
+
+    fn paint_text(&mut self, ui: &mut egui::Ui, path: &Path) {
+        self.load_text(path);
+        if !self.deck_note.is_empty() && self.text_body.is_empty() {
+            wrap_text(ui, &self.deck_note, CYAN, 12.0);
+        }
+        let rows = self.text_body.lines().count().clamp(8, 400);
+        let width = ui.available_width().max(40.0);
+        let resp = ui.add(
+            egui::TextEdit::multiline(&mut self.text_body)
+                .desired_width(width)
+                .desired_rows(rows)
+                .font(egui::FontId::new(14.0, theme::mono()))
+                .code_editor(),
+        );
+        if resp.changed() {
+            self.text_dirty = true;
+            self.text_hold = None;
+        }
+    }
+
+    fn save_text(&mut self) {
+        let Some(path) = self.text_for.clone() else {
+            return;
+        };
+        match crate::deskfile::write_text(&self.root, &path, &self.text_body) {
+            Ok(()) => {
+                self.text_dirty = false;
+                self.text_hold = None;
+                self.deck_note = "Saved the text.".into();
+            }
+            Err(err) => self.deck_note = err,
+        }
+    }
+
+    fn discard_text(&mut self) {
+        self.text_dirty = false;
+        self.text_for = None;
+        let hold = self.text_hold.take();
+        self.deck_note.clear();
+        match hold {
+            Some(TextMove::Index(i)) if i < self.deck_list.len() => {
+                self.deck_i = i;
+                self.cue_from_start(true);
+            }
+            Some(TextMove::Next) => self.deck_next(false),
+            Some(TextMove::Prev) => self.deck_prev(),
+            _ => {
+                if let Some(p) = self.deck_list.get(self.deck_i).cloned() {
+                    self.load_text(&p);
+                }
+            }
+        }
+    }
+
+    fn restore_selected(&mut self) {
+        let Some(path) = self.deck_list.get(self.deck_i).cloned() else {
+            return;
+        };
+        match crate::deskfile::restore_file(&self.root, &path) {
+            Ok(()) => {
+                self.text_for = None;
+                self.text_dirty = false;
+                self.tex.forget(&path.to_string_lossy());
+                self.tex.forget("gif-stage");
+                self.tex.forget("media-stage");
+                self.gif_for = None;
+                self.tags_for = None;
+                self.deck_note = "Restored the last copy.".into();
+                self.deck_play_current();
+            }
+            Err(err) => self.deck_note = err,
+        }
+    }
+
+    fn load_gif(&mut self, path: &Path) {
+        if self.gif_for.as_deref() == Some(path) && !self.gif_frames.is_empty() {
+            self.gif_run = true;
+            return;
+        }
+        self.gif_gen = self.gif_gen.wrapping_add(1);
+        let gen = self.gif_gen;
+        self.gif_frames.clear();
+        self.gif_i = 0;
+        self.gif_acc = 0.0;
+        self.gif_run = false;
+        self.gif_note.clear();
+        self.gif_for = Some(path.to_path_buf());
+        let path = path.to_path_buf();
+        let (tx, rx) = std::sync::mpsc::channel();
+        self.gif_rx = Some(rx);
+        std::thread::spawn(move || {
+            let set = crate::deskfile::decode_gif(&path);
+            let _ = tx.send(GifDone { gen, path, set });
+        });
+    }
+
+    fn poll_gif(&mut self, ctx: &egui::Context) {
+        let Some(rx) = self.gif_rx.take() else {
+            return;
+        };
+        match rx.try_recv() {
+            Ok(done) => {
+                if done.gen != self.gif_gen {
+                    return;
+                }
+                match done.set {
+                    Ok(set) => {
+                        self.gif_note = set.note;
+                        self.gif_frames = set.frames;
+                        self.gif_for = Some(done.path);
+                        self.gif_i = 0;
+                        self.gif_acc = 0.0;
+                        self.gif_run = !self.gif_frames.is_empty();
+                        self.show_gif_frame(ctx);
+                    }
+                    Err(err) => self.gif_note = err,
+                }
+            }
+            Err(std::sync::mpsc::TryRecvError::Empty) => self.gif_rx = Some(rx),
+            Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                if self.gif_note.is_empty() {
+                    self.gif_note = "The gif did not open.".into();
+                }
+            }
+        }
+    }
+
+    fn step_gif(&mut self, ctx: &egui::Context, dt: f32) {
+        self.poll_gif(ctx);
+        if self.current_kind() != "gif" || !self.gif_run || self.gif_frames.is_empty() {
+            return;
+        }
+        self.gif_acc += dt * 1000.0;
+        let mut moved = false;
+        for _ in 0..8 {
+            let ms = self.gif_frames[self.gif_i].ms.max(10) as f32;
+            if self.gif_acc < ms {
+                break;
+            }
+            self.gif_acc -= ms;
+            self.gif_i = (self.gif_i + 1) % self.gif_frames.len();
+            moved = true;
+        }
+        if moved {
+            self.show_gif_frame(ctx);
+        }
+    }
+
+    fn show_gif_frame(&mut self, ctx: &egui::Context) {
+        if self.gif_frames.is_empty() {
+            return;
+        }
+        let i = self.gif_i.min(self.gif_frames.len() - 1);
+        let w = self.gif_frames[i].w;
+        let h = self.gif_frames[i].h;
+        let rgb = std::mem::take(&mut self.gif_frames[i].rgb);
+        let gen = self.gif_gen.wrapping_add(i as u64).wrapping_add(1);
+        let _ = self.tex.put_rgb(ctx, "gif-stage", w, h, &rgb, gen);
+        self.gif_frames[i].rgb = rgb;
+    }
+
+    fn gif_secs(&self) -> Option<f32> {
+        if self.gif_frames.is_empty() {
+            return None;
+        }
+        let ms: u32 = self.gif_frames.iter().map(|f| f.ms.max(10)).sum();
+        Some(ms as f32 / 1000.0)
+    }
+
+    fn gif_head(&self) -> f32 {
+        if let Some(t) = self.seek_drag {
+            return t;
+        }
+        let mut ms = 0u32;
+        for frame in self.gif_frames.iter().take(self.gif_i) {
+            ms += frame.ms.max(10);
+        }
+        ms as f32 / 1000.0 + self.gif_acc / 1000.0
+    }
+
+    fn jump_gif(&mut self, secs: f32) {
+        if self.gif_frames.is_empty() {
+            return;
+        }
+        let mut left = (secs.max(0.0) * 1000.0) as u32;
+        for (i, frame) in self.gif_frames.iter().enumerate() {
+            let ms = frame.ms.max(10);
+            if left < ms {
+                self.gif_i = i;
+                self.gif_acc = left as f32;
+                return;
+            }
+            left -= ms;
+        }
+        self.gif_i = self.gif_frames.len() - 1;
+        self.gif_acc = 0.0;
+    }
+
+    fn paint_gif(&mut self, ui: &mut egui::Ui, full: bool, path: &Path) {
+        if self.gif_for.as_deref() != Some(path) {
+            self.load_gif(path);
+        }
+        self.show_gif_frame(ui.ctx());
+        if !self.gif_note.is_empty() {
+            wrap_text(ui, &self.gif_note, CYAN, 12.0);
+        }
+        let max = Self::stage_size(ui, full);
+        if let Some(tex) = self.tex.get_key("gif-stage") {
+            let _ = paint_contain(ui, &tex, max);
+        } else {
+            let (rect, _) = ui.allocate_exact_size(max, egui::Sense::hover());
+            ui.painter().rect_filled(rect, 4.0, PANEL);
+            ui.painter().text(
+                rect.center(),
+                egui::Align2::CENTER_CENTER,
+                "Opening the gif…",
+                FontId::new(14.0, theme::mono()),
+                CYAN,
+            );
+        }
+    }
+
+    fn open_tags(&mut self) {
+        self.tags_open = !self.tags_open;
+        self.tags_arm = 0;
+        if self.tags_open {
+            self.queue_tags();
+        }
+    }
+
+    fn queue_tags(&mut self) {
+        let Some(path) = self.deck_list.get(self.deck_i).cloned() else {
+            return;
+        };
+        if self.tags_for.as_ref() == Some(&path) && self.tags_rx.is_none() {
+            return;
+        }
+        self.tags_gen = self.tags_gen.wrapping_add(1);
+        let gen = self.tags_gen;
+        let (tx, rx) = std::sync::mpsc::channel();
+        self.tags_rx = Some(rx);
+        self.tags_for = Some(path.clone());
+        std::thread::spawn(move || {
+            let result = crate::deskfile::read_tags(&path).map(|tags| (path, tags));
+            let _ = tx.send((gen, TagMsg::Read(result)));
+        });
+    }
+
+    fn poll_tags(&mut self) {
+        let Some(rx) = self.tags_rx.take() else {
+            return;
+        };
+        match rx.try_recv() {
+            Ok((gen, TagMsg::Read(Ok((path, tags))))) => {
+                if gen == self.tags_gen {
+                    self.tags = tags;
+                    self.tags_for = Some(path);
+                    self.tags_note.clear();
+                }
+            }
+            Ok((gen, TagMsg::Read(Err(err)))) => {
+                if gen == self.tags_gen {
+                    self.tags_note = err;
+                }
+            }
+            Ok((gen, TagMsg::Wrote(result))) => self.finish_tag_write(gen, result),
+            Err(std::sync::mpsc::TryRecvError::Empty) => self.tags_rx = Some(rx),
+            Err(std::sync::mpsc::TryRecvError::Disconnected) => {}
+        }
+    }
+
+    fn arm_tags(&mut self, save: bool) {
+        let kind = self.current_kind();
+        if !matches!(kind, "audio" | "video" | "image") {
+            self.tags_note = "This file has no media tags.".into();
+            return;
+        }
+        if crate::sys::ffmpeg_bin().is_none() {
+            self.tags_note = "ffmpeg is not on this computer, so tags cannot be changed here.".into();
+            return;
+        }
+        let want = if save { 1 } else { 2 };
+        if self.tags_arm != want {
+            self.tags_arm = want;
+            self.tags_note = if !save {
+                "Press Clear tags again to strip the tags.".into()
+            } else if kind == "image" {
+                "Press Save tags again. The picture file is written again.".into()
+            } else {
+                "Press Save tags again.".into()
+            };
+            return;
+        }
+        self.tags_arm = 0;
+        let Some(path) = self.deck_list.get(self.deck_i).cloned() else {
+            return;
+        };
+        let tags = self.tags.clone();
+        let root = self.root.clone();
+        let clear = !save;
+        self.tags_gen = self.tags_gen.wrapping_add(1);
+        let gen = self.tags_gen;
+        let (tx, rx) = std::sync::mpsc::channel();
+        self.tags_rx = Some(rx);
+        std::thread::spawn(move || {
+            let result = crate::deskfile::apply_tags(&root, &path, &tags, kind, clear);
+            let _ = tx.send((gen, TagMsg::Wrote(result)));
+        });
+        self.tags_note = if save {
+            "Writing the tags…".into()
+        } else {
+            "Clearing the tags…".into()
+        };
+    }
+
+    fn finish_tag_write(&mut self, gen: u64, result: Result<(), String>) {
+        if gen != self.tags_gen {
+            return;
+        }
+        match result {
+            Ok(()) => {
+                self.tags_note = if self.tags_note.starts_with("Clear") {
+                    "Cleared the tags.".into()
+                } else {
+                    "Saved the tags.".into()
+                };
+                self.tags_for = None;
+                if let Some(p) = self.deck_list.get(self.deck_i).cloned() {
+                    self.tex.forget(&p.to_string_lossy());
+                }
+                self.queue_tags();
+            }
+            Err(err) => self.tags_note = err,
+        }
+    }
+
+    fn paint_tags(&mut self, ui: &mut egui::Ui) {
+        if !self.tags_open {
+            return;
+        }
+        let Some(path) = self.deck_list.get(self.deck_i).cloned() else {
+            return;
+        };
+        if self.tags_for.as_ref() != Some(&path) && self.tags_rx.is_none() {
+            self.queue_tags();
+        }
+        ui.add_space(6.0);
+        theme::kicker(ui, "TAGS");
+        let folder = path
+            .parent()
+            .map(|p| p.display().to_string())
+            .unwrap_or_default();
+        let size = std::fs::metadata(&path).map(|m| m.len()).unwrap_or(0);
+        wrap_text(
+            ui,
+            &format!(
+                "{}\n{}\n{} · {}",
+                path.file_name().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default(),
+                folder,
+                brief_bytes(size),
+                crate::deskfile::changed_stamp(&path)
+            ),
+            MUTED,
+            11.0,
+        );
+        let kind = media_kind(&path);
+        if matches!(kind, "audio" | "video" | "image") {
+            let mut title = self.tags.title.clone();
+            let mut artist = self.tags.artist.clone();
+            let mut album = self.tags.album.clone();
+            let mut year = self.tags.year.clone();
+            let mut comment = self.tags.comment.clone();
+            if Self::tag_line(ui, "Title", &mut title) {
+                self.tags.title = title;
+                self.tags_arm = 0;
+            }
+            if Self::tag_line(ui, "Artist", &mut artist) {
+                self.tags.artist = artist;
+                self.tags_arm = 0;
+            }
+            if Self::tag_line(ui, "Album", &mut album) {
+                self.tags.album = album;
+                self.tags_arm = 0;
+            }
+            if Self::tag_line(ui, "Year", &mut year) {
+                self.tags.year = year;
+                self.tags_arm = 0;
+            }
+            if Self::tag_line(ui, "Comment", &mut comment) {
+                self.tags.comment = comment;
+                self.tags_arm = 0;
+            }
+            if self.tags.width > 0 {
+                wrap_text(
+                    ui,
+                    &format!("{}×{}", self.tags.width, self.tags.height),
+                    DIM,
+                    11.0,
+                );
+            }
+            ui.horizontal_wrapped(|ui| {
+                let save = if self.tags_arm == 1 { "Save tags?" } else { "Save tags" };
+                let clear = if self.tags_arm == 2 { "Clear tags?" } else { "Clear tags" };
+                if theme::neon_btn(ui, save).clicked() {
+                    self.arm_tags(true);
+                }
+                if theme::neon_btn_color(ui, clear, KILL, self.tags_arm == 2).clicked() {
+                    self.arm_tags(false);
+                }
+            });
+        } else if kind == "gif" {
+            wrap_text(
+                ui,
+                "Tags on a gif stay as they are so the animation is not rewritten.",
+                MUTED,
+                11.0,
+            );
+        } else {
+            wrap_text(ui, "This file has no media tags.", MUTED, 11.0);
+        }
+        if !self.tags_note.is_empty() {
+            wrap_text(ui, &self.tags_note, CYAN, 12.0);
+        }
+    }
+
+    fn tag_line(ui: &mut egui::Ui, label: &str, value: &mut String) -> bool {
+        let mut changed = false;
+        ui.horizontal(|ui| {
+            ui.label(
+                RichText::new(label)
+                    .family(theme::mono())
+                    .size(11.0)
+                    .color(DIM),
+            );
+            if ui
+                .add(
+                    egui::TextEdit::singleline(value)
+                        .desired_width(ui.available_width().max(80.0)),
+                )
+                .changed()
+            {
+                changed = true;
+            }
+        });
+        changed
+    }
+
+    fn open_file_send(&mut self) {
+        if !self.node_live {
+            self.chat.push("Press Online first. Then you can send it.".into());
+            return;
+        }
+        let Some(path) = self.deck_list.get(self.deck_i).cloned() else {
+            self.chat.push("Choose a file first.".into());
+            return;
+        };
+        self.send_path = Some(path);
+        self.send_ids.clear();
+    }
+
+    fn ui_file_send(&mut self, ctx: &egui::Context) {
+        if self.send_path.is_none() {
+            return;
+        }
+        let name = self
+            .send_path
+            .as_ref()
+            .and_then(|p| p.file_name())
+            .map(|s| s.to_string_lossy().into_owned())
+            .unwrap_or_else(|| "file".into());
+        let mut close = false;
+        let mut fire = false;
+        let contacts: Vec<(String, String)> = self
+            .contacts
+            .iter()
+            .map(|c| (c.id.clone(), c.name.clone()))
+            .collect();
+        let crews: Vec<(String, String, Vec<String>)> = self
+            .crews
+            .iter()
+            .map(|c| (c.id.clone(), c.name.clone(), c.members.clone()))
+            .collect();
+        egui::Window::new("Send file")
+            .collapsible(false)
+            .resizable(false)
+            .show(ctx, |ui| {
+                wrap_text(
+                    ui,
+                    &format!("Send {name} to one or more contacts."),
+                    CREAM,
+                    13.0,
+                );
+                for (id, who) in &contacts {
+                    let mut on = self.send_ids.contains(id);
+                    if ui.checkbox(&mut on, who).changed() {
+                        if on {
+                            self.send_ids.insert(id.clone());
+                        } else {
+                            self.send_ids.remove(id);
+                        }
+                    }
+                }
+                for (_, crew, members) in &crews {
+                    if theme::neon_btn(ui, &format!("Check {crew}")).clicked() {
+                        for id in members {
+                            if id != &self.net.self_id {
+                                self.send_ids.insert(id.clone());
+                            }
+                        }
+                    }
+                }
+                if contacts.is_empty() && crews.is_empty() {
+                    wrap_text(ui, "Save a contact or a crew first.", DIM, 12.0);
+                }
+                ui.horizontal_wrapped(|ui| {
+                    if theme::neon_btn(ui, "Send").clicked() {
+                        fire = true;
+                    }
+                    if theme::neon_btn_color(ui, "Cancel", KILL, false).clicked() {
+                        close = true;
+                    }
+                });
+            });
+        if fire {
+            self.fire_file_send();
+        } else if close {
+            self.send_path = None;
+            self.send_ids.clear();
+        }
+    }
+
+    fn fire_file_send(&mut self) {
+        let Some(path) = self.send_path.clone() else {
+            return;
+        };
+        self.send_ids.retain(|id| id != &self.net.self_id);
+        let names: std::collections::HashMap<String, String> = self
+            .contacts
+            .iter()
+            .map(|c| (c.id.clone(), c.name.clone()))
+            .collect();
+        let targets: Vec<(Option<String>, String)> = self
+            .send_ids
+            .iter()
+            .map(|id| {
+                let name = names.get(id).cloned().unwrap_or_else(|| id.clone());
+                (Some(id.clone()), name)
+            })
+            .collect();
+        self.spawn_send(path, targets);
+    }
+
+    fn poll_send(&mut self) {
+        let Some(rx) = self.send_rx.take() else {
+            return;
+        };
+        let mut put_back = true;
+        loop {
+            match rx.try_recv() {
+                Ok(crate::net::SendNote::Tick(tick)) => {
+                    let started = self
+                        .send_live
+                        .as_ref()
+                        .filter(|live| live.filename == tick.filename && live.index == tick.index)
+                        .map(|live| live.started)
+                        .unwrap_or_else(Instant::now);
+                    self.send_live = Some(LiveSend {
+                        filename: tick.filename,
+                        who: tick.who,
+                        index: tick.index,
+                        count: tick.count,
+                        done: tick.done,
+                        total: tick.total,
+                        started,
+                    });
+                }
+                Ok(crate::net::SendNote::Finished(Ok(()))) => {
+                    if let Some(live) = self.send_live.take() {
+                        self.chat.push(format!(
+                            "Sent {} to {}.",
+                            live.filename,
+                            if live.count == 1 {
+                                live.who
+                            } else {
+                                format!("{} people", live.count)
+                            }
+                        ));
+                    }
+                    self.send_path = None;
+                    self.send_ids.clear();
+                    put_back = false;
+                    break;
+                }
+                Ok(crate::net::SendNote::Finished(Err(err))) => {
+                    self.send_live = None;
+                    self.chat.push(err);
+                    put_back = false;
+                    break;
+                }
+                Err(std::sync::mpsc::TryRecvError::Empty) => break,
+                Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                    self.send_live = None;
+                    put_back = false;
+                    break;
+                }
+            }
+        }
+        if put_back {
+            self.send_rx = Some(rx);
+        }
+    }
+
+    fn send_clock_line(&self) -> Option<String> {
+        let live = self.send_live.as_ref()?;
+        let who = if live.count > 1 {
+            format!("{} · {} of {}", live.who, live.index, live.count)
+        } else {
+            live.who.clone()
+        };
+        Some(transfer_line(
+            &format!("Sending {} to {who}", live.filename),
+            live.done,
+            live.total,
+            live.started.elapsed().as_secs_f32(),
+        ))
+    }
+
+    fn recv_clock_line(&self) -> Option<String> {
+        let id = self.recv_focus.as_ref()?;
+        let file = self.file_in.get(id)?;
+        Some(transfer_line(
+            &format!("Receiving {}", file.filename),
+            file.got,
+            file.size,
+            file.started.elapsed().as_secs_f32(),
+        ))
+    }
+
+    fn ui_seek_bar(&mut self, ui: &mut egui::Ui) {
+        let kind = self.current_kind();
+        let file_live = self.deck_on || self.media_run || self.mixer.deck_paused();
+        if self.radio_on && !file_live {
+            ui.label(
+                RichText::new("LIVE")
+                    .family(theme::mono())
+                    .size(12.0)
+                    .color(CYAN),
+            );
+            return;
+        }
+        if kind != "audio" && kind != "video" && kind != "gif" {
+            return;
+        }
+        let path = self.deck_list.get(self.deck_i).cloned();
+        if kind != "gif" {
+            if let Some(path) = &path {
+                self.ask_len(path);
+            }
+        }
+        let len = if kind == "gif" {
+            self.gif_secs()
+        } else {
+            path.as_ref().and_then(|p| self.len_cache.get(p).copied())
+        };
+        let head = match kind {
+            "video" => self.video_head(),
+            "gif" => self.gif_head(),
+            _ => self.audio_head(),
+        };
+        let head = len.map(|l| head.min(l)).unwrap_or(head).max(0.0);
+        ui.horizontal(|ui| {
+            ui.label(
+                RichText::new(fmt_media(head))
+                    .family(theme::mono())
+                    .size(12.0)
+                    .color(CYAN),
+            );
+            if let Some(len) = len {
+                ui.label(
+                    RichText::new(format!("{} left", fmt_media((len - head).max(0.0))))
+                        .family(theme::mono())
+                        .size(12.0)
+                        .color(theme::ACID),
+                );
+            }
+        });
+        let width = ui.available_width().max(40.0);
+        let (rect, resp) = ui.allocate_exact_size(Vec2::new(width, 16.0), egui::Sense::click_and_drag());
+        let shown = self.seek_drag.unwrap_or(head);
+        let frac = len
+            .filter(|l| *l > 0.0)
+            .map(|l| (shown / l).clamp(0.0, 1.0))
+            .unwrap_or(0.0);
+        ui.painter().rect_filled(rect, 0.0, PANEL);
+        let fill = rect.with_max_x(rect.left() + rect.width() * frac);
+        ui.painter().rect_filled(fill, 0.0, theme::ACID);
+        ui.painter().rect_stroke(
+            rect,
+            0.0,
+            egui::Stroke::new(1.0, theme::HOT),
+            egui::StrokeKind::Inside,
+        );
+        let Some(len) = len else {
+            return;
+        };
+        if resp.dragged() || resp.clicked() {
+            if let Some(pos) = resp.interact_pointer_pos() {
+                let t = ((pos.x - rect.left()) / rect.width()).clamp(0.0, 1.0);
+                self.seek_drag = Some(t * len);
+            }
+        }
+        if resp.drag_stopped() || (resp.clicked() && !resp.dragged()) {
+            if let Some(at) = self.seek_drag.take() {
+                self.jump_to(at);
+            }
         }
     }
 
@@ -3049,6 +4838,9 @@ impl Blightnet {
             }
             self.deck_list.push(p);
             n += 1;
+        }
+        if n > 0 {
+            self.deck_bag.clear();
         }
         save_deck_lib(&self.root, &self.deck_list);
         if n > 0 {
@@ -3830,6 +5622,11 @@ impl eframe::App for Blightnet {
         self.poll_probe();
         self.poll_radio();
         self.step_media(ctx);
+        self.step_gif(ctx, ctx.input(|i| i.stable_dt));
+        self.poll_deck_ready();
+        self.poll_len();
+        self.poll_tags();
+        self.poll_send();
         if self.page == Page::Netspace && self.node_live && self.net_pos_at.elapsed() > Duration::from_millis(200) {
             self.net_pos_at = Instant::now();
             let name = if self.handle.trim().is_empty() {
@@ -3936,6 +5733,7 @@ impl Blightnet {
                     Page::Player => self.ui_player_panel(&mut body_ui),
                     Page::Terminal => self.ui_terminal(&mut body_ui),
                     Page::Recon => self.ui_recon(&mut body_ui),
+                    Page::Tree => self.ui_tree(&mut body_ui),
                     Page::Boot => {}
                 }
                 if dock_open {
@@ -3955,6 +5753,7 @@ impl Blightnet {
                 }
                 self.ui_zoom(ui.ctx());
                 self.ui_share_pick(ui.ctx());
+                self.ui_file_send(ui.ctx());
                 let mut st = ui.new_child(
                     egui::UiBuilder::new()
                         .max_rect(status)
@@ -3997,6 +5796,7 @@ impl Blightnet {
             Page::Player => "blightnet://player",
             Page::Terminal => "blightnet://terminal",
             Page::Recon => "blightnet://recon",
+            Page::Tree => "blightnet://tree",
             _ => "blightnet://start",
         }
     }
@@ -4015,6 +5815,7 @@ impl Blightnet {
             Page::Player => "PLAYER",
             Page::Terminal => "TERMINAL",
             Page::Recon => "RECON",
+            Page::Tree => "TREE",
             Page::Catalog(n) => n,
             Page::Boot => "BOOT",
         }
@@ -4067,6 +5868,22 @@ impl Blightnet {
                 status_pair(ui, "SEATS", &n.to_string(), CREAM);
             }
             status_pair(ui, "PAGE", self.page_name(), CREAM);
+            if let Some(line) = self.recv_clock_line() {
+                ui.label(
+                    RichText::new(line)
+                        .family(theme::mono())
+                        .size(10.0)
+                        .color(CYAN),
+                );
+            }
+            if let Some(line) = self.send_clock_line() {
+                ui.label(
+                    RichText::new(line)
+                        .family(theme::mono())
+                        .size(10.0)
+                        .color(theme::ACID),
+                );
+            }
             if let Some(name) = self.deck_track_name() {
                 let playing = self.media_run || (self.deck_on && self.mixer.deck_live());
                 if quiet_btn(ui, if playing { "PLAY" } else { "DECK" }, DIM)
@@ -4312,6 +6129,9 @@ impl Blightnet {
                         }
                         if tab(ui, "RECON", self.page == Page::Recon).clicked() {
                             self.page = Page::Recon;
+                        }
+                        if tab(ui, "TREE", self.page == Page::Tree).clicked() {
+                            self.page = Page::Tree;
                         }
                         if self.player_full && tab(ui, "PLAYER", self.page == Page::Player).clicked() {
                             self.page = Page::Player;
@@ -5067,18 +6887,19 @@ impl Blightnet {
         }
         wrap_text(
             ui,
-            "Pictures, video, PDF, and music on this deck. Nothing here is sent to the table, and it does not change the mix.",
+            "Pictures, gifs, text, video, PDF, and music on this deck. Send is the only way a file leaves this computer, and it does not change the mix.",
             MUTED,
             12.0,
         );
         ui.add_space(6.0);
         self.paint_media_stage(ui, full);
         ui.add_space(6.0);
+        self.ui_seek_bar(ui);
         ui.horizontal_wrapped(|ui| {
             if theme::neon_btn(ui, "Prev").clicked() {
                 self.deck_prev();
             }
-            let playing = self.media_run || (self.deck_on && self.mixer.deck_live());
+            let playing = self.media_run || self.gif_run || (self.deck_on && self.mixer.deck_live());
             if theme::neon_btn_color(ui, if playing { "Pause" } else { "Play" }, CYAN, playing)
                 .clicked()
             {
@@ -5087,7 +6908,42 @@ impl Blightnet {
             if theme::neon_btn(ui, "Next").clicked() {
                 self.deck_next(false);
             }
+            if theme::neon_btn_color(ui, "Shuffle", theme::ACID, self.deck_shuffle).clicked() {
+                self.deck_shuffle = !self.deck_shuffle;
+                self.deck_bag.clear();
+                if self.deck_shuffle && self.playable_indices().len() <= 1 {
+                    self.deck_note = "Nothing else to shuffle.".into();
+                } else {
+                    self.deck_note.clear();
+                }
+            }
         });
+        if !self.deck_note.is_empty() {
+            wrap_text(ui, &self.deck_note, CYAN, 12.0);
+        }
+        ui.horizontal_wrapped(|ui| {
+            if theme::neon_btn_color(ui, "Tags", CYAN, self.tags_open).clicked() {
+                self.open_tags();
+            }
+            if theme::neon_btn(ui, "Send").clicked() {
+                self.open_file_send();
+            }
+            if let Some(line) = self.send_clock_line() {
+                wrap_text(ui, &line, CYAN, 12.0);
+            }
+            if theme::neon_btn(ui, "Restore last").clicked() {
+                self.restore_selected();
+            }
+            if self.current_kind() == "text" {
+                if theme::neon_btn(ui, "Save").clicked() {
+                    self.save_text();
+                }
+                if theme::neon_btn_color(ui, "Discard", KILL, false).clicked() {
+                    self.discard_text();
+                }
+            }
+        });
+        self.paint_tags(ui);
         ui.horizontal_wrapped(|ui| {
             ui.label(
                 RichText::new("VOL")
@@ -5110,7 +6966,7 @@ impl Blightnet {
                 if let Some(files) = rfd::FileDialog::new()
                     .add_filter(
                         "Media",
-                        &["ogg", "mp3", "wav", "flac", "opus", "m4a", "aac", "png", "jpg", "jpeg", "webp", "mp4", "webm", "mkv", "pdf"],
+                        &["ogg", "mp3", "wav", "flac", "opus", "m4a", "aac", "png", "jpg", "jpeg", "webp", "gif", "mp4", "webm", "mkv", "pdf", "txt", "md", "log", "csv", "json", "toml"],
                     )
                     .set_title("Add pictures, video, PDF, or music")
                     .pick_files()
@@ -5137,6 +6993,10 @@ impl Blightnet {
                 self.media_msg.clear();
                 self.deck_list.clear();
                 self.deck_i = 0;
+                self.deck_bag.clear();
+                self.deck_base = 0.0;
+                self.deck_note.clear();
+                self.seek_drag = None;
                 save_deck_lib(&self.root, &self.deck_list);
             }
         });
@@ -5208,28 +7068,42 @@ impl Blightnet {
         for (i, name) in names {
             let kind = kinds.get(i).copied().unwrap_or("audio");
             let selected = self.deck_i == i;
-            let on = selected && (self.deck_on || self.media_run || kind != "audio");
+            let on = selected && (self.deck_on || self.media_run || self.gif_run || kind != "audio");
             let sub = if selected {
                 match kind {
                     "video" if self.media_run => "PLAYING",
                     "video" => "VIDEO",
+                    "gif" if self.gif_run => "PLAYING",
+                    "gif" => "GIF",
                     "image" => "PICTURE",
                     "pdf" => "PDF",
+                    "text" => "TEXT",
                     _ if self.deck_on => "NOW PLAYING",
                     _ => "SELECTED",
                 }
             } else {
                 match kind {
                     "video" => "VIDEO",
+                    "gif" => "GIF",
                     "image" => "PICTURE",
                     "pdf" => "PDF",
+                    "text" => "TEXT",
                     _ => "",
                 }
             };
             if theme::wide_btn(ui, &name, sub, on).clicked() {
+                if i != self.deck_i && !self.gate_text(TextMove::Index(i)) {
+                    return;
+                }
                 self.deck_i = i;
                 self.media_page = 1;
                 self.media_msg.clear();
+                self.deck_base = 0.0;
+                self.media_offset = 0.0;
+                self.seek_drag = None;
+                if self.current_kind() != "text" {
+                    self.deck_note.clear();
+                }
                 self.deck_play_current();
             }
         }
@@ -8564,6 +10438,259 @@ impl Blightnet {
         }
     }
 
+    fn ui_tree(&mut self, ui: &mut egui::Ui) {
+        if !self.tree_loaded {
+            self.tree_loaded = true;
+            self.tree_reload();
+        }
+        ui.set_clip_rect(ui.max_rect().intersect(ui.clip_rect()));
+        theme::kicker(ui, "NETDIR://TREE");
+        wrap_text(
+            ui,
+            "Folders and files on this computer. Open a folder to read it. Nothing here is sent to the table.",
+            MUTED,
+            12.0,
+        );
+        ui.horizontal_wrapped(|ui| {
+            if theme::neon_btn(ui, "This deck").clicked() {
+                self.tree_enter(self.root.clone());
+            }
+            if theme::neon_btn(ui, "Home").clicked() {
+                if let Some(home) = crate::tree::home_dir() {
+                    self.tree_enter(home);
+                } else {
+                    self.tree_err = "Home is not on this computer.".into();
+                }
+            }
+            if theme::neon_btn(ui, "Computer").clicked() {
+                let roots = crate::tree::computer_roots();
+                if roots.len() == 1 {
+                    self.tree_enter(roots[0].clone());
+                } else {
+                    self.tree_drives = true;
+                    self.tree_sel = None;
+                    self.tree_arm = None;
+                    self.tree_reload();
+                }
+            }
+            if theme::neon_btn(ui, "Up").clicked() {
+                self.tree_up();
+            }
+        });
+        let place = if self.tree_drives {
+            "Computer".to_string()
+        } else {
+            self.tree_at.display().to_string()
+        };
+        wrap_text(ui, &place, CYAN, 12.0);
+        if !self.tree_err.is_empty() {
+            wrap_text(ui, &self.tree_err, CYAN, 12.0);
+        }
+        ui.horizontal_wrapped(|ui| {
+            ui.add(
+                egui::TextEdit::singleline(&mut self.tree_name)
+                    .hint_text("Name")
+                    .desired_width(180.0),
+            );
+            if theme::neon_btn(ui, "New file").clicked() {
+                self.tree_make(false);
+            }
+            if theme::neon_btn(ui, "New folder").clicked() {
+                self.tree_make(true);
+            }
+        });
+        ui.horizontal_wrapped(|ui| {
+            if theme::neon_btn(ui, "Open").clicked() {
+                if let Some(path) = self.tree_sel.clone() {
+                    self.tree_open(path);
+                }
+            }
+            let armed = self.tree_arm.is_some() && self.tree_arm == self.tree_sel;
+            let label = if armed && self.tree_deep {
+                "Delete all?"
+            } else if armed {
+                "Delete?"
+            } else {
+                "Delete"
+            };
+            if theme::neon_btn_color(ui, label, KILL, armed).clicked() {
+                self.tree_delete();
+            }
+        });
+        let n = self.tree_rows.len();
+        let list_h = ui.available_height().max(40.0);
+        let mut open_dir = None;
+        egui::ScrollArea::vertical()
+            .id_salt("tree-rows")
+            .max_height(list_h)
+            .auto_shrink([false, false])
+            .show_rows(ui, 36.0, n, |ui, range| {
+                for i in range {
+                    let Some(ent) = self.tree_rows.get(i).cloned() else {
+                        continue;
+                    };
+                    let label_sub = if ent.dir {
+                        "folder".to_string()
+                    } else if ent.bytes < 1024 {
+                        format!("{} B", ent.bytes)
+                    } else {
+                        brief_bytes(ent.bytes)
+                    };
+                    let on = self.tree_sel.as_ref() == Some(&ent.path);
+                    let resp = theme::wide_btn(ui, &ent.name, &label_sub, on);
+                    if resp.double_clicked() && !ent.dir {
+                        self.tree_open(ent.path.clone());
+                    } else if resp.clicked() {
+                        if ent.dir {
+                            open_dir = Some(ent.path);
+                        } else {
+                            if self.tree_sel.as_ref() != Some(&ent.path) {
+                                self.tree_arm = None;
+                            }
+                            self.tree_sel = Some(ent.path);
+                        }
+                    }
+                }
+            });
+        if let Some(path) = open_dir {
+            self.tree_enter(path);
+        }
+    }
+
+    fn tree_reload(&mut self) {
+        if self.tree_drives {
+            self.tree_rows = crate::tree::computer_roots()
+                .into_iter()
+                .map(|path| crate::tree::Entry {
+                    name: path.display().to_string(),
+                    path,
+                    dir: true,
+                    bytes: 0,
+                })
+                .collect();
+            self.tree_err.clear();
+            return;
+        }
+        match crate::tree::list_dir(&self.tree_at) {
+            Ok(rows) => {
+                self.tree_rows = rows;
+                self.tree_err.clear();
+            }
+            Err(err) => {
+                self.tree_rows.clear();
+                self.tree_err = err;
+            }
+        }
+    }
+
+    fn tree_enter(&mut self, path: PathBuf) {
+        self.tree_drives = false;
+        self.tree_at = path;
+        self.tree_sel = None;
+        self.tree_arm = None;
+        self.tree_deep = false;
+        self.tree_reload();
+    }
+
+    fn tree_up(&mut self) {
+        if self.tree_drives {
+            return;
+        }
+        if crate::tree::is_fs_root(&self.tree_at) {
+            let roots = crate::tree::computer_roots();
+            if roots.len() > 1 {
+                self.tree_drives = true;
+                self.tree_sel = None;
+                self.tree_arm = None;
+                self.tree_reload();
+            }
+            return;
+        }
+        if let Some(parent) = self.tree_at.parent() {
+            if parent.as_os_str().is_empty() {
+                return;
+            }
+            self.tree_enter(parent.to_path_buf());
+        }
+    }
+
+    fn tree_make(&mut self, folder: bool) {
+        if self.tree_drives {
+            self.tree_err = "Open a folder first.".into();
+            return;
+        }
+        let made = if folder {
+            crate::tree::create_dir(&self.tree_at, &self.tree_name)
+        } else {
+            crate::tree::create_file(&self.tree_at, &self.tree_name)
+        };
+        match made {
+            Ok(_) => {
+                self.tree_name.clear();
+                self.tree_err.clear();
+                self.tree_reload();
+            }
+            Err(err) => self.tree_err = err,
+        }
+    }
+
+    fn tree_delete(&mut self) {
+        let Some(sel) = self.tree_sel.clone() else {
+            self.tree_err = "Choose a file first.".into();
+            return;
+        };
+        if self.tree_arm.as_ref() != Some(&sel) {
+            self.tree_arm = Some(sel.clone());
+            let link = std::fs::symlink_metadata(&sel)
+                .map(|m| m.file_type().is_symlink())
+                .unwrap_or(false);
+            self.tree_deep = !link && sel.is_dir() && crate::tree::dir_has_child(&sel);
+            self.tree_err = if self.tree_deep {
+                "This folder is not empty. Press Delete again to remove it and everything inside.".into()
+            } else {
+                "Press Delete again to remove this.".into()
+            };
+            return;
+        }
+        match crate::tree::remove_path(&sel, &self.root) {
+            Ok(()) => {
+                self.tree_sel = None;
+                self.tree_arm = None;
+                self.tree_deep = false;
+                self.tree_err.clear();
+                self.tree_reload();
+            }
+            Err(err) => {
+                self.tree_arm = None;
+                self.tree_err = err;
+            }
+        }
+    }
+
+    fn tree_open(&mut self, path: PathBuf) {
+        if path.is_dir() {
+            self.tree_enter(path);
+            return;
+        }
+        if is_library_file(&path) {
+            self.add_deck_paths(vec![path.clone()]);
+            if let Some(i) = self.deck_list.iter().position(|p| p == &path) {
+                self.deck_i = i;
+                self.deck_base = 0.0;
+                self.media_offset = 0.0;
+                self.seek_drag = None;
+                self.media_page = 1;
+                self.deck_note.clear();
+                self.deck_play_current();
+                self.shell = ShellPanel::Player;
+            }
+            return;
+        }
+        if !crate::sys::open_path(&path) {
+            self.tree_err = "This computer did not open that file.".into();
+        }
+    }
+
     fn ui_terminal(&mut self, ui: &mut egui::Ui) {
         ui.set_clip_rect(ui.max_rect().intersect(ui.clip_rect()));
         let rect = ui.available_rect_before_wrap();
@@ -8578,7 +10705,7 @@ impl Blightnet {
         let cols = (main.width() / cw).floor() as u16;
         let rows = (main.height() / ch).floor() as u16;
         if self.term.is_none() {
-            self.term = Some(crate::term::Shell::spawn(cols, rows));
+            self.term = Some(crate::term::Shell::spawn_in(cols, rows, &self.root));
             self.term_cmds = crate::term::list_commands();
         }
         if let Some(shell) = self.term.as_mut() {
@@ -8592,6 +10719,12 @@ impl Blightnet {
             let resp = ui.interact(main, id, egui::Sense::click());
             if resp.clicked() {
                 resp.request_focus();
+            }
+            if resp.hovered() {
+                let dy = ui.input(|i| i.smooth_scroll_delta.y);
+                if dy.abs() > 1.0 {
+                    shell.scroll_by(if dy > 0.0 { 3 } else { -3 });
+                }
             }
             if resp.has_focus() {
                 let events = ui.input(|i| i.events.clone());
@@ -9330,19 +11463,8 @@ impl Blightnet {
         let Some(step) = self.tour else {
             return;
         };
-        let steps: &[(&str, &str)] = &[
-            ("INDEX", "The front desk. Tiles open TABLE, NET, and this tour."),
-            ("ONLINE", "The node is off until you press Online. Press it again to stop it."),
-            ("TABLE", "The world and the clock stay on top. Host, books, sheets, and maps are on the left rail."),
-            ("TIME", "The watch and the date sit together. Past midnight, the calendar moves a day."),
-            ("SCENES", "Scenes and Mix are on the left rail. They open a short strip under the world bar."),
-            ("SEAT", "Every person at the table is a button. Click to open their sheet. Click again to close."),
-            ("NETHOOKS", "Write HTML and CSS. The preview is live. Learn HTML and Learn CSS are pinned lessons."),
-            ("NETSPACE", "Walk the city. When Online, other seats appear under their handles."),
-            ("ROTN", "The fixer. Press Hour, Table, Place, Rumor, Job, or NPC. Nothing they say is sent away."),
-        ];
-        let step = step.min(steps.len() - 1);
-        let (title, body) = steps[step];
+        let step = step.min(TOUR.len() - 1);
+        let card = &TOUR[step];
         egui::Area::new(egui::Id::new("tour-card"))
             .anchor(egui::Align2::CENTER_BOTTOM, egui::Vec2::new(0.0, -48.0))
             .show(ctx, |ui| {
@@ -9351,36 +11473,37 @@ impl Blightnet {
                     .stroke(egui::Stroke::new(2.0, theme::ACID))
                     .inner_margin(egui::Margin::symmetric(14, 10))
                     .show(ui, |ui| {
-                        let w = (ui.ctx().screen_rect().width() - 48.0).clamp(180.0, 420.0);
+                        let w = (ui.ctx().screen_rect().width() - 48.0).clamp(220.0, 560.0);
                         ui.set_max_width(w);
                         ui.set_width(w);
                         ui.label(
-                            RichText::new(format!("TOUR {} / {}", step + 1, steps.len()))
+                            RichText::new(format!("TOUR {} / {}", step + 1, TOUR.len()))
                                 .family(theme::mono())
                                 .size(11.0)
                                 .color(theme::ACID),
                         );
                         ui.label(
-                            RichText::new(title)
+                            RichText::new(card.title)
                                 .family(theme::display())
                                 .size(22.0)
                                 .color(CYAN),
                         );
-                        ui.label(RichText::new(body).color(CREAM).size(14.0));
+                        wrap_text(ui, card.body, CREAM, 14.0);
                         ui.horizontal_wrapped(|ui| {
                             if theme::neon_btn(ui, "Back").clicked() && step > 0 {
                                 self.tour = Some(step - 1);
+                                self.jump_tour(step - 1);
                             }
                             if theme::neon_btn(ui, "Next").clicked() {
-                                if step + 1 >= steps.len() {
-                                    self.tour = None;
+                                if step + 1 >= TOUR.len() {
+                                    self.end_tour();
                                 } else {
                                     self.tour = Some(step + 1);
                                     self.jump_tour(step + 1);
                                 }
                             }
                             if theme::neon_btn_color(ui, "Skip", KILL, false).clicked() {
-                                self.tour = None;
+                                self.end_tour();
                             }
                         });
                     });
@@ -9388,14 +11511,68 @@ impl Blightnet {
     }
 
     fn jump_tour(&mut self, step: usize) {
-        self.page = match step {
-            0 => Page::Index,
-            1 => Page::Index,
-            2 | 3 | 4 | 5 => Page::Table,
-            6 => Page::Nethooks,
-            7 => Page::Netspace,
-            _ => Page::Rotn,
+        let Some(card) = TOUR.get(step) else {
+            return;
         };
+        let page = card.page;
+        let dock = card.dock;
+        let open = card.open;
+        self.page = page;
+        self.shell = dock;
+        self.player_full = page == Page::Player;
+        self.watch_open = false;
+        self.place_open = false;
+        self.open.clear();
+        self.viewing = None;
+        match open {
+            TourOpen::None => {}
+            TourOpen::Panel(Overlay::Vendors) => {
+                self.kit_filter.clear();
+                self.restock_vendor();
+                self.open.push(Overlay::Vendors);
+            }
+            TourOpen::Panel(Overlay::Armory) => {
+                self.kit_filter.clear();
+                self.open.push(Overlay::Armory);
+            }
+            TourOpen::Panel(panel) => self.open.push(panel),
+            TourOpen::Games => {
+                self.open.push(Overlay::Blackjack);
+                if self.blight {
+                    self.open.push(Overlay::Chess);
+                }
+            }
+            TourOpen::Book => self.open_tour_book(),
+            TourOpen::Seat => self.open.push(Overlay::Chars),
+        }
+        if page == Page::Netspace {
+            self.jack_at = Instant::now();
+        }
+        if page == Page::Nethooks {
+            self.hook_edit = false;
+        }
+    }
+
+    fn open_tour_book(&mut self) {
+        let (name, file) = if self.blight {
+            ("Datashard", "datashard.json")
+        } else {
+            ("Bestiary", "bestiary.json")
+        };
+        self.catalog_rows = load_list(&self.root, file);
+        self.catalog_pick = 0;
+        self.catalog_q.clear();
+        self.overlay_cat = name;
+        self.open.push(Overlay::Catalog);
+    }
+
+    fn end_tour(&mut self) {
+        self.tour = None;
+        self.open.clear();
+        self.viewing = None;
+        self.shell = ShellPanel::None;
+        self.watch_open = false;
+        self.place_open = false;
     }
 
     fn ui_tutorial(&mut self, ui: &mut egui::Ui) {
@@ -9413,11 +11590,11 @@ impl Blightnet {
         );
         if theme::neon_btn(ui, "Start tour").clicked() {
             self.tour = Some(0);
-            self.page = Page::Index;
+            self.jump_tour(0);
         }
         wrap_text(
             ui,
-            "The tour walks the real window. Each card says what the control does. The world bar stays above the painting. Tools stay on the left rail.",
+            "The tour opens the real window, one part at a time. Each card is the desk, a table tool, talk, the player, the folders, the shell, recon, a page, the city, or the fixer.",
             MUTED,
             13.0,
         );
@@ -9431,18 +11608,8 @@ impl Blightnet {
             .max_height(manual_h)
             .auto_shrink([false, false])
             .show(ui, |ui| {
-                let cards: &[(&str, &str, &str)] = &[
-                    ("01", "DECK", "Native window. No browser. Keep audio/, assets/, and data/ next to the binary. Update on the status line pulls from GitHub. Rescan devices is on INDEX."),
-                    ("02", "NET", "Stamp a Handle in the command bar. Online starts the node. Host copies a blightnet:// invite. Friends paste it into Join. No Cloudflare. The window X leaves the node running. INDEX 00 shuts it down and closes. daemon-stop does the same from a terminal."),
-                    ("03", "TABLE", "INDEX 01 BLIGHTNEXUS or the TABLE tab. Scenes and Mix open as tiles in the center. Master is local. Place is the painting. Time is the watch. The world name switches Hearthsong and Blight. Log and Notes are on the left rail. Notes stay on this computer."),
-                    ("04", "TALK", "Chat, Contacts, Voice, and Video are on the top row, next to the tabs. Send any file. Chat stays until Wipe chat."),
-                    ("05", "MAPS", "Gamemaster only: Ink, filled Circle, filled Square to fog the board. Erase click. Clear drawings. Marks sync to the table."),
-                    ("06", "NETHOOKS", "Pages you can show the table. A handout, a rumor, or a job. Press Post to table, then Board on the left of TABLE. The lessons at the top only teach you how to write a page."),
-                    ("09", "FIXER AND BOARD", "The fixer (ROTN) sits on your computer and knows the table. Press Hour, Table, or Place for the facts. Press Rumor, Job, or NPC and they make something up. None of that is sent away. You do not need a model. DeepSeek and Kimi work only if you start them on this computer, then press Rescan. Post rumor or Post job makes a page. Post to table shows it. Board opens it. Take down removes it. Private notes, the fixer's memory, and the model never leave your computer."),
-                    ("07", "NETSPACE", "Own tab, full window. WASD, look-drag, Shift to run, C for auto-walk. Radar overlays the city. TABLE Jack-in or the NETSPACE tab opens it."),
-                    ("08", "PLAY", "Player on the top row plays files on this machine. The status line shows the track. It is independent of the table mix and radio."),
-                ];
-                for (id, title, body) in cards {
+                for (i, card) in TOUR.iter().enumerate() {
+                    let id = format!("{:02}", i + 1);
                     egui::Frame::NONE
                         .fill(PANEL)
                         .stroke(egui::Stroke::new(1.0, theme::fade(theme::HOT, 140)))
@@ -9450,20 +11617,20 @@ impl Blightnet {
                         .show(ui, |ui| {
                             ui.horizontal_wrapped(|ui| {
                                 ui.label(
-                                    RichText::new(*id)
+                                    RichText::new(&id)
                                         .family(theme::mono())
                                         .size(13.0)
                                         .color(theme::ACID),
                                 );
                                 ui.label(
-                                    RichText::new(*title)
+                                    RichText::new(card.title)
                                         .family(theme::display())
                                         .size(18.0)
                                         .color(CREAM),
                                 );
                             });
                             ui.add_space(4.0);
-                            wrap_text(ui, body, CREAM, 14.0);
+                            wrap_text(ui, card.body, CREAM, 14.0);
                         });
                     ui.add_space(8.0);
                 }
@@ -9673,7 +11840,7 @@ fn mime_of(path: &Path) -> &'static str {
         "pdf" => "application/pdf",
         "zip" => "application/zip",
         "json" => "application/json",
-        "txt" | "md" => "text/plain",
+        "txt" | "md" | "log" | "csv" | "toml" => "text/plain",
         _ => "application/octet-stream",
     }
 }
@@ -10322,6 +12489,7 @@ fn catalog_art(root: &Path, title: &str, id: &str) -> PathBuf {
 
 impl Drop for Blightnet {
     fn drop(&mut self) {
+        self.drop_partials();
         self.stop_media_proc();
         self.stop_hook_video();
         self.term = None;
@@ -10329,7 +12497,8 @@ impl Drop for Blightnet {
 }
 
 fn is_library_file(path: &std::path::Path) -> bool {
-    crate::audio::is_music(path) || matches!(media_kind(path), "image" | "video" | "pdf")
+    crate::audio::is_music(path)
+        || matches!(media_kind(path), "image" | "video" | "pdf" | "gif" | "text")
 }
 
 fn paint_air_legend(ui: &mut egui::Ui) {
@@ -10447,6 +12616,8 @@ fn media_kind(path: &std::path::Path) -> &'static str {
         .as_str()
     {
         "png" | "jpg" | "jpeg" | "webp" => "image",
+        "gif" => "gif",
+        "txt" | "md" | "log" | "csv" | "json" | "toml" => "text",
         "mp4" | "webm" | "mkv" => "video",
         "pdf" => "pdf",
         _ => "audio",
@@ -10742,9 +12913,372 @@ fn load_saved(root: &Path) -> Vec<SavedMix> {
         .unwrap_or_default()
 }
 
+fn transfer_clock(done: u64, total: u64, elapsed: f32) -> Option<(f32, f32)> {
+    if total == 0 || done == 0 || done > total || elapsed < 0.05 {
+        return None;
+    }
+    if done < 256 * 1024 && elapsed < 0.5 {
+        return None;
+    }
+    let rate = done as f32 / elapsed;
+    if rate <= 0.0 {
+        return None;
+    }
+    let left = (total - done) as f32 / rate;
+    Some((elapsed + left, left))
+}
+
+fn transfer_line(prefix: &str, done: u64, total: u64, elapsed: f32) -> String {
+    let amounts = format!("{} of {}", brief_bytes(done), brief_bytes(total));
+    match transfer_clock(done, total, elapsed) {
+        Some((about, left)) => format!(
+            "{prefix} · {amounts} · About {} · {} left",
+            fmt_media(about),
+            fmt_media(left)
+        ),
+        None => format!("{prefix} · {amounts}"),
+    }
+}
+
+fn fmt_media(secs: f32) -> String {
+    let total = secs.max(0.0) as u32;
+    let h = total / 3600;
+    let m = (total % 3600) / 60;
+    let s = total % 60;
+    if h > 0 {
+        format!("{h}:{m:02}:{s:02}")
+    } else {
+        format!("{m}:{s:02}")
+    }
+}
+
+fn parse_ffmpeg_duration(text: &str) -> Option<f32> {
+    let rest = text.split("Duration:").nth(1)?;
+    let stamp = rest.trim().split([',', ' ']).next()?.trim();
+    let mut parts = stamp.split(':');
+    let h: f32 = parts.next()?.parse().ok()?;
+    let m: f32 = parts.next()?.parse().ok()?;
+    let s: f32 = parts.next()?.parse().ok()?;
+    let secs = h * 3600.0 + m * 60.0 + s;
+    (secs.is_finite() && secs > 0.0).then_some(secs)
+}
+
+fn probe_media_len(path: &Path) -> Option<f32> {
+    if let Some(bin) = crate::sys::which("ffprobe") {
+        if let Ok(out) = std::process::Command::new(bin)
+            .args([
+                "-v",
+                "error",
+                "-show_entries",
+                "format=duration",
+                "-of",
+                "default=noprint_wrappers=1:nokey=1",
+            ])
+            .arg(path)
+            .output()
+        {
+            let text = String::from_utf8_lossy(&out.stdout);
+            if let Ok(secs) = text.trim().parse::<f32>() {
+                if secs.is_finite() && secs > 0.05 {
+                    return Some(secs);
+                }
+            }
+        }
+    }
+    let bin = crate::sys::ffmpeg_bin()?;
+    let out = std::process::Command::new(bin)
+        .args(["-hide_banner", "-i"])
+        .arg(path)
+        .output()
+        .ok()?;
+    let text = String::from_utf8_lossy(&out.stderr);
+    parse_ffmpeg_duration(&text)
+}
+
+fn refill_shuffle(bag: &mut Vec<usize>, playable: &[usize], current: usize) -> bool {
+    bag.retain(|i| playable.contains(i) && *i != current);
+    if !bag.is_empty() {
+        return false;
+    }
+    *bag = playable.iter().copied().filter(|i| *i != current).collect();
+    true
+}
+
+fn draw_shuffle(bag: &mut Vec<usize>, playable: &[usize], current: usize) -> Option<usize> {
+    if !playable.iter().any(|i| *i != current) {
+        return None;
+    }
+    if refill_shuffle(bag, playable, current) {
+        bag.shuffle(&mut rand::thread_rng());
+    }
+    bag.pop()
+}
+
 fn save_saved(root: &Path, mixes: &[SavedMix]) {
     if let Ok(s) = serde_json::to_string_pretty(mixes) {
         let _ = std::fs::write(root.join("data/saved-mixes.json"), s);
+    }
+}
+
+fn kill_child(child: &mut Option<std::process::Child>) {
+    if let Some(mut child) = child.take() {
+        let _ = child.kill();
+        std::thread::spawn(move || {
+            let _ = child.wait();
+        });
+    }
+}
+
+fn take_exit(child: &mut Option<std::process::Child>) -> Option<std::process::ExitStatus> {
+    let status = child.as_mut()?.try_wait().ok()??;
+    *child = None;
+    Some(status)
+}
+
+fn film_video_args(sec: &str, path: &Path) -> Vec<String> {
+    vec![
+        "-hide_banner".into(),
+        "-loglevel".into(),
+        "error".into(),
+        "-ss".into(),
+        sec.into(),
+        "-re".into(),
+        "-i".into(),
+        path.display().to_string(),
+        "-an".into(),
+        "-vf".into(),
+        "scale=960:540:force_original_aspect_ratio=decrease,pad=960:540:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=24".into(),
+        "-pix_fmt".into(),
+        "rgb24".into(),
+        "-f".into(),
+        "rawvideo".into(),
+        "pipe:1".into(),
+    ]
+}
+
+fn film_audio_args(sec: &str, path: &Path) -> Vec<String> {
+    vec![
+        "-hide_banner".into(),
+        "-loglevel".into(),
+        "error".into(),
+        "-ss".into(),
+        sec.into(),
+        "-re".into(),
+        "-i".into(),
+        path.display().to_string(),
+        "-vn".into(),
+        "-ac".into(),
+        "1".into(),
+        "-ar".into(),
+        "48000".into(),
+        "-f".into(),
+        "f32le".into(),
+        "pipe:1".into(),
+    ]
+}
+
+fn spawn_ffmpeg(bin: &Path, args: &[String]) -> Result<std::process::Child, String> {
+    let mut cmd = std::process::Command::new(bin);
+    crate::sys::hide(&mut cmd);
+    cmd.args(args)
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::null());
+    cmd.spawn().map_err(|_| "ffmpeg did not start.".to_string())
+}
+
+fn read_full(reader: &mut impl std::io::Read, buf: &mut [u8]) -> bool {
+    let mut got = 0;
+    while got < buf.len() {
+        match reader.read(&mut buf[got..]) {
+            Ok(0) => return false,
+            Ok(n) => got += n,
+            Err(err) if err.kind() == std::io::ErrorKind::Interrupted => continue,
+            Err(_) => return false,
+        }
+    }
+    true
+}
+
+fn pcm_le(buf: &[u8]) -> Vec<f32> {
+    buf.chunks_exact(4)
+        .map(|c| f32::from_le_bytes([c[0], c[1], c[2], c[3]]))
+        .collect()
+}
+
+fn pump_film_frames(mut stdout: impl std::io::Read + Send, slot: std::sync::Arc<FilmSlot>) {
+    let mut buf = vec![0u8; FILM_BYTES];
+    let mut n = 0u64;
+    loop {
+        if !read_full(&mut stdout, &mut buf) {
+            break;
+        }
+        n += 1;
+        if let Ok(mut guard) = slot.rgb.lock() {
+            let spare = guard
+                .take()
+                .map(|(_, old)| old)
+                .filter(|old| old.len() == FILM_BYTES);
+            let frame = std::mem::replace(&mut buf, spare.unwrap_or_else(|| vec![0u8; FILM_BYTES]));
+            *guard = Some((n, frame));
+        }
+    }
+}
+
+fn pump_film_audio(mut stdout: impl std::io::Read + Send, tx: std::sync::mpsc::SyncSender<Vec<f32>>) {
+    let mut buf = [0u8; 4096 * 4];
+    loop {
+        let mut got = 0;
+        let mut end = false;
+        while got < buf.len() {
+            match stdout.read(&mut buf[got..]) {
+                Ok(0) => {
+                    end = true;
+                    break;
+                }
+                Ok(n) => got += n,
+                Err(err) if err.kind() == std::io::ErrorKind::Interrupted => continue,
+                Err(_) => return,
+            }
+        }
+        let n = got - (got % 4);
+        if n >= 4 && tx.send(pcm_le(&buf[..n])).is_err() {
+            return;
+        }
+        if end {
+            return;
+        }
+    }
+}
+
+fn edit_copy_path(src: &Path) -> PathBuf {
+    let parent = src.parent().unwrap_or_else(|| Path::new("."));
+    let stem = src
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("picture");
+    let ext = src.extension().and_then(|s| s.to_str()).unwrap_or("jpg");
+    for n in 0..100 {
+        let name = if n == 0 {
+            format!("{stem}-edit.{ext}")
+        } else {
+            format!("{stem}-edit-{n}.{ext}")
+        };
+        let path = parent.join(name);
+        if !path.exists() {
+            return path;
+        }
+    }
+    parent.join(format!("{stem}-edit-now.{ext}"))
+}
+
+fn bake_picture(src: &Path, edit: &PicEdit, dest: Option<&Path>) -> Result<Vec<u8>, String> {
+    let img = image::open(src).map_err(|_| "The picture did not open.".to_string())?;
+    let img = apply_edit(img, edit);
+    if let Some(dest) = dest {
+        write_picture(&img, dest)?;
+        return Ok(Vec::new());
+    }
+    let preview = fit_preview(img);
+    let rgb = preview.to_rgb8();
+    let mut out = Vec::new();
+    image::codecs::jpeg::JpegEncoder::new_with_quality(&mut out, 85)
+        .encode(
+            rgb.as_raw(),
+            rgb.width(),
+            rgb.height(),
+            image::ExtendedColorType::Rgb8,
+        )
+        .map_err(|_| "The picture did not open.".to_string())?;
+    Ok(out)
+}
+
+fn apply_edit(mut img: image::DynamicImage, edit: &PicEdit) -> image::DynamicImage {
+    img = match edit.turns % 4 {
+        1 => img.rotate90(),
+        2 => img.rotate180(),
+        3 => img.rotate270(),
+        _ => img,
+    };
+    if edit.flip {
+        img = img.fliph();
+    }
+    img = crop_edges(img, edit);
+    if edit.bright != 0 {
+        img = img.brighten(edit.bright);
+    }
+    if edit.contrast != 0 {
+        let rgb = img.to_rgb8();
+        img = image::DynamicImage::ImageRgb8(image::imageops::contrast(&rgb, edit.contrast as f32));
+    }
+    img
+}
+
+fn crop_edges(img: image::DynamicImage, edit: &PicEdit) -> image::DynamicImage {
+    let left = edit.left.clamp(0, 45) as u32;
+    let top = edit.top.clamp(0, 45) as u32;
+    let right = edit.right.clamp(0, 45) as u32;
+    let bottom = edit.bottom.clamp(0, 45) as u32;
+    if left + top + right + bottom == 0 {
+        return img;
+    }
+    let w = img.width();
+    let h = img.height();
+    let x = w * left / 100;
+    let y = h * top / 100;
+    let x2 = w * right / 100;
+    let y2 = h * bottom / 100;
+    let nw = w.saturating_sub(x + x2).max(1);
+    let nh = h.saturating_sub(y + y2).max(1);
+    let x = x.min(w.saturating_sub(nw));
+    let y = y.min(h.saturating_sub(nh));
+    img.crop_imm(x, y, nw, nh)
+}
+
+fn fit_preview(img: image::DynamicImage) -> image::DynamicImage {
+    if img.width() <= 1280 && img.height() <= 1280 {
+        img
+    } else {
+        img.resize(1280, 1280, image::imageops::FilterType::Triangle)
+    }
+}
+
+fn write_picture(img: &image::DynamicImage, dest: &Path) -> Result<(), String> {
+    if let Some(parent) = dest.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    let ext = dest
+        .extension()
+        .and_then(|s| s.to_str())
+        .unwrap_or("jpg")
+        .to_ascii_lowercase();
+    let fail = "The picture did not save.";
+    match ext.as_str() {
+        "png" => img.save(dest).map_err(|_| fail.to_string()),
+        "webp" => {
+            let mut file = std::fs::File::create(dest).map_err(|_| fail.to_string())?;
+            let rgba = img.to_rgba8();
+            image::codecs::webp::WebPEncoder::new_lossless(&mut file)
+                .encode(
+                    rgba.as_raw(),
+                    rgba.width(),
+                    rgba.height(),
+                    image::ExtendedColorType::Rgba8,
+                )
+                .map_err(|_| fail.to_string())
+        }
+        _ => {
+            let mut file = std::fs::File::create(dest).map_err(|_| fail.to_string())?;
+            let rgb = img.to_rgb8();
+            image::codecs::jpeg::JpegEncoder::new_with_quality(&mut file, 90)
+                .encode(
+                    rgb.as_raw(),
+                    rgb.width(),
+                    rgb.height(),
+                    image::ExtendedColorType::Rgb8,
+                )
+                .map_err(|_| fail.to_string())
+        }
     }
 }
 
@@ -11007,5 +13541,195 @@ mod tests {
         let c = load_crews(&dir);
         assert_eq!(c[0].name, "Aldecaldos");
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn film_args_keep_picture_and_sound() {
+        let path = Path::new("clip.mp4");
+        let video = film_video_args("1.25", path).join(" ");
+        assert!(video.contains("-an"));
+        assert!(video.contains("fps=24"));
+        assert!(video.contains("rgb24"));
+        assert!(video.contains("rawvideo"));
+        assert!(!video.contains("image2"));
+        assert!(!video.contains("fps=4"));
+        let audio = film_audio_args("1.25", path).join(" ");
+        assert!(audio.contains("-vn"));
+        assert!(audio.contains("f32le"));
+        assert!(audio.contains("48000"));
+        assert!(!audio.contains(" -an"));
+    }
+
+    #[test]
+    fn picture_rotate_and_crop_save() {
+        let dir = std::env::temp_dir().join(format!("bn-pic-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let src = dir.join("shot.png");
+        image::RgbImage::from_fn(20, 10, |x, y| image::Rgb([x as u8, y as u8, 40]))
+            .save(&src)
+            .unwrap();
+        let edit = PicEdit {
+            turns: 1,
+            ..PicEdit::default()
+        };
+        let dest = dir.join("turned.jpg");
+        bake_picture(&src, &edit, Some(&dest)).unwrap();
+        let out = image::open(&dest).unwrap();
+        assert_eq!((out.width(), out.height()), (10, 20));
+        let wide = dir.join("wide.png");
+        image::RgbImage::from_pixel(100, 40, image::Rgb([8, 8, 8]))
+            .save(&wide)
+            .unwrap();
+        let crop = PicEdit {
+            left: 50,
+            ..PicEdit::default()
+        };
+        let cropped = dir.join("crop.png");
+        bake_picture(&wide, &crop, Some(&cropped)).unwrap();
+        let out = image::open(&cropped).unwrap();
+        assert_eq!((out.width(), out.height()), (55, 40));
+        assert_eq!(
+            edit_copy_path(&src).file_name().unwrap().to_str(),
+            Some("shot-edit.png")
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn film_pipe_carries_a_frame_and_sound() {
+        let Some(bin) = crate::sys::ffmpeg_bin() else {
+            return;
+        };
+        let dir = std::env::temp_dir().join(format!("bn-film-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let clip = dir.join("clip.mp4");
+        let make = std::process::Command::new(&bin)
+            .args([
+                "-y",
+                "-hide_banner",
+                "-loglevel",
+                "error",
+                "-f",
+                "lavfi",
+                "-i",
+                "testsrc=size=160x120:rate=24:duration=1",
+                "-f",
+                "lavfi",
+                "-i",
+                "sine=frequency=440:sample_rate=48000:duration=1",
+                "-shortest",
+                "-pix_fmt",
+                "yuv420p",
+            ])
+            .arg(&clip)
+            .output()
+            .expect("ffmpeg");
+        if !make.status.success() {
+            let _ = std::fs::remove_dir_all(&dir);
+            return;
+        }
+        let mut video = spawn_ffmpeg(&bin, &film_video_args("0", &clip)).unwrap();
+        let mut audio = spawn_ffmpeg(&bin, &film_audio_args("0", &clip)).unwrap();
+        let mut vout = video.stdout.take().unwrap();
+        let mut aout = audio.stdout.take().unwrap();
+        let (vtx, vrx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let mut buf = vec![0u8; FILM_BYTES];
+            let ok = read_full(&mut vout, &mut buf);
+            let _ = vtx.send((ok, buf));
+        });
+        let frame = vrx.recv_timeout(std::time::Duration::from_secs(12));
+        let (atx, arx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let mut buf = [0u8; 4096];
+            let n = std::io::Read::read(&mut aout, &mut buf).unwrap_or(0);
+            let _ = atx.send((n, buf));
+        });
+        let audio_got = arx.recv_timeout(std::time::Duration::from_secs(12));
+        let _ = video.kill();
+        let _ = audio.kill();
+        let _ = video.wait();
+        let _ = audio.wait();
+        let _ = std::fs::remove_dir_all(&dir);
+        let (ok, buf) = frame.expect("timed out waiting for a frame");
+        assert!(ok, "the frame was short");
+        assert_eq!(buf.len(), FILM_BYTES);
+        assert!(buf.iter().any(|b| *b != 0), "the frame was blank");
+        let (n, samples) = audio_got.expect("timed out waiting for sound");
+        assert!(n >= 4, "no sound bytes");
+        let pcm = pcm_le(&samples[..n - (n % 4)]);
+        assert!(pcm.iter().any(|s| s.abs() > 0.01), "the sound was silent");
+    }
+
+    #[test]
+    fn transfer_clock_estimates_the_rest() {
+        assert!(transfer_clock(1000, 10_000, 0.1).is_none());
+        let (about, left) = transfer_clock(50_000_000, 100_000_000, 2.0).unwrap();
+        assert!((left - 2.0).abs() < 0.01);
+        assert!((about - 4.0).abs() < 0.01);
+        let line = transfer_line("Receiving clip.mp4", 50_000_000, 100_000_000, 2.0);
+        assert!(line.contains("0:02 left"));
+        assert!(line.contains("About 0:04"));
+    }
+
+    #[test]
+    fn media_clock_and_duration_parse() {
+        assert_eq!(fmt_media(5.0), "0:05");
+        assert_eq!(fmt_media(62.2), "1:02");
+        assert_eq!(fmt_media(3661.0), "1:01:01");
+        assert_eq!(
+            parse_ffmpeg_duration("Duration: 00:01:02.50, start: 0.000000"),
+            Some(62.5)
+        );
+        assert!(parse_ffmpeg_duration("no clock here").is_none());
+    }
+
+    #[test]
+    fn tour_opens_each_part_of_the_desk() {
+        assert_eq!(TOUR.len(), 31);
+        assert_eq!(TOUR.first().map(|s| s.title), Some("INDEX"));
+        assert_eq!(TOUR.last().map(|s| s.title), Some("ROTN"));
+        let mut seen = std::collections::HashSet::new();
+        for step in TOUR {
+            assert!(seen.insert(step.title), "{}", step.title);
+            assert!(!step.body.is_empty());
+        }
+        let host = TOUR.iter().find(|s| s.title == "HOST").unwrap();
+        assert!(host.page == Page::Index);
+        assert!(host.dock == ShellPanel::Host);
+        let maps = TOUR.iter().find(|s| s.title == "MAPS").unwrap();
+        assert!(maps.page == Page::Table);
+        assert!(maps.open == TourOpen::Panel(Overlay::Maps));
+        let player = TOUR.iter().find(|s| s.title == "PLAYER").unwrap();
+        assert!(player.page == Page::Player);
+        assert!(player.dock == ShellPanel::None);
+        assert!(TOUR.iter().any(|s| s.page == Page::Tree && s.title == "TREE"));
+        assert!(TOUR.iter().any(|s| s.page == Page::Terminal));
+        assert!(TOUR.iter().any(|s| s.page == Page::Recon));
+        assert!(TOUR.iter().any(|s| s.page == Page::Audio));
+        assert!(TOUR.iter().any(|s| matches!(s.open, TourOpen::Book)));
+        assert!(TOUR.iter().any(|s| matches!(s.open, TourOpen::Seat)));
+        assert!(TOUR.iter().any(|s| matches!(s.open, TourOpen::Games)));
+        assert!(TOUR.iter().any(|s| s.dock == ShellPanel::Join));
+        assert!(TOUR.iter().any(|s| s.dock == ShellPanel::Chat));
+        assert!(TOUR.iter().any(|s| s.open == TourOpen::Panel(Overlay::Board)));
+    }
+
+    #[test]
+    fn shuffle_bag_uses_every_other_file_before_repeating() {
+        let playable = [0usize, 1, 2];
+        let mut bag = Vec::new();
+        assert!(refill_shuffle(&mut bag, &playable, 0));
+        bag.sort();
+        assert_eq!(bag, vec![1, 2]);
+        let first = bag.pop().unwrap();
+        let second = bag.pop().unwrap();
+        assert_ne!(first, second);
+        assert!(refill_shuffle(&mut bag, &playable, second));
+        assert!(!bag.contains(&second));
+        assert!(bag.contains(&0));
+        assert!(draw_shuffle(&mut Vec::new(), &[4], 4).is_none());
     }
 }

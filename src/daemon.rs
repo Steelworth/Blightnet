@@ -10,7 +10,7 @@ use std::net::{TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::{self, Receiver, Sender};
+use std::sync::mpsc::{self, Receiver, Sender, SyncSender};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -727,6 +727,13 @@ fn write_ipc(stream: &mut TcpStream, msg: &Ipc) -> bool {
     stream.write_all(s.as_bytes()).is_ok() && stream.flush().is_ok()
 }
 
+fn file_cmd(cmd: &Cmd) -> bool {
+    matches!(
+        cmd,
+        Cmd::Send(Wire::FileStart { .. } | Wire::FileChunk { .. } | Wire::FileDone { .. })
+    )
+}
+
 fn cmd_from_ipc(c: IpcCmd, root: &Path) -> Cmd {
     match c {
         IpcCmd::Host { internet } => Cmd::Host {
@@ -918,6 +925,7 @@ pub fn connect_or_spawn(root: &Path, handle: &str) -> Result<TcpStream, String> 
 pub fn run_client(
     stream: TcpStream,
     cmd_rx: Receiver<Cmd>,
+    file_rx: Receiver<Cmd>,
     ev_tx: Sender<NetEvent>,
     alive: Arc<AtomicBool>,
 ) {
@@ -948,16 +956,15 @@ pub fn run_client(
         let _ = ev_tx.send(NetEvent::Status("Node link dropped.".into()));
     });
     while alive.load(Ordering::SeqCst) {
-        match cmd_rx.recv_timeout(Duration::from_millis(40)) {
-            Ok(cmd) => {
-                if let Some(c) = ipc_from_cmd(&cmd) {
-                    if !write_ipc(&mut writer, &Ipc::Cmd { cmd: c }) {
-                        break;
-                    }
-                }
+        let cmd = match net::next_io(&cmd_rx, &file_rx) {
+            net::IoWait::Cmd(cmd) => cmd,
+            net::IoWait::Idle => continue,
+            net::IoWait::Dead => break,
+        };
+        if let Some(c) = ipc_from_cmd(&cmd) {
+            if !write_ipc(&mut writer, &Ipc::Cmd { cmd: c }) {
+                break;
             }
-            Err(mpsc::RecvTimeoutError::Timeout) => {}
-            Err(_) => break,
         }
     }
 }
@@ -1010,13 +1017,14 @@ fn run_node(root: PathBuf) -> i32 {
     };
     let self_id = net::load_peer_id(&root);
     let (cmd_tx, cmd_rx) = mpsc::channel::<Cmd>();
+    let (file_tx, file_rx) = mpsc::sync_channel::<Cmd>(4);
     let (ev_tx, ev_rx) = mpsc::channel::<NetEvent>();
     let alive = Arc::new(AtomicBool::new(true));
     let hub_alive = alive.clone();
     let hub_handle = handle.clone();
     thread::Builder::new()
         .name("blightnet-hub".into())
-        .spawn(move || net::run_hub(self_id, hub_handle, cmd_rx, ev_tx, hub_alive))
+        .spawn(move || net::run_hub(self_id, hub_handle, cmd_rx, file_rx, ev_tx, hub_alive))
         .ok();
 
     let inner = Arc::new(Mutex::new(Inner {
@@ -1067,8 +1075,9 @@ fn run_node(root: PathBuf) -> i32 {
                 let tok = token.clone();
                 let inn = inner.clone();
                 let tx = cmd_tx.clone();
+                let files = file_tx.clone();
                 let flag = alive.clone();
-                thread::spawn(move || serve_gui(stream, tok, inn, tx, flag));
+                thread::spawn(move || serve_gui(stream, tok, inn, tx, files, flag));
             }
             Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
                 thread::sleep(Duration::from_millis(40));
@@ -1269,6 +1278,7 @@ fn serve_gui(
     token: String,
     inner: Arc<Mutex<Inner>>,
     cmd_tx: Sender<Cmd>,
+    file_tx: SyncSender<Cmd>,
     alive: Arc<AtomicBool>,
 ) {
     let _ = stream.set_nodelay(true);
@@ -1368,7 +1378,15 @@ fn serve_gui(
                             _ => {}
                         }
                     }
-                    let _ = cmd_tx.send(cmd_from_ipc(cmd, &root));
+                    let cmd = cmd_from_ipc(cmd, &root);
+                    let sent = if file_cmd(&cmd) {
+                        file_tx.send(cmd).is_ok()
+                    } else {
+                        cmd_tx.send(cmd).is_ok()
+                    };
+                    if !sent {
+                        break;
+                    }
                 }
                 Ok(Ipc::Ping) => {}
                 Ok(Ipc::Bye) => break,
@@ -1553,7 +1571,15 @@ mod tests {
             let _ = listener.set_nonblocking(true);
             for _ in 0..80 {
                 if let Ok((stream, _)) = listener.accept() {
-                    serve_gui(stream, token.clone(), inner.clone(), cmd_tx.clone(), flag.clone());
+                    let (_file_tx, _file_rx) = mpsc::sync_channel(1);
+                    serve_gui(
+                        stream,
+                        token.clone(),
+                        inner.clone(),
+                        cmd_tx.clone(),
+                        _file_tx,
+                        flag.clone(),
+                    );
                     break;
                 }
                 thread::sleep(Duration::from_millis(20));

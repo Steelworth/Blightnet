@@ -19,6 +19,8 @@ data/devices.json
 data/notes.json
 data/recon.json
 data/recon/
+data/file-bak/
+data/media-frame.png
 data/combat-log.json
 data/chat.json
 data/crews.json

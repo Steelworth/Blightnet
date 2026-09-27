@@ -330,6 +330,7 @@ pub struct NetHub {
     pub table_key: Vec<u8>,
     pub daemon: bool,
     tx: Sender<Cmd>,
+    file_tx: SyncSender<Cmd>,
     rx: Receiver<NetEvent>,
     alive: Arc<AtomicBool>,
 }
@@ -337,6 +338,7 @@ pub struct NetHub {
 impl NetHub {
     pub fn new(handle: String, root: &std::path::Path) -> Self {
         let (cmd_tx, cmd_rx) = mpsc::channel::<Cmd>();
+        let (file_tx, file_rx) = mpsc::sync_channel::<Cmd>(4);
         let (ev_tx, ev_rx) = mpsc::channel::<NetEvent>();
         let alive = Arc::new(AtomicBool::new(true));
         let self_id = load_peer_id(root);
@@ -345,7 +347,7 @@ impl NetHub {
         let flag = alive.clone();
         thread::Builder::new()
             .name("blightnet-hub".into())
-            .spawn(move || run_hub(hub_id, hub_name, cmd_rx, ev_tx, flag))
+            .spawn(move || run_hub(hub_id, hub_name, cmd_rx, file_rx, ev_tx, flag))
             .ok();
         Self {
             role: Role::Idle,
@@ -362,6 +364,7 @@ impl NetHub {
             table_key: vec![],
             daemon: false,
             tx: cmd_tx,
+            file_tx,
             rx: ev_rx,
             alive,
         }
@@ -376,13 +379,14 @@ impl NetHub {
 
     fn from_ipc(handle: String, root: &std::path::Path, stream: TcpStream) -> Self {
         let (cmd_tx, cmd_rx) = mpsc::channel::<Cmd>();
+        let (file_tx, file_rx) = mpsc::sync_channel::<Cmd>(4);
         let (ev_tx, ev_rx) = mpsc::channel::<NetEvent>();
         let alive = Arc::new(AtomicBool::new(true));
         let self_id = load_peer_id(root);
         let flag = alive.clone();
         thread::Builder::new()
             .name("blightnet-ipc".into())
-            .spawn(move || crate::daemon::run_client(stream, cmd_rx, ev_tx, flag))
+            .spawn(move || crate::daemon::run_client(stream, cmd_rx, file_rx, ev_tx, flag))
             .ok();
         Self {
             role: Role::Idle,
@@ -399,9 +403,14 @@ impl NetHub {
             table_key: vec![],
             daemon: true,
             tx: cmd_tx,
+            file_tx,
             rx: ev_rx,
             alive,
         }
+    }
+
+    pub fn file_sender(&self) -> SyncSender<Cmd> {
+        self.file_tx.clone()
     }
 
     pub fn set_handle(&mut self, name: String) {
@@ -958,10 +967,116 @@ fn coalesce_video(batch: Vec<Wire>) -> Vec<Wire> {
         .collect()
 }
 
+pub(crate) enum IoWait {
+    Cmd(Cmd),
+    Idle,
+    Dead,
+}
+
+pub(crate) fn next_io(cmd_rx: &Receiver<Cmd>, file_rx: &Receiver<Cmd>) -> IoWait {
+    if let Ok(cmd) = cmd_rx.try_recv() {
+        return IoWait::Cmd(cmd);
+    }
+    if let Ok(cmd) = file_rx.try_recv() {
+        return IoWait::Cmd(cmd);
+    }
+    match cmd_rx.recv_timeout(Duration::from_millis(20)) {
+        Ok(cmd) => IoWait::Cmd(cmd),
+        Err(mpsc::RecvTimeoutError::Disconnected) => IoWait::Dead,
+        Err(mpsc::RecvTimeoutError::Timeout) => match file_rx.try_recv() {
+            Ok(cmd) => IoWait::Cmd(cmd),
+            Err(_) => IoWait::Idle,
+        },
+    }
+}
+
+pub const FILE_PIECE: usize = 48 * 1024;
+
+pub struct SendTick {
+    pub filename: String,
+    pub who: String,
+    pub index: u32,
+    pub count: u32,
+    pub done: u64,
+    pub total: u64,
+}
+
+pub enum SendNote {
+    Tick(SendTick),
+    Finished(Result<(), String>),
+}
+
+pub fn stream_file(
+    tx: &SyncSender<Cmd>,
+    from: &str,
+    handle: &str,
+    to: Option<String>,
+    path: &std::path::Path,
+    mime: &str,
+    filename: &str,
+    who: &str,
+    index: u32,
+    count: u32,
+    tick: &Sender<SendNote>,
+) -> Result<(), String> {
+    let file = std::fs::File::open(path).map_err(|_| "The file did not open.".to_string())?;
+    let total = file.metadata().map(|m| m.len()).unwrap_or(0);
+    if total == 0 {
+        return Err("That file is empty.".into());
+    }
+    let id = format!("f{:08x}", rand::random::<u32>());
+    let start = Wire::FileStart {
+        from: from.to_string(),
+        name: handle.to_string(),
+        to: to.clone(),
+        crew: None,
+        mime: mime.to_string(),
+        filename: filename.to_string(),
+        id: id.clone(),
+        size: total,
+    };
+    tx.send(Cmd::Send(start))
+        .map_err(|_| "The send stopped.".to_string())?;
+    let mut reader = BufReader::new(file);
+    let mut buf = vec![0u8; FILE_PIECE];
+    let mut done = 0u64;
+    loop {
+        let n = reader
+            .read(&mut buf)
+            .map_err(|_| "The file did not read.".to_string())?;
+        if n == 0 {
+            break;
+        }
+        let data = base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &buf[..n]);
+        tx.send(Cmd::Send(Wire::FileChunk {
+            id: id.clone(),
+            to: to.clone(),
+            data,
+        }))
+        .map_err(|_| "The send stopped.".to_string())?;
+        done += n as u64;
+        let _ = tick.send(SendNote::Tick(SendTick {
+            filename: filename.to_string(),
+            who: who.to_string(),
+            index,
+            count,
+            done,
+            total,
+        }));
+    }
+    tx.send(Cmd::Send(Wire::FileDone { id, to }))
+        .map_err(|_| "The send stopped.".to_string())?;
+    if done != total {
+        return Err("The file stopped.".into());
+    }
+    Ok(())
+}
+
 pub(crate) fn run_hub(
     self_id: String,
     handle: String,
     cmd_rx: Receiver<Cmd>,
+    file_rx: Receiver<Cmd>,
     ev_tx: Sender<NetEvent>,
     alive: Arc<AtomicBool>,
 ) {
@@ -979,10 +1094,10 @@ pub(crate) fn run_hub(
     let mut mesh_slot: Option<String> = None;
 
     while alive.load(Ordering::SeqCst) {
-        let cmd = match cmd_rx.recv_timeout(Duration::from_millis(40)) {
-            Ok(c) => c,
-            Err(mpsc::RecvTimeoutError::Timeout) => continue,
-            Err(_) => break,
+        let cmd = match next_io(&cmd_rx, &file_rx) {
+            IoWait::Cmd(c) => c,
+            IoWait::Idle => continue,
+            IoWait::Dead => break,
         };
         match cmd {
             Cmd::Host { internet, root: _ } => {
@@ -2995,5 +3110,72 @@ mod tests {
         assert!(saw_sheet, "guest did not receive sheets");
         assert!(saw_tok, "guest did not receive tokens");
         assert!(saw_ask, "guest did not receive map-image-ask");
+    }
+
+    #[test]
+    fn stream_file_sends_every_byte_in_pieces() {
+        let dir = std::env::temp_dir().join(format!("bn-stream-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("blob.bin");
+        let raw = vec![9u8; 100_000];
+        std::fs::write(&path, &raw).unwrap();
+        let (tx, rx) = mpsc::sync_channel(4);
+        let (tick_tx, tick_rx) = mpsc::channel();
+        let send_path = path.clone();
+        let worker = std::thread::spawn(move || {
+            stream_file(
+                &tx,
+                "me",
+                "Me",
+                Some("them".into()),
+                &send_path,
+                "application/octet-stream",
+                "blob.bin",
+                "Them",
+                1,
+                1,
+                &tick_tx,
+            )
+        });
+        let mut got = 0u64;
+        let mut size = 0u64;
+        let mut chunks = 0u32;
+        while let Ok(cmd) = rx.recv_timeout(std::time::Duration::from_secs(3)) {
+            match cmd {
+                Cmd::Send(Wire::FileStart { size: n, .. }) => size = n,
+                Cmd::Send(Wire::FileChunk { data, .. }) => {
+                    let bytes = base64::Engine::decode(&base64::engine::general_purpose::STANDARD, data).unwrap();
+                    got += bytes.len() as u64;
+                    chunks += 1;
+                }
+                Cmd::Send(Wire::FileDone { .. }) => break,
+                _ => {}
+            }
+        }
+        worker.join().unwrap().unwrap();
+        let _ = tick_rx;
+        assert_eq!(size, 100_000);
+        assert_eq!(got, 100_000);
+        assert!(chunks > 1);
+        let empty = dir.join("empty.bin");
+        std::fs::write(&empty, b"").unwrap();
+        let (tx, _rx) = mpsc::sync_channel(1);
+        let (tick_tx, _tick_rx) = mpsc::channel();
+        let err = stream_file(
+            &tx,
+            "me",
+            "Me",
+            None,
+            &empty,
+            "application/octet-stream",
+            "empty.bin",
+            "table",
+            1,
+            1,
+            &tick_tx,
+        );
+        assert!(err.is_err());
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

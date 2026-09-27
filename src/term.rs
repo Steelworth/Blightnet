@@ -36,6 +36,9 @@ pub struct Grid {
     cy: usize,
     fg: u8,
     bg: u8,
+    bold: bool,
+    color_base: u8,
+    saved: Option<(usize, usize)>,
     scroll: Vec<Vec<Cell>>,
 }
 
@@ -51,8 +54,90 @@ impl Grid {
             cy: 0,
             fg: 0,
             bg: 0,
+            bold: false,
+            color_base: 255,
+            saved: None,
             scroll: Vec::new(),
         }
+    }
+
+    pub fn scroll_len(&self) -> usize {
+        self.scroll.len()
+    }
+
+    pub fn refit(&mut self, cols: usize, rows: usize) {
+        let cols = cols.max(8);
+        let rows = rows.max(4);
+        if cols == self.cols && rows == self.rows {
+            return;
+        }
+        let mut cursor_at = self.scroll.len() + self.cy;
+        let mut lines = std::mem::take(&mut self.scroll);
+        for y in 0..self.rows {
+            let mut row = Vec::with_capacity(cols);
+            for x in 0..cols {
+                row.push(if x < self.cols {
+                    self.cell(x, y)
+                } else {
+                    Cell::default()
+                });
+            }
+            lines.push(row);
+        }
+        for line in &mut lines {
+            line.resize(cols, Cell::default());
+        }
+        while lines.len() > cursor_at + 1 && lines.last().is_some_and(|line| line.iter().all(|c| c.ch == ' '))
+        {
+            lines.pop();
+        }
+        if lines.is_empty() {
+            lines.push(vec![Cell::default(); cols]);
+            cursor_at = 0;
+        }
+        cursor_at = cursor_at.min(lines.len() - 1);
+        while lines.len() > SCROLL_MAX + rows {
+            lines.remove(0);
+            cursor_at = cursor_at.saturating_sub(1);
+        }
+        let below = lines.len().saturating_sub(cursor_at + 1).min(rows - 1);
+        let above = rows - 1 - below;
+        let mut start = cursor_at.saturating_sub(above);
+        if lines.len() <= rows {
+            start = 0;
+        } else if start + rows > lines.len() {
+            start = lines.len() - rows;
+        }
+        if cursor_at < start {
+            start = cursor_at;
+        }
+        self.scroll = lines.drain(..start).collect();
+        self.cols = cols;
+        self.rows = rows;
+        self.cells = vec![Cell::default(); cols * rows];
+        for (y, row) in lines.into_iter().take(rows).enumerate() {
+            for (x, cell) in row.into_iter().take(cols).enumerate() {
+                self.cells[y * cols + x] = cell;
+            }
+        }
+        self.cy = cursor_at.saturating_sub(start).min(rows - 1);
+        self.cx = self.cx.min(cols.saturating_sub(1));
+    }
+
+    fn copy_row(&self, index: usize, out: &mut Vec<Cell>) {
+        out.clear();
+        if index < self.scroll.len() {
+            out.extend_from_slice(&self.scroll[index]);
+            out.resize(self.cols, Cell::default());
+            return;
+        }
+        let y = index - self.scroll.len();
+        if y >= self.rows {
+            out.resize(self.cols, Cell::default());
+            return;
+        }
+        let start = y * self.cols;
+        out.extend_from_slice(&self.cells[start..start + self.cols]);
     }
 
     pub fn cursor(&self) -> (usize, usize) {
@@ -119,6 +204,47 @@ impl Grid {
     fn tab(&mut self) {
         let next = (self.cx / 8 + 1) * 8;
         self.cx = next.min(self.cols.saturating_sub(1));
+    }
+
+    fn reset_sgr(&mut self) {
+        self.fg = 0;
+        self.bg = 0;
+        self.bold = false;
+        self.color_base = 255;
+    }
+
+    fn apply_fg(&mut self) {
+        if self.color_base == 255 {
+            self.fg = 0;
+        } else if self.bold {
+            self.fg = self.color_base + 9;
+        } else {
+            self.fg = self.color_base + 1;
+        }
+    }
+
+    fn erase_to(&mut self, to_cursor: bool) {
+        let y = self.cy.min(self.rows - 1);
+        let x = self.cx.min(self.cols - 1);
+        if to_cursor {
+            for row in 0..y {
+                for col in 0..self.cols {
+                    self.cells[row * self.cols + col] = Cell::default();
+                }
+            }
+            for col in 0..=x {
+                self.cells[y * self.cols + col] = Cell::default();
+            }
+        } else {
+            for col in x..self.cols {
+                self.cells[y * self.cols + col] = Cell::default();
+            }
+            for row in (y + 1)..self.rows {
+                for col in 0..self.cols {
+                    self.cells[row * self.cols + col] = Cell::default();
+                }
+            }
+        }
     }
 
     fn clear_all(&mut self) {
@@ -190,25 +316,42 @@ impl Perform for Grid {
                 let col = param(params, 1).max(1) as usize - 1;
                 self.move_to(col, row);
             }
-            'J' if p0 == 2 => self.clear_all(),
+            'J' => match p0 {
+                2 => self.clear_all(),
+                1 => self.erase_to(true),
+                _ => self.erase_to(false),
+            },
             'K' => self.erase_line(p0),
             'm' => {
                 if params.iter().next().is_none() {
-                    self.fg = 0;
-                    self.bg = 0;
+                    self.reset_sgr();
                 }
                 for group in params.iter() {
                     let n = group.first().copied().unwrap_or(0);
                     match n {
-                        0 => {
-                            self.fg = 0;
-                            self.bg = 0;
+                        0 => self.reset_sgr(),
+                        1 => {
+                            self.bold = true;
+                            self.apply_fg();
                         }
-                        30..=37 => self.fg = (n - 30) as u8 + 1,
-                        39 => self.fg = 0,
+                        22 => {
+                            self.bold = false;
+                            self.apply_fg();
+                        }
+                        30..=37 => {
+                            self.color_base = (n - 30) as u8;
+                            self.apply_fg();
+                        }
+                        39 => {
+                            self.color_base = 255;
+                            self.fg = 0;
+                        }
                         40..=47 => self.bg = (n - 40) as u8 + 1,
                         49 => self.bg = 0,
-                        90..=97 => self.fg = (n - 90) as u8 + 1,
+                        90..=97 => {
+                            self.color_base = (n - 90) as u8;
+                            self.fg = self.color_base + 9;
+                        }
                         _ => {}
                     }
                 }
@@ -216,6 +359,55 @@ impl Perform for Grid {
             _ => {}
         }
     }
+
+    fn esc_dispatch(&mut self, _intermediates: &[u8], _ignore: bool, byte: u8) {
+        match byte {
+            b'7' => self.saved = Some((self.cx, self.cy)),
+            b'8' => {
+                if let Some((x, y)) = self.saved {
+                    self.move_to(x, y);
+                }
+            }
+            _ => {}
+        }
+    }
+}
+
+fn row_hash(line: &[Cell]) -> u64 {
+    let mut h = 1469598103934665603u64;
+    for cell in line {
+        h ^= cell.ch as u64;
+        h = h.wrapping_mul(1099511628211);
+        h ^= cell.fg as u64;
+        h = h.wrapping_mul(1099511628211);
+        h ^= cell.bg as u64;
+        h = h.wrapping_mul(1099511628211);
+    }
+    h
+}
+
+fn row_job(line: &[Cell], font: FontId) -> egui::text::LayoutJob {
+    let mut job = egui::text::LayoutJob::default();
+    let mut i = 0;
+    while i < line.len() {
+        let cell = line[i];
+        let mut end = i + 1;
+        while end < line.len() && line[end].fg == cell.fg {
+            end += 1;
+        }
+        let text: String = line[i..end].iter().map(|c| c.ch).collect();
+        job.append(
+            &text,
+            0.0,
+            egui::TextFormat {
+                font_id: font.clone(),
+                color: ansi(cell.fg, true),
+                ..Default::default()
+            },
+        );
+        i = end;
+    }
+    job
 }
 
 fn ansi(n: u8, default_fg: bool) -> Color32 {
@@ -228,6 +420,14 @@ fn ansi(n: u8, default_fg: bool) -> Color32 {
         6 => Color32::from_rgb(180, 60, 180),
         7 => Color32::from_rgb(40, 170, 180),
         8 => Color32::from_rgb(220, 220, 220),
+        9 => Color32::from_rgb(80, 80, 80),
+        10 => Color32::from_rgb(255, 90, 90),
+        11 => Color32::from_rgb(80, 230, 120),
+        12 => Color32::from_rgb(255, 220, 80),
+        13 => Color32::from_rgb(120, 160, 255),
+        14 => Color32::from_rgb(255, 120, 220),
+        15 => Color32::from_rgb(80, 240, 240),
+        16 => Color32::from_rgb(255, 255, 255),
         _ if default_fg => CREAM,
         _ => PANEL,
     }
@@ -243,11 +443,20 @@ pub struct Shell {
     grid: Grid,
     cols: u16,
     rows: u16,
+    view: usize,
+    row_cache: Vec<Option<(u64, std::sync::Arc<egui::Galley>)>>,
+    line_buf: Vec<Cell>,
+    font_q: f32,
     pub err: String,
 }
 
 impl Shell {
     pub fn spawn(cols: u16, rows: u16) -> Self {
+        let cwd = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
+        Self::spawn_in(cols, rows, &cwd)
+    }
+
+    pub fn spawn_in(cols: u16, rows: u16, cwd: &std::path::Path) -> Self {
         let cols = cols.clamp(20, 240);
         let rows = rows.clamp(6, 80);
         let (tx, rx) = channel();
@@ -261,15 +470,19 @@ impl Shell {
             grid: Grid::new(cols as usize, rows as usize),
             cols,
             rows,
+            view: 0,
+            row_cache: Vec::new(),
+            line_buf: Vec::new(),
+            font_q: 0.0,
             err: String::new(),
         };
-        if let Err(e) = shell.open(cols, rows, tx) {
+        if let Err(e) = shell.open(cols, rows, tx, cwd) {
             shell.err = e;
         }
         shell
     }
 
-    fn open(&mut self, cols: u16, rows: u16, tx: Sender<Vec<u8>>) -> Result<(), String> {
+    fn open(&mut self, cols: u16, rows: u16, tx: Sender<Vec<u8>>, cwd: &std::path::Path) -> Result<(), String> {
         let pair = native_pty_system()
             .openpty(PtySize {
                 rows,
@@ -279,7 +492,7 @@ impl Shell {
             })
             .map_err(|e| format!("The terminal did not open. {e}"))?;
         let mut cmd = CommandBuilder::new(shell_program());
-        cmd.cwd(std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from(".")));
+        cmd.cwd(cwd);
         let child = pair
             .slave
             .spawn_command(cmd)
@@ -291,7 +504,7 @@ impl Shell {
         let writer = pair.master.take_writer().map_err(|e| e.to_string())?;
         thread::spawn(move || {
             let mut reader = reader;
-            let mut buf = [0u8; 4096];
+            let mut buf = [0u8; 65536];
             loop {
                 match reader.read(&mut buf) {
                     Ok(0) | Err(_) => break,
@@ -316,13 +529,23 @@ impl Shell {
                 self.parser.advance(&mut self.grid, *b);
             }
             n += buf.len();
-            if n > 65_536 {
+            if n > 2_000_000 {
                 break;
             }
         }
     }
 
+    pub fn scroll_by(&mut self, lines: i32) {
+        let max = self.grid.scroll_len();
+        if lines > 0 {
+            self.view = (self.view + lines as usize).min(max);
+        } else {
+            self.view = self.view.saturating_sub((-lines) as usize);
+        }
+    }
+
     pub fn write_str(&mut self, text: &str) {
+        self.view = 0;
         if let Some(w) = self.writer.as_mut() {
             let _ = w.write_all(text.as_bytes());
             let _ = w.flush();
@@ -337,7 +560,9 @@ impl Shell {
         }
         self.cols = cols;
         self.rows = rows;
-        self.grid = Grid::new(cols as usize, rows as usize);
+        self.grid.refit(cols as usize, rows as usize);
+        self.view = self.view.min(self.grid.scroll_len());
+        self.row_cache.clear();
         if let Some(master) = self.master.as_ref() {
             let _ = master.resize(PtySize {
                 rows,
@@ -348,52 +573,80 @@ impl Shell {
         }
     }
 
-    pub fn paint(&self, ui: &egui::Ui, rect: Rect) {
+    pub fn paint(&mut self, ui: &egui::Ui, rect: Rect) {
         ui.painter().rect_filled(rect, 0.0, Color32::from_rgb(8, 10, 14));
-        let cw = (rect.width() / self.cols as f32).max(7.0);
-        let ch = (rect.height() / self.rows as f32).max(12.0);
-        let font = FontId::new(ch * 0.72, theme::mono());
-        let mut y = 0usize;
-        while y < self.rows as usize {
-            let mut x = 0usize;
-            while x < self.cols as usize {
-                let cell = self.grid.cell(x, y);
-                let mut end = x + 1;
-                if cell.ch != ' ' || cell.bg != 0 {
-                    while end < self.cols as usize {
-                        let n = self.grid.cell(end, y);
-                        if n.fg != cell.fg || n.bg != cell.bg || (n.ch == ' ' && n.bg == 0) {
-                            break;
-                        }
-                        end += 1;
-                    }
-                    let min = egui::pos2(rect.left() + x as f32 * cw, rect.top() + y as f32 * ch);
-                    let run = Rect::from_min_size(min, Vec2::new((end - x) as f32 * cw, ch));
-                    if cell.bg != 0 {
-                        ui.painter().rect_filled(run, 0.0, ansi(cell.bg, false));
-                    }
-                    let text: String = (x..end).map(|i| self.grid.cell(i, y).ch).collect();
-                    ui.painter().text(
-                        min + Vec2::new(1.0, 1.0),
-                        egui::Align2::LEFT_TOP,
-                        text,
-                        font.clone(),
-                        ansi(cell.fg, true),
-                    );
-                }
-                x = end;
-            }
-            y += 1;
+        let rows = self.rows as usize;
+        let cols = self.cols as usize;
+        let total = self.grid.scroll_len() + rows;
+        let view = self.view.min(self.grid.scroll_len());
+        let start = total.saturating_sub(rows + view);
+        let cw = (rect.width() / cols as f32).max(7.0);
+        let ch = (rect.height() / rows as f32).max(12.0);
+        let font = mono_fit(ui, cw, ch);
+        let q = (font.size * 4.0).round();
+        if (self.font_q - q).abs() > 0.1 || self.row_cache.len() != rows {
+            self.font_q = q;
+            self.row_cache = vec![None; rows];
         }
-        let cursor = Rect::from_min_size(
-            egui::pos2(
-                rect.left() + self.grid.cx as f32 * cw,
-                rect.top() + self.grid.cy as f32 * ch,
-            ),
-            Vec2::new(cw.max(2.0), 2.0),
-        );
-        ui.painter().rect_filled(cursor, 0.0, theme::ACID);
+        for y in 0..rows {
+            self.grid.copy_row(start + y, &mut self.line_buf);
+            let hash = row_hash(&self.line_buf);
+            if self.row_cache[y].as_ref().map(|(h, _)| *h) != Some(hash) {
+                let galley = ui
+                    .ctx()
+                    .fonts(|f| f.layout_job(row_job(&self.line_buf, font.clone())));
+                self.row_cache[y] = Some((hash, galley));
+            }
+            let min = egui::pos2(rect.left(), rect.top() + y as f32 * ch);
+            for (x, cell) in self.line_buf.iter().enumerate() {
+                if cell.bg == 0 {
+                    continue;
+                }
+                let run = Rect::from_min_size(
+                    egui::pos2(rect.left() + x as f32 * cw, min.y),
+                    Vec2::new(cw, ch),
+                );
+                ui.painter().rect_filled(run, 0.0, ansi(cell.bg, false));
+            }
+            if let Some((_, galley)) = &self.row_cache[y] {
+                ui.painter()
+                    .galley(min + Vec2::new(1.0, 1.0), galley.clone(), Color32::WHITE);
+            }
+        }
+        if self.view == 0 {
+            let cursor = Rect::from_min_size(
+                egui::pos2(
+                    rect.left() + self.grid.cx as f32 * cw,
+                    rect.top() + self.grid.cy as f32 * ch,
+                ),
+                Vec2::new(2.0, ch),
+            );
+            ui.painter().rect_filled(cursor, 0.0, theme::ACID);
+        }
     }
+}
+
+fn mono_fit(ui: &egui::Ui, cw: f32, ch: f32) -> FontId {
+    let family = theme::mono();
+    let mut size = (ch * 0.86).clamp(8.0, 32.0);
+    for _ in 0..5 {
+        let id = FontId::new(size, family.clone());
+        let (gw, rh) = ui.ctx().fonts(|f| (f.glyph_width(&id, 'M'), f.row_height(&id)));
+        if gw <= 0.5 || rh <= 0.5 {
+            break;
+        }
+        let mut next = size * (cw / gw);
+        if rh * (next / size) > ch {
+            next = size * (ch / rh);
+        }
+        next = next.clamp(6.0, 40.0);
+        if (next - size).abs() < 0.2 {
+            size = next;
+            break;
+        }
+        size = next;
+    }
+    FontId::new(size, family)
 }
 
 impl Drop for Shell {
@@ -490,6 +743,9 @@ pub fn handle_key(shell: &mut Shell, event: &egui::Event) {
                 egui::Key::ArrowLeft => "\u{1b}[D",
                 egui::Key::Home => "\u{1b}[H",
                 egui::Key::End => "\u{1b}[F",
+                egui::Key::PageUp => "\u{1b}[5~",
+                egui::Key::PageDown => "\u{1b}[6~",
+                egui::Key::Delete => "\u{1b}[3~",
                 _ => "",
             };
             if !seq.is_empty() {
@@ -511,6 +767,10 @@ mod tests {
         assert_eq!(grid.cell(0, 0).ch, 'h');
         assert_eq!(grid.cell(1, 0).ch, 'i');
         assert_eq!(grid.cursor(), (0, 1));
+        grid.feed(b"\x1b[1;32mG");
+        assert!(grid.cell(0, 1).fg >= 9);
+        grid.refit(10, 4);
+        assert_eq!(grid.cell(0, 0).ch, 'h');
     }
 
     #[test]
@@ -520,6 +780,37 @@ mod tests {
             w[0].to_lowercase() < w[1].to_lowercase()
                 || (w[0].to_lowercase() == w[1].to_lowercase() && w[0] <= w[1])
         }));
+    }
+
+    #[test]
+    fn shell_starts_in_the_given_folder() {
+        let dir = std::env::temp_dir().join(format!("bn-term-{}", std::process::id()));
+        let _ = std::fs::create_dir_all(&dir);
+        let mut shell = Shell::spawn_in(60, 16, &dir);
+        if !shell.err.is_empty() {
+            let _ = std::fs::remove_dir_all(&dir);
+            return;
+        }
+        shell.write_str("pwd\r");
+        let needle = dir.display().to_string();
+        let start = std::time::Instant::now();
+        let mut saw = false;
+        while start.elapsed() < std::time::Duration::from_secs(4) {
+            shell.poll();
+            let mut word = String::new();
+            for y in 0..16 {
+                for x in 0..60 {
+                    word.push(shell.grid.cell(x, y).ch);
+                }
+            }
+            if word.contains(&needle) {
+                saw = true;
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(30));
+        }
+        let _ = std::fs::remove_dir_all(&dir);
+        assert!(saw, "shell did not start in the folder");
     }
 
     #[test]
