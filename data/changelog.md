@@ -4,6 +4,8 @@ The deck writes here so you can see what changed after an update. Newest first. 
 
 ## 2026-09-27
 
+- The intro is the loading screen. The glass plate comes up at once. Catalog, devices, records, and the city load behind it. Each line appears when that step finishes. One cyan scan follows the bar and does not repeat.
+- The front desk opens when the load has succeeded. On a fast machine the plate stays up for about a second and a half. A click or a key skips that hold and still waits if the load is not finished. A failed load stays on the plate in red. The node stays off until Online.
 - The window is a still hologram. A cyan grid sits behind the pages. Panels are dark glass with a red edge, a cyan line on top, and a cyan stroke shifted one pixel. That shift does not move.
 - Hot pink is gone. The idle edge, the open tab, and the window frame use the same red as Leave, Delete, and the close button. A selected control stays acid. Hover stays cyan.
 - The tutorial walks the whole desk. Each card opens that part of the window: the front desk, host and join, the table tools, talk, the player, the folders, the shell, recon, pages, the city, and the fixer.

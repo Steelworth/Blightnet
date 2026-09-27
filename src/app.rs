@@ -18,6 +18,9 @@ use std::time::{Duration, Instant};
 
 /// Wake at most every 16.67ms. Do not sleep on the UI thread to enforce this.
 const FRAME: Duration = Duration::from_nanos(16_666_667);
+const BOOT_HOLD: f32 = 1.6;
+const BOOT_SKIP: f32 = 0.2;
+const BOOT_STEPS: u32 = 5;
 const COMBAT_MARK: &str = "\u{2060}C|";
 const FILE_CAP: usize = 96 * 1024 * 1024;
 const MAP_WIRE: &str = "__table-map";
@@ -465,7 +468,6 @@ pub struct Blightnet {
     catalog: Catalog,
     mixer: Mixer,
     page: Page,
-    boot_at: Instant,
     blight: bool,
     master: f32,
     time: &'static str,
@@ -825,9 +827,35 @@ fn paint_card(ui: &mut egui::Ui, c: u8, hole: bool, size: Vec2) {
     );
 }
 
+struct Desk {
+    root: PathBuf,
+    catalog: Catalog,
+    inputs: Vec<crate::audio::AudioDev>,
+    outputs: Vec<crate::audio::AudioDev>,
+    mic_name: String,
+    speaker_name: String,
+    cam_name: String,
+    chat: Vec<String>,
+    chars: Vec<Character>,
+    saved: Vec<SavedMix>,
+    contacts: Vec<Contact>,
+    crews: Vec<Crew>,
+    inbox: HashMap<String, InboxFile>,
+    names: Names,
+    combat_log: Vec<String>,
+    notes: String,
+    changelog: Vec<(String, Vec<String>)>,
+    nethooks: Vec<crate::nethook::Nethook>,
+    rotn: crate::rotn::Rotn,
+    recon: Vec<crate::recon::Dossier>,
+    net: NetHub,
+    netspace: crate::netspace::Netspace,
+}
+
 impl Blightnet {
-    pub fn new(root: PathBuf) -> Result<Self, String> {
+    fn prepare(root: PathBuf, mut note: impl FnMut(BootMsg)) -> Result<Desk, String> {
         let catalog = Catalog::load(&root)?;
+        note(BootMsg::Step("catalog"));
         let pref = load_devices(&root);
         let inputs = crate::audio::list_inputs();
         let outputs = crate::audio::list_outputs();
@@ -841,11 +869,87 @@ impl Blightnet {
             &pref.speaker,
             crate::audio::default_output_name(),
         );
-        let mixer = Mixer::with_output(
-            root.clone(),
-            Some(speaker_name.as_str()).filter(|s| !s.is_empty()),
-        )
-        .or_else(|_| Mixer::new(root.clone()))?;
+        note(BootMsg::Step("devices"));
+        note(BootMsg::NeedMixer(speaker_name.clone()));
+        let chat = load_chat(&root).unwrap_or_else(|| {
+            vec!["INDEX // stamp a Handle, then Host or Join, then JACK IN.".into()]
+        });
+        let mut chars = crate::chars::load(&root);
+        if chars.is_empty() {
+            let mut ada = Character::new("hearthsong");
+            ada.name = "Ada".into();
+            ada.hp = 12;
+            ada.hp_max = 12;
+            ada.gp = 80;
+            chars.push(ada);
+        }
+        let saved = load_saved(&root);
+        let contacts = net::load_contacts(&root);
+        let crews = load_crews(&root);
+        let inbox = load_inbox(&root);
+        let names = Names::load(&root);
+        let combat_log = load_combat_log(&root);
+        let notes = load_notes(&root, "Traveller");
+        let changelog = load_changelog(&root);
+        let nethooks = crate::nethook::load_all(&root);
+        let rotn = crate::rotn::Rotn::load(&root);
+        let recon = crate::recon::load(&root);
+        let net = NetHub::new("Traveller".into(), &root);
+        note(BootMsg::Step("records"));
+        let netspace = crate::netspace::Netspace::new();
+        note(BootMsg::Step("city"));
+        let cam_name = pref.camera;
+        Ok(Desk {
+            root,
+            catalog,
+            inputs,
+            outputs,
+            mic_name,
+            speaker_name,
+            cam_name,
+            chat,
+            chars,
+            saved,
+            contacts,
+            crews,
+            inbox,
+            names,
+            combat_log,
+            notes,
+            changelog,
+            nethooks,
+            rotn,
+            recon,
+            net,
+            netspace,
+        })
+    }
+
+    fn from_parts(desk: Desk, mixer: Mixer) -> Result<Self, String> {
+        let Desk {
+            root,
+            catalog,
+            inputs,
+            outputs,
+            mic_name,
+            speaker_name,
+            cam_name,
+            chat,
+            chars,
+            saved,
+            contacts,
+            crews,
+            inbox,
+            names,
+            combat_log,
+            notes,
+            changelog,
+            nethooks,
+            rotn,
+            recon,
+            net,
+            netspace,
+        } = desk;
         let place = catalog
             .settings(false)
             .first()
@@ -856,7 +960,6 @@ impl Blightnet {
             catalog,
             root: root.clone(),
             page: Page::Boot,
-            boot_at: Instant::now(),
             blight: false,
             master: 0.85,
             time: "day",
@@ -869,22 +972,9 @@ impl Blightnet {
             catalog_pick: 0,
             handle: "Traveller".into(),
             status: "Offline".into(),
-            chat: load_chat(&root).unwrap_or_else(|| {
-                vec!["INDEX // stamp a Handle, then Host or Join, then JACK IN.".into()]
-            }),
+            chat,
             chat_in: String::new(),
-            chars: {
-                let mut rows = crate::chars::load(&root);
-                if rows.is_empty() {
-                    let mut ada = Character::new("hearthsong");
-                    ada.name = "Ada".into();
-                    ada.hp = 12;
-                    ada.hp_max = 12;
-                    ada.gp = 80;
-                    rows.push(ada);
-                }
-                rows
-            },
+            chars,
             char_i: 0,
             dice: String::new(),
             mic_gain: 1.0,
@@ -905,7 +995,7 @@ impl Blightnet {
             overlay_cat: "Bestiary",
             mix_search: String::new(),
             mix_msg: String::new(),
-            saved: load_saved(&root),
+            saved,
             held_mix: None,
             map: MapBoard::default(),
             radio_on: false,
@@ -937,13 +1027,13 @@ impl Blightnet {
             kit_filter: String::new(),
             kit_focus: String::new(),
             tex: TexCache::default(),
-            net: NetHub::new("Traveller".into(), &root),
+            net,
             probe_n: 0,
             probe_at: Instant::now(),
             probe_sent: HashMap::new(),
             ping_ms: HashMap::new(),
             ping_at: HashMap::new(),
-            contacts: net::load_contacts(&root),
+            contacts,
             shell: ShellPanel::None,
             join_in: String::new(),
             voice_on: false,
@@ -958,14 +1048,14 @@ impl Blightnet {
             mic_rx: None,
             mic_rate: 48000,
             _mic: None,
-            crews: load_crews(&root),
+            crews,
             crew_name: String::new(),
             chat_target: ChatTarget::Table,
             mic_name,
             speaker_name,
             inputs,
             outputs,
-            inbox: load_inbox(&root),
+            inbox,
             file_in: HashMap::new(),
             chat_saved: 0,
             is_gm: true,
@@ -979,11 +1069,11 @@ impl Blightnet {
             mix_at: Instant::now(),
             luck: Luck::Norm,
             roll: None,
-            names: Names::load(&root),
+            names,
             jack_at: Instant::now(),
-            netspace: crate::netspace::Netspace::new(),
+            netspace,
             cameras: vec![],
-            cam_name: pref.camera.clone(),
+            cam_name,
             cam_on: false,
             screen_on: false,
             video_on: false,
@@ -1007,16 +1097,16 @@ impl Blightnet {
             cat_cache: vec![],
             cat_cache_key: String::new(),
             devices_on: false,
-            combat_log: load_combat_log(&root),
-            notes: load_notes(&root, "Traveller"),
+            combat_log,
+            notes,
             notes_dirty: false,
             notes_at: Instant::now(),
-            changelog: load_changelog(&root),
+            changelog,
             zoom_path: None,
             zoom_key: None,
             rec_on: false,
             rec: vec![],
-            nethooks: crate::nethook::load_all(&root),
+            nethooks,
             hook_i: 0,
             hook_edit: false,
             hook_build: false,
@@ -1074,7 +1164,7 @@ impl Blightnet {
             send_rx: None,
             send_live: None,
             recv_focus: None,
-            rotn: crate::rotn::Rotn::load(&root),
+            rotn,
             chess: crate::chess::Game::new(),
             term: None,
             term_filter: String::new(),
@@ -1085,7 +1175,7 @@ impl Blightnet {
             calc_entry: "0".into(),
             calc_fresh: true,
             update_rx: None,
-            recon: crate::recon::load(&root),
+            recon,
             recon_i: 0,
             recon_q: String::new(),
             recon_arm: String::new(),
@@ -5669,10 +5759,6 @@ impl eframe::App for Blightnet {
         // Never sleep on this thread: Wayland frame callbacks would stall and
         // the boot screen would freeze. Cap rate with a delayed wake instead.
         ctx.request_repaint_after(FRAME);
-        if self.page == Page::Boot {
-            self.ui_boot(ctx);
-            return;
-        }
         self.ui_shell(ctx);
     }
 }
@@ -6141,181 +6227,6 @@ impl Blightnet {
         });
     }
 
-    fn paint_boot_city(&self, ui: &egui::Ui, r: Rect) {
-        let _ = self;
-        let horizon_y = r.top() + r.height() * 0.62;
-        let vanish = egui::pos2(r.center().x, horizon_y);
-        let p = ui.painter();
-        let ground = Rect::from_min_max(egui::pos2(r.left(), horizon_y), r.right_bottom());
-        p.rect_filled(ground, 0.0, Color32::from_rgb(5, 7, 12));
-        let dim_c = theme::fade(CYAN, 42);
-        for i in 0..9 {
-            let x = r.left() + r.width() * (i as f32 / 8.0);
-            p.line_segment(
-                [vanish, egui::pos2(x, r.bottom())],
-                egui::Stroke::new(1.0, dim_c),
-            );
-        }
-        let band = (r.bottom() - horizon_y).max(40.0);
-        for i in 1..5 {
-            let y = horizon_y + band * (i as f32 / 4.0);
-            p.hline(r.x_range(), y, egui::Stroke::new(1.0, theme::fade(CYAN, 28)));
-        }
-        let towers: [(f32, f32, f32, bool); 9] = [
-            (0.03, 0.045, 0.38, false),
-            (0.10, 0.07, 0.72, true),
-            (0.19, 0.05, 0.48, true),
-            (0.27, 0.09, 0.88, false),
-            (0.40, 0.06, 0.55, true),
-            (0.52, 0.08, 0.78, false),
-            (0.64, 0.05, 0.44, true),
-            (0.74, 0.09, 0.92, true),
-            (0.86, 0.06, 0.58, false),
-        ];
-        let base = r.bottom() - 6.0;
-        for (xf, wf, hf, cyan_edge) in towers {
-            let w = r.width() * wf;
-            let h = band * hf;
-            let x = r.left() + r.width() * xf;
-            let rect = Rect::from_min_max(egui::pos2(x, base - h), egui::pos2((x + w).min(r.right() - 4.0), base));
-            let edge = if cyan_edge { CYAN } else { theme::HOT };
-            theme::fill_chamfer(
-                ui,
-                rect,
-                5.0,
-                Color32::from_rgb(7, 9, 14),
-                egui::Stroke::new(1.0, theme::fade(edge, 190)),
-            );
-            let mark = if cyan_edge {
-                theme::fade(CYAN, 210)
-            } else {
-                theme::fade(theme::ACID, 200)
-            };
-            p.rect_filled(
-                Rect::from_center_size(rect.center() + Vec2::new(0.0, -h * 0.14), Vec2::splat(3.0)),
-                0.0,
-                mark,
-            );
-            p.rect_filled(
-                Rect::from_center_size(rect.center() + Vec2::new(0.0, h * 0.16), Vec2::splat(3.0)),
-                0.0,
-                theme::fade(edge, 150),
-            );
-        }
-    }
-
-    fn ui_boot(&mut self, ctx: &egui::Context) {
-        let t = self.boot_at.elapsed().as_secs_f32();
-        let skip = t > 0.2
-            && ctx.input(|i| {
-                i.pointer.any_click()
-                    || i.events.iter().any(|e| {
-                        matches!(
-                            e,
-                            egui::Event::Key { pressed: true, .. }
-                                | egui::Event::PointerButton { pressed: true, .. }
-                        )
-                    })
-            });
-        if skip || t > 8.6 {
-            self.page = Page::Index;
-        }
-        egui::CentralPanel::default()
-            .frame(egui::Frame::NONE.fill(theme::BG))
-            .show(ctx, |ui| {
-                let r = ui.max_rect();
-                ui.painter().rect_filled(r, 0.0, theme::BG);
-                ui.painter().rect_stroke(
-                    r,
-                    0.0,
-                    egui::Stroke::new(1.0, theme::HOT),
-                    egui::StrokeKind::Inside,
-                );
-                theme::hud_ticks(ui, r.shrink(10.0), CYAN, 16.0);
-                self.paint_boot_city(ui, r);
-                let grow = (t / 2.4).clamp(0.0, 1.0);
-                let anchor = egui::pos2(r.center().x, r.top() + r.height() * 0.34);
-                let frame = Rect::from_center_size(
-                    anchor,
-                    Vec2::new(
-                        r.width() * (0.50 + 0.18 * grow),
-                        r.height() * (0.42 + 0.10 * grow),
-                    ),
-                );
-                let edge = mix_rgb(theme::HOT, CYAN, grow);
-                theme::fill_chamfer(
-                    ui,
-                    frame,
-                    16.0,
-                    Color32::from_rgba_unmultiplied(6, 8, 12, 230),
-                    egui::Stroke::new(1.5, edge),
-                );
-                theme::hud_ticks(ui, frame.shrink(10.0), CYAN, 12.0);
-                if t < 3.2 {
-                    let scan = r.top() + (t / 3.2) * r.height();
-                    ui.painter().hline(
-                        r.x_range(),
-                        scan,
-                        egui::Stroke::new(8.0, Color32::from_rgba_unmultiplied(77, 232, 255, 22)),
-                    );
-                    ui.painter().hline(r.x_range(), scan, egui::Stroke::new(1.0, CYAN));
-                }
-                ui.painter().text(
-                    anchor + Vec2::new(0.0, -72.0),
-                    egui::Align2::CENTER_CENTER,
-                    "BLIGHTNET",
-                    FontId::new(42.0, theme::display()),
-                    theme::ACID,
-                );
-                ui.painter().rect_filled(
-                    Rect::from_center_size(anchor + Vec2::new(0.0, -44.0), Vec2::new(120.0, 2.0)),
-                    0.0,
-                    CYAN,
-                );
-                ui.painter().text(
-                    anchor + Vec2::new(0.0, -26.0),
-                    egui::Align2::CENTER_CENTER,
-                    "LOCAL NODE",
-                    FontId::new(13.0, theme::mono()),
-                    CYAN,
-                );
-                let lines: &[(&str, &str, f32, Color32)] = &[
-                    ("ok", "lock        data/daemon.lock", 0.55, CREAM),
-                    ("ok", "handshake   x25519 · chacha20", 1.45, CREAM),
-                    ("ok", "listen      127.0.0.1:18766", 2.35, CYAN),
-                    ("ok", "node        WAITING · press Online", 3.25, CREAM),
-                    ("ok", "shell       ready", 4.15, theme::ACID),
-                ];
-                for (i, (ok, rest, at, color)) in lines.iter().enumerate() {
-                    if t < *at {
-                        continue;
-                    }
-                    let y = anchor.y + 8.0 + i as f32 * 22.0;
-                    let x = anchor.x - 210.0;
-                    ui.painter().text(
-                        egui::pos2(x, y),
-                        egui::Align2::LEFT_TOP,
-                        *ok,
-                        FontId::new(14.0, theme::mono()),
-                        CYAN,
-                    );
-                    ui.painter().text(
-                        egui::pos2(x + 36.0, y),
-                        egui::Align2::LEFT_TOP,
-                        *rest,
-                        FontId::new(14.0, theme::mono()),
-                        *color,
-                    );
-                }
-                ui.painter().text(
-                    egui::pos2(r.center().x, r.top() + r.height() * 0.585),
-                    egui::Align2::CENTER_CENTER,
-                    "CLICK OR PRESS ANY KEY TO SKIP",
-                    FontId::new(12.0, theme::mono()),
-                    DIM,
-                );
-            });
-    }
 
 
     fn ui_index(&mut self, ui: &mut egui::Ui, t: f32) {
@@ -12298,15 +12209,6 @@ fn status_pair(ui: &mut egui::Ui, k: &str, v: &str, value: Color32) {
     ui.label(RichText::new(v).family(theme::mono()).size(10.0).color(value));
 }
 
-fn mix_rgb(a: Color32, b: Color32, t: f32) -> Color32 {
-    let t = t.clamp(0.0, 1.0);
-    Color32::from_rgb(
-        (a.r() as f32 + (b.r() as f32 - a.r() as f32) * t) as u8,
-        (a.g() as f32 + (b.g() as f32 - a.g() as f32) * t) as u8,
-        (a.b() as f32 + (b.b() as f32 - a.b() as f32) * t) as u8,
-    )
-}
-
 fn meta(ui: &mut egui::Ui, k: &str, v: &str) {
     meta_c(ui, k, v, CREAM);
 }
@@ -13282,6 +13184,300 @@ fn write_picture(img: &image::DynamicImage, dest: &Path) -> Result<(), String> {
     }
 }
 
+fn boot_open(elapsed: f32, ready: bool, skip: bool) -> bool {
+    if !ready {
+        return false;
+    }
+    if skip && elapsed > BOOT_SKIP {
+        return true;
+    }
+    elapsed >= BOOT_HOLD
+}
+
+fn boot_frac(done: u32, total: u32) -> f32 {
+    if total == 0 {
+        return 0.0;
+    }
+    (done as f32 / total as f32).clamp(0.0, 1.0)
+}
+
+fn boot_line(step: &str) -> &'static str {
+    match step {
+        "catalog" => "catalog    mix, places, scenes",
+        "devices" => "devices    mics and speakers",
+        "mixer" => "mixer      local sound",
+        "records" => "records    sheets, notes, pages",
+        "city" => "city       netspace",
+        _ => "load       working",
+    }
+}
+
+enum BootMsg {
+    Step(&'static str),
+    NeedMixer(String),
+    Desk(Desk),
+    Failed(String),
+}
+
+pub struct Launch {
+    root: PathBuf,
+    boot_at: Instant,
+    skip: bool,
+    steps: Vec<&'static str>,
+    err: String,
+    mixer: Option<Mixer>,
+    app: Option<Blightnet>,
+    rx: Receiver<BootMsg>,
+    visuals: bool,
+}
+
+impl Launch {
+    pub fn start(root: PathBuf) -> Self {
+        let (tx, rx) = mpsc::channel();
+        let folder = root.clone();
+        std::thread::spawn(move || {
+            let tx_note = tx.clone();
+            let loaded = Blightnet::prepare(folder, move |msg| {
+                let _ = tx_note.send(msg);
+            });
+            match loaded {
+                Ok(desk) => {
+                    let _ = tx.send(BootMsg::Desk(desk));
+                }
+                Err(err) => {
+                    let _ = tx.send(BootMsg::Failed(err));
+                }
+            }
+        });
+        Self {
+            root,
+            boot_at: Instant::now(),
+            skip: false,
+            steps: Vec::new(),
+            err: String::new(),
+            mixer: None,
+            app: None,
+            rx,
+            visuals: false,
+        }
+    }
+
+    fn open_mixer(&mut self, speaker: String) {
+        if self.mixer.is_some() || !self.err.is_empty() {
+            return;
+        }
+        let chosen = if speaker.is_empty() { None } else { Some(speaker.as_str()) };
+        match Mixer::with_output(self.root.clone(), chosen).or_else(|_| Mixer::new(self.root.clone()))
+        {
+            Ok(mixer) => {
+                self.mixer = Some(mixer);
+                if !self.steps.contains(&"mixer") {
+                    self.steps.push("mixer");
+                }
+            }
+            Err(err) => self.err = err,
+        }
+    }
+
+    fn drain(&mut self) {
+        loop {
+            match self.rx.try_recv() {
+                Ok(BootMsg::Step(step)) => {
+                    if !self.steps.contains(&step) {
+                        self.steps.push(step);
+                    }
+                }
+                Ok(BootMsg::NeedMixer(speaker)) => self.open_mixer(speaker),
+                Ok(BootMsg::Desk(desk)) => {
+                    if self.mixer.is_none() {
+                        self.open_mixer(desk.speaker_name.clone());
+                    }
+                    if self.err.is_empty() {
+                        if let Some(mixer) = self.mixer.take() {
+                            match Blightnet::from_parts(desk, mixer) {
+                                Ok(mut app) => {
+                                    app.page = Page::Index;
+                                    self.app = Some(app);
+                                }
+                                Err(err) => self.err = err,
+                            }
+                        }
+                    }
+                }
+                Ok(BootMsg::Failed(err)) => self.err = err,
+                Err(TryRecvError::Empty) => break,
+                Err(TryRecvError::Disconnected) => {
+                    if self.app.is_none() && self.err.is_empty() {
+                        self.err = "The load stopped.".into();
+                    }
+                    break;
+                }
+            }
+        }
+    }
+
+    fn paint(&self, ctx: &egui::Context) {
+        let ready = self.app.is_some();
+        let frac = if ready {
+            1.0
+        } else {
+            boot_frac(self.steps.len() as u32, BOOT_STEPS)
+        };
+        let t = self.boot_at.elapsed().as_secs_f32();
+        egui::CentralPanel::default()
+            .frame(egui::Frame::NONE.fill(theme::BG))
+            .show(ctx, |ui| {
+                let r = ui.max_rect();
+                ui.painter().rect_filled(r, 0.0, theme::BG);
+                theme::holo_grid(ui, r);
+                ui.painter().rect_stroke(
+                    r,
+                    0.0,
+                    egui::Stroke::new(1.0, theme::HOT),
+                    egui::StrokeKind::Inside,
+                );
+                theme::hud_ticks(ui, r.shrink(10.0), CYAN, 16.0);
+                let plate = Rect::from_center_size(
+                    egui::pos2(r.center().x, r.center().y - 8.0),
+                    Vec2::new((r.width() - 80.0).clamp(420.0, 680.0), 380.0),
+                );
+                theme::holo_frame(ui, plate, 12.0);
+                let anchor = plate.center();
+                ui.painter().text(
+                    anchor + Vec2::new(0.0, -140.0),
+                    egui::Align2::CENTER_CENTER,
+                    "BLIGHTNET",
+                    FontId::new(42.0, theme::display()),
+                    theme::ACID,
+                );
+                ui.painter().rect_filled(
+                    Rect::from_center_size(anchor + Vec2::new(0.0, -112.0), Vec2::new(120.0, 2.0)),
+                    0.0,
+                    CYAN,
+                );
+                ui.painter().text(
+                    anchor + Vec2::new(0.0, -90.0),
+                    egui::Align2::CENTER_CENTER,
+                    "LOCAL NODE",
+                    FontId::new(13.0, theme::mono()),
+                    CYAN,
+                );
+                for (i, step) in self.steps.iter().enumerate() {
+                    let y = anchor.y - 58.0 + i as f32 * 22.0;
+                    ui.painter().text(
+                        egui::pos2(anchor.x - 220.0, y),
+                        egui::Align2::LEFT_TOP,
+                        "ok",
+                        FontId::new(14.0, theme::mono()),
+                        CYAN,
+                    );
+                    ui.painter().text(
+                        egui::pos2(anchor.x - 184.0, y),
+                        egui::Align2::LEFT_TOP,
+                        boot_line(step),
+                        FontId::new(14.0, theme::mono()),
+                        CREAM,
+                    );
+                }
+                ui.painter().text(
+                    egui::pos2(
+                        anchor.x - 220.0,
+                        anchor.y - 58.0 + self.steps.len() as f32 * 22.0,
+                    ),
+                    egui::Align2::LEFT_TOP,
+                    if ready {
+                        "ok   node       waiting · press Online"
+                    } else {
+                        "     node       waiting · press Online"
+                    },
+                    FontId::new(14.0, theme::mono()),
+                    if ready { theme::ACID } else { DIM },
+                );
+                if !self.err.is_empty() {
+                    ui.painter().text(
+                        egui::pos2(anchor.x, plate.bottom() - 86.0),
+                        egui::Align2::CENTER_CENTER,
+                        &self.err,
+                        FontId::new(13.0, theme::mono()),
+                        KILL,
+                    );
+                }
+                let track = Rect::from_center_size(
+                    egui::pos2(anchor.x, plate.bottom() - 52.0),
+                    Vec2::new(440.0, 4.0),
+                );
+                ui.painter()
+                    .rect_filled(track, 0.0, theme::fade(KILL, 110));
+                let mut fill = track;
+                fill.max.x = track.left() + track.width() * frac;
+                ui.painter().rect_filled(fill, 0.0, CYAN);
+                if frac > 0.0 {
+                    let scan = r.top() + frac * (r.bottom() - r.top() - 2.0);
+                    ui.painter().hline(
+                        r.x_range(),
+                        scan,
+                        egui::Stroke::new(8.0, Color32::from_rgba_unmultiplied(77, 232, 255, 28)),
+                    );
+                    ui.painter().hline(r.x_range(), scan, egui::Stroke::new(1.0, CYAN));
+                }
+                let hint = if !self.err.is_empty() {
+                    "THE LOAD STOPPED"
+                } else if ready {
+                    "OPENING"
+                } else if self.skip || t <= BOOT_SKIP {
+                    "LOADING"
+                } else {
+                    "CLICK OR PRESS ANY KEY TO SKIP"
+                };
+                ui.painter().text(
+                    egui::pos2(anchor.x, plate.bottom() - 28.0),
+                    egui::Align2::CENTER_CENTER,
+                    hint,
+                    FontId::new(12.0, theme::mono()),
+                    DIM,
+                );
+            });
+    }
+}
+
+impl eframe::App for Launch {
+    fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
+        self.drain();
+        let t = self.boot_at.elapsed().as_secs_f32();
+        let pressed = t > BOOT_SKIP
+            && ctx.input(|i| {
+                i.pointer.any_click()
+                    || i.events.iter().any(|e| {
+                        matches!(
+                            e,
+                            egui::Event::Key { pressed: true, .. }
+                                | egui::Event::PointerButton { pressed: true, .. }
+                        )
+                    })
+            });
+        if pressed {
+            self.skip = true;
+        }
+        if self.err.is_empty() && boot_open(t, self.app.is_some(), self.skip) {
+            if let Some(app) = self.app.as_mut() {
+                app.page = Page::Index;
+                app.update(ctx, frame);
+            }
+            return;
+        }
+        if !self.visuals {
+            ctx.set_visuals(theme::visuals());
+            ctx.style_mut(|s| {
+                s.interaction.tooltip_delay = 0.08;
+                s.interaction.tooltip_grace_time = 0.12;
+            });
+            self.visuals = true;
+        }
+        ctx.request_repaint_after(FRAME);
+        self.paint(ctx);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -13684,6 +13880,18 @@ mod tests {
             Some(62.5)
         );
         assert!(parse_ffmpeg_duration("no clock here").is_none());
+    }
+
+    #[test]
+    fn boot_waits_for_the_load() {
+        assert!(!boot_open(2.0, false, true));
+        assert!(!boot_open(0.1, true, true));
+        assert!(boot_open(0.3, true, true));
+        assert!(!boot_open(1.0, true, false));
+        assert!(boot_open(1.6, true, false));
+        assert_eq!(boot_frac(0, 5), 0.0);
+        assert!((boot_frac(2, 5) - 0.4).abs() < 0.001);
+        assert_eq!(boot_frac(5, 5), 1.0);
     }
 
     #[test]

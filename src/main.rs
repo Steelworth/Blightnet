@@ -23,7 +23,7 @@ mod theme;
 mod tree;
 mod video;
 
-use app::Blightnet;
+use app::Launch;
 use eframe::egui;
 use eframe::egui_wgpu::WgpuConfiguration;
 use eframe::wgpu;
@@ -122,13 +122,7 @@ fn main() -> eframe::Result<()> {
         Box::new(move |cc| {
             egui_extras::install_image_loaders(&cc.egui_ctx);
             crate::theme::install_fonts(&cc.egui_ctx);
-            match Blightnet::new(root.clone()) {
-                Ok(app) => Ok(Box::new(app)),
-                Err(e) => {
-                    eprintln!("blightnet: {e}");
-                    Err(e.into())
-                }
-            }
+            Ok(Box::new(Launch::start(root.clone())))
         }),
     )
 }
