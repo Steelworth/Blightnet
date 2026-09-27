@@ -4,6 +4,8 @@ The deck writes here so you can see what changed after an update. Newest first. 
 
 ## 2026-09-27
 
+- The window is a still hologram. A cyan grid sits behind the pages. Panels are dark glass with a red edge, a cyan line on top, and a cyan stroke shifted one pixel. That shift does not move.
+- Hot pink is gone. The idle edge, the open tab, and the window frame use the same red as Leave, Delete, and the close button. A selected control stays acid. Hover stays cyan.
 - The tutorial walks the whole desk. Each card opens that part of the window: the front desk, host and join, the table tools, talk, the player, the folders, the shell, recon, pages, the city, and the fixer.
 - TREE is a tab for the folders on this computer. Open a folder, make a file or a folder, and delete asks again. The top of the disk and this Blightnet folder stay. Nothing in the tree is sent to the table.
 - The terminal scrolls, lists the commands on this computer, and stays in this folder. Nothing typed there is sent.

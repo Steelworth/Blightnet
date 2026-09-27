@@ -5683,9 +5683,9 @@ impl Blightnet {
         egui::CentralPanel::default()
             .frame(egui::Frame::NONE.fill(theme::BG))
             .show(ctx, |ui| {
-                theme::scanlines(ui, ui.max_rect());
                 let win = ui.max_rect();
                 ui.painter().rect_filled(win, 0.0, theme::BG);
+                theme::holo_grid(ui, win);
                 ui.painter().rect_stroke(
                     win,
                     0.0,
@@ -8173,7 +8173,7 @@ impl Blightnet {
                         }
                     });
                     if self.is_gm
-                        && theme::neon_btn_color(ui, "Run clock", theme::HOT, self.clock_run)
+                        && theme::neon_btn_color(ui, "Run clock", theme::ACID, self.clock_run)
                             .clicked()
                     {
                         self.clock_run = !self.clock_run;
@@ -12313,8 +12313,8 @@ fn meta(ui: &mut egui::Ui, k: &str, v: &str) {
 
 fn meta_c(ui: &mut egui::Ui, k: &str, v: &str, value: Color32) {
     egui::Frame::NONE
-        .fill(PANEL)
-        .stroke(egui::Stroke::new(1.0, theme::fade(theme::HOT, 140)))
+        .fill(theme::glass())
+        .stroke(egui::Stroke::new(1.0, theme::fade(theme::HOT, 170)))
         .inner_margin(egui::Margin::symmetric(8, 3))
         .show(ui, |ui| {
             ui.horizontal(|ui| {

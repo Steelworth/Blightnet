@@ -16,7 +16,11 @@ pub const CYAN: Color32 = Color32::from_rgb(77, 232, 255);
 pub const NEON_RED: Color32 = Color32::from_rgb(255, 23, 68);
 pub const KILL: Color32 = NEON_RED;
 pub const ACID: Color32 = Color32::from_rgb(214, 255, 63);
-pub const HOT: Color32 = Color32::from_rgb(255, 79, 216);
+pub const HOT: Color32 = NEON_RED;
+
+pub fn glass() -> Color32 {
+    Color32::from_rgba_unmultiplied(PANEL.r(), PANEL.g(), PANEL.b(), 168)
+}
 pub const INK: Color32 = Color32::from_rgb(17, 17, 17);
 pub const RAIL: Color32 = Color32::from_rgb(8, 12, 16);
 
@@ -140,14 +144,50 @@ pub fn fade(c: Color32, a: u8) -> Color32 {
 
 pub fn pane() -> egui::Frame {
     egui::Frame::NONE
-        .fill(PANEL)
-        .stroke(Stroke::new(1.0, fade(HOT, 200)))
+        .fill(glass())
+        .stroke(Stroke::new(1.0, fade(NEON_RED, 200)))
         .inner_margin(egui::Margin::symmetric(12, 10))
 }
 
 pub fn plate(ui: &Ui, rect: Rect) {
-    fill_chamfer(ui, rect, 8.0, PANEL, Stroke::new(1.0, fade(HOT, 190)));
-    hairline_top(ui, rect.shrink(1.0), fade(CYAN, 170));
+    holo_frame(ui, rect, 8.0);
+}
+
+/// Dark glass, a red edge, a cyan top line, and a cyan stroke shifted one pixel.
+pub fn holo_frame(ui: &Ui, rect: Rect, cut: f32) {
+    holo_frame_at(ui, rect, cut, true);
+}
+
+pub fn holo_frame_at(ui: &Ui, rect: Rect, cut: f32, ticks: bool) {
+    stroke_chamfer(
+        ui,
+        rect.translate(Vec2::new(1.0, 1.0)),
+        cut,
+        Stroke::new(1.0, fade(CYAN, 80)),
+    );
+    fill_chamfer(ui, rect, cut, glass(), Stroke::new(1.0, fade(NEON_RED, 210)));
+    hairline_top(ui, rect.shrink(1.0), fade(CYAN, 180));
+    if ticks {
+        hud_ticks(ui, rect.shrink(4.0), fade(CYAN, 110), 8.0);
+    }
+}
+
+/// Coarse cyan grid. Drawn once behind the pages. It does not move.
+pub fn holo_grid(ui: &Ui, rect: Rect) {
+    let p = ui.painter();
+    let line = Stroke::new(1.0, fade(CYAN, 22));
+    let step = 48.0;
+    let mut x = rect.left();
+    while x < rect.right() {
+        p.vline(x, rect.y_range(), line);
+        x += step;
+    }
+    let mut y = rect.top();
+    while y < rect.bottom() {
+        p.hline(rect.x_range(), y, line);
+        y += step;
+    }
+    scanlines(ui, rect);
 }
 
 pub fn hairline_top(ui: &Ui, rect: Rect, color: Color32) {
@@ -171,8 +211,14 @@ pub fn wide_btn(ui: &mut Ui, label: &str, sub: &str, on: bool) -> egui::Response
     let h = if sub.is_empty() { 36.0 } else { 52.0 };
     let (rect, resp) = ui.allocate_exact_size(Vec2::new(w, h), Sense::click());
     let hover = resp.hovered();
-    let edge = if on || hover { ACID } else { fade(CYAN, 90) };
-    fill_chamfer(ui, rect, 6.0, PANEL, Stroke::new(if on { 1.5 } else { 1.0 }, edge));
+    let edge = if on || hover { ACID } else { fade(NEON_RED, 170) };
+    fill_chamfer(
+        ui,
+        rect,
+        6.0,
+        glass(),
+        Stroke::new(if on { 1.5 } else { 1.0 }, edge),
+    );
     ui.painter().hline(
         (rect.left() + 8.0)..=(rect.right() - 8.0),
         rect.bottom() - 1.0,
@@ -479,20 +525,20 @@ pub fn visuals() -> egui::Visuals {
     v.widgets.noninteractive.bg_fill = PANEL;
     v.widgets.noninteractive.fg_stroke = Stroke::new(1.0, MUTED);
     v.widgets.inactive.bg_fill = PANEL;
-    v.widgets.inactive.weak_bg_fill = Color32::from_rgb(14, 12, 8);
-    v.widgets.inactive.bg_stroke = Stroke::new(1.0, fade(HOT, 140));
+    v.widgets.inactive.weak_bg_fill = Color32::from_rgb(8, 14, 18);
+    v.widgets.inactive.bg_stroke = Stroke::new(1.0, fade(NEON_RED, 150));
     v.widgets.inactive.fg_stroke = Stroke::new(1.0, CREAM);
-    v.widgets.hovered.bg_fill = Color32::from_rgb(28, 16, 28);
-    v.widgets.hovered.weak_bg_fill = Color32::from_rgb(28, 16, 28);
+    v.widgets.hovered.bg_fill = Color32::from_rgb(10, 24, 32);
+    v.widgets.hovered.weak_bg_fill = Color32::from_rgb(10, 24, 32);
     v.widgets.hovered.bg_stroke = Stroke::new(1.0, CYAN);
     v.widgets.hovered.fg_stroke = Stroke::new(1.0, ACID);
     v.widgets.active.bg_fill = ACID;
-    v.widgets.active.bg_stroke = Stroke::new(1.0, HOT);
+    v.widgets.active.bg_stroke = Stroke::new(1.0, NEON_RED);
     v.widgets.active.fg_stroke = Stroke::new(1.0, INK);
-    v.widgets.open.bg_fill = Color32::from_rgb(18, 12, 16);
-    v.widgets.open.bg_stroke = Stroke::new(1.0, HOT);
+    v.widgets.open.bg_fill = Color32::from_rgb(8, 14, 20);
+    v.widgets.open.bg_stroke = Stroke::new(1.0, NEON_RED);
     v.selection.bg_fill = fade(ACID, 80);
-    v.selection.stroke = Stroke::new(1.0, HOT);
+    v.selection.stroke = Stroke::new(1.0, NEON_RED);
     v.text_cursor.stroke = Stroke::new(1.6, ACID);
     v.popup_shadow = egui::Shadow {
         offset: [2, 3],
@@ -518,6 +564,14 @@ pub fn chamfer(rect: Rect, cut: f32) -> Vec<Pos2> {
 pub fn fill_chamfer(ui: &Ui, rect: Rect, cut: f32, fill: Color32, stroke: Stroke) {
     ui.painter()
         .add(Shape::convex_polygon(chamfer(rect, cut), fill, stroke));
+}
+
+pub fn stroke_chamfer(ui: &Ui, rect: Rect, cut: f32, stroke: Stroke) {
+    let mut pts = chamfer(rect, cut);
+    if let Some(first) = pts.first().copied() {
+        pts.push(first);
+    }
+    ui.painter().add(Shape::line(pts, stroke));
 }
 
 pub fn hatch(ui: &Ui, rect: Rect, color: Color32) {
@@ -637,7 +691,7 @@ fn neon_btn_paint(ui: &mut Ui, label: &str, color: Color32, solid: bool) -> egui
     } else if hover {
         fade(CYAN, 36)
     } else {
-        fade(HOT, 18)
+        glass()
     };
     let fg = if danger && solid {
         CREAM
@@ -651,6 +705,14 @@ fn neon_btn_paint(ui: &mut Ui, label: &str, color: Color32, solid: bool) -> egui
         CREAM
     };
     let stroke = if hover && !solid { CYAN } else { accent };
+    if !solid && !danger {
+        stroke_chamfer(
+            ui,
+            rect.translate(Vec2::new(1.0, 1.0)),
+            6.0,
+            Stroke::new(1.0, fade(CYAN, 70)),
+        );
+    }
     fill_chamfer(ui, rect, 6.0, fill, Stroke::new(if solid { 1.4 } else { 1.0 }, stroke));
     hairline_top(ui, rect.shrink(1.5), fade(ACID, if solid { 80 } else { 28 }));
     ui.painter().galley(
@@ -878,6 +940,13 @@ mod tests {
         assert!(super::hint_for("Ada").contains("Ada"));
         assert!(super::hint_for("Stop 3s").contains("voice note"));
     }
+
+    #[test]
+    fn edge_is_the_neon_red() {
+        assert_eq!(super::HOT, super::NEON_RED);
+        assert_eq!((super::HOT.r(), super::HOT.g(), super::HOT.b()), (255, 23, 68));
+        assert_ne!((super::HOT.r(), super::HOT.g(), super::HOT.b()), (255, 79, 216));
+    }
 }
 
 pub fn sys_tile(ui: &mut Ui, id: &str, title: &str, sub: &str, go: &str, kill: bool) -> egui::Response {
@@ -891,9 +960,9 @@ pub fn sys_tile(ui: &mut Ui, id: &str, title: &str, sub: &str, go: &str, kill: b
     } else {
         fade(HOT, 70)
     };
-    fill_chamfer(ui, rect, 8.0, PANEL, Stroke::new(if hover || kill { 1.4 } else { 1.0 }, edge));
-    if !kill {
-        hud_ticks(ui, rect.shrink(5.0), fade(CYAN, if hover { 200 } else { 120 }), 8.0);
+    holo_frame_at(ui, rect, 8.0, !kill);
+    if hover || kill {
+        fill_chamfer(ui, rect, 8.0, Color32::TRANSPARENT, Stroke::new(1.4, edge));
     }
     let id_c = if kill { NEON_RED } else { ACID };
     let clip = rect.shrink2(Vec2::new(12.0, 8.0));
@@ -929,7 +998,10 @@ pub fn jack_tile(ui: &mut Ui, t: f32) -> egui::Response {
     let (rect, resp) = ui.allocate_exact_size(size, Sense::click());
     let hover = resp.hovered();
     let edge = if hover { ACID } else { fade(HOT, 80) };
-    fill_chamfer(ui, rect, 10.0, PANEL, Stroke::new(if hover { 1.6 } else { 1.0 }, edge));
+    holo_frame(ui, rect, 10.0);
+    if hover {
+        fill_chamfer(ui, rect, 10.0, Color32::TRANSPARENT, Stroke::new(1.6, edge));
+    }
     hud_ticks(ui, rect.shrink(8.0), fade(CYAN, if hover { 210 } else { 130 }), 14.0);
     let c = rect.center();
     let p = ui.painter().with_clip_rect(rect.shrink(8.0));
