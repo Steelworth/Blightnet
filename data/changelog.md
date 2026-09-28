@@ -4,6 +4,12 @@ The deck writes here so you can see what changed after an update. Newest first. 
 
 ## 2026-09-28
 
+- Hearthsong level-up can take a feat instead of ASI, and caster spell slots refresh on Confirm.
+- Table initiative tracks Sync, Roll, set, Next, and Clear. Host and GM drive it; guests see it over the wire.
+- Map TOKEN ROLL uses the selected token as attacker and Aim (or another open sheet) as the victim, then can apply HP.
+- Sheet conditions can be toggled (5e set plus RED Stunned/Immobilized). Peers get them with the sheet.
+- When a sheet is marked defeated, the GM gets a kill-credit Confirm plate before any XP or IP is awarded. Cancel leaves sheets alone.
+
 - Players can Level up their own sheets. The GM can still Level up any sheet.
 - Blight Level up spends IP on role rank, stats, and skills. Role rank and Level stay labeled apart.
 - The GM Characters desk can award XP or IP to one sheet or the party, and run a party short or long rest without editing every Bio field.

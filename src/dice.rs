@@ -19,6 +19,8 @@ pub struct Roll {
     pub heal: bool,
     pub label: String,
     pub target: String,
+    /// Sheet id of the attacker when known (TOKEN ROLL / sheet attack).
+    pub attacker: String,
     pub start: Instant,
     pub applied: bool,
 }
@@ -143,6 +145,7 @@ pub fn fire(label: &str, formula: &str, heal: bool, luck: Luck, target: &str) ->
         heal,
         label: label.into(),
         target: target.into(),
+        attacker: String::new(),
         start: Instant::now(),
         applied: false,
     }

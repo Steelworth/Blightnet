@@ -1,5 +1,5 @@
 use crate::images::TexCache;
-use crate::theme::{self, CREAM, CYAN, DIM, KILL, MUTED, PANEL};
+use crate::theme::{self, CREAM, CYAN, DIM, KILL, MUTED, ORANGE, PANEL};
 use eframe::egui::{self, Color32, FontId, RichText, Vec2};
 use rand::Rng;
 use serde::{Deserialize, Serialize};
@@ -231,12 +231,18 @@ pub struct Character {
     pub inspiration: bool,
     #[serde(default)]
     pub exhaustion: i32,
+    /// Active condition flags (5e / RED). Display + toggle only — not a rules engine.
+    #[serde(default)]
+    pub conditions: Vec<String>,
     #[serde(default)]
     pub attacks: Vec<Attack>,
     #[serde(default)]
     pub features: String,
     #[serde(default)]
     pub feats: String,
+    /// Initiative bonus / imported datashard `init` (0 = roll from DEX/REF).
+    #[serde(default)]
+    pub init: i32,
     #[serde(default)]
     pub proficiencies: String,
     #[serde(default)]
@@ -330,6 +336,15 @@ pub struct Character {
     /// Session-local — see `leveling`.
     #[serde(skip)]
     pub pending_ip: HashMap<String, i32>,
+    /// At ASI levels: take a feat instead of the 2-point ASI spend.
+    #[serde(skip)]
+    pub level_feat: bool,
+    /// Queued feat name while leveling (Hearthsong). Free-text OK if catalog empty.
+    #[serde(skip)]
+    pub pending_feat: String,
+    /// Optional note for the queued feat.
+    #[serde(skip)]
+    pub pending_feat_note: String,
 }
 
 fn default_name() -> String {
@@ -399,6 +414,7 @@ impl Character {
             dead: false,
             inspiration: false,
             exhaustion: 0,
+            conditions: Vec::new(),
             attacks: vec![
                 Attack {
                     name: "Punch".into(),
@@ -423,6 +439,7 @@ impl Character {
             ],
             features: String::new(),
             feats: String::new(),
+            init: 0,
             proficiencies: String::new(),
             languages: String::new(),
             equipment: String::new(),
@@ -467,6 +484,9 @@ impl Character {
             leveling: false,
             pending_asi: HashMap::new(),
             pending_ip: HashMap::new(),
+            level_feat: false,
+            pending_feat: String::new(),
+            pending_feat_note: String::new(),
         }
     }
 
@@ -722,6 +742,203 @@ pub fn award_points(c: &mut Character, amount: i32) {
     }
 }
 
+/// Common 5e-flavored sheet statuses (flags/display — not a full rules engine).
+pub const CONDITIONS_5E: &[&str] = &[
+    "Blinded",
+    "Charmed",
+    "Frightened",
+    "Grappled",
+    "Incapacitated",
+    "Invisible",
+    "Paralyzed",
+    "Petrified",
+    "Poisoned",
+    "Prone",
+    "Restrained",
+    "Stunned",
+    "Unconscious",
+];
+
+/// Cyberpunk RED / Blight Role statuses — extend, do not fork a parallel set.
+pub const CONDITIONS_RED: &[&str] = &["Stunned", "Immobilized"];
+
+pub fn conditions_catalog(blight: bool) -> &'static [&'static str] {
+    if blight {
+        CONDITIONS_RED
+    } else {
+        CONDITIONS_5E
+    }
+}
+
+pub fn condition_abbrev(name: &str) -> &'static str {
+    match name.trim() {
+        "Blinded" => "BLI",
+        "Charmed" => "CHA",
+        "Frightened" => "FRI",
+        "Grappled" => "GRA",
+        "Incapacitated" => "INC",
+        "Invisible" => "INV",
+        "Paralyzed" => "PAR",
+        "Petrified" => "PET",
+        "Poisoned" => "POI",
+        "Prone" => "PRN",
+        "Restrained" => "RES",
+        "Stunned" => "STU",
+        "Unconscious" => "UNC",
+        "Immobilized" => "IMB",
+        _ => "???",
+    }
+}
+
+pub fn has_condition(c: &Character, name: &str) -> bool {
+    let n = name.trim();
+    c.conditions.iter().any(|x| x.eq_ignore_ascii_case(n))
+}
+
+/// Toggle a named condition. Returns true when the condition is now active.
+pub fn toggle_condition(c: &mut Character, name: &str) -> bool {
+    let n = name.trim();
+    if n.is_empty() {
+        return false;
+    }
+    if let Some(i) = c
+        .conditions
+        .iter()
+        .position(|x| x.eq_ignore_ascii_case(n))
+    {
+        c.conditions.remove(i);
+        false
+    } else {
+        // Canonical casing from catalog when known.
+        let canon = conditions_catalog(c.is_blight())
+            .iter()
+            .chain(CONDITIONS_5E.iter())
+            .chain(CONDITIONS_RED.iter())
+            .find(|x| x.eq_ignore_ascii_case(n))
+            .copied()
+            .unwrap_or(n);
+        c.conditions.push(canon.to_string());
+        true
+    }
+}
+
+/// Short chip line for token tooltip / Aim strip (empty when none).
+pub fn conditions_label(c: &Character) -> String {
+    if c.conditions.is_empty() {
+        return String::new();
+    }
+    c.conditions
+        .iter()
+        .map(|n| condition_abbrev(n))
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+/// GM or sheet owner may toggle conditions.
+pub fn can_edit_sheet(c: &Character, is_gm: bool, viewer_id: &str) -> bool {
+    can_level_up(c, is_gm, viewer_id)
+}
+
+/// Pending kill-credit award (session). Never auto-applies — GM must Confirm.
+#[derive(Clone, Debug)]
+pub struct KillCredit {
+    pub victim_id: String,
+    pub victim_name: String,
+    pub killer_id: String,
+    pub killer_name: String,
+    pub amount: i32,
+    /// Award every non-NPC when true; otherwise `recipients`.
+    pub party: bool,
+    pub recipients: Vec<String>,
+}
+
+impl KillCredit {
+    pub fn from_defeat(victim: &Character, killer_id: &str, killer_name: &str) -> Self {
+        Self {
+            victim_id: victim.id.clone(),
+            victim_name: victim.name.clone(),
+            killer_id: killer_id.to_string(),
+            killer_name: killer_name.to_string(),
+            amount: suggest_defeat_xp(victim),
+            party: true,
+            recipients: Vec::new(),
+        }
+    }
+}
+
+/// Rough table award suggestion from victim level (GM can edit before Confirm).
+pub fn suggest_defeat_xp(victim: &Character) -> i32 {
+    let lv = victim.level.max(1);
+    if victim.is_blight() {
+        (lv * 20).clamp(10, 500)
+    } else {
+        (lv * 50).clamp(25, 2_500)
+    }
+}
+
+/// Apply a confirmed kill-credit award. Returns the combat-log line.
+pub fn apply_kill_credit(chars: &mut [Character], credit: &KillCredit) -> String {
+    let amt = credit.amount.max(0);
+    let mut names = Vec::new();
+    if credit.party {
+        for c in chars.iter_mut() {
+            if c.npc {
+                continue;
+            }
+            award_points(c, amt);
+            names.push(c.name.clone());
+        }
+    } else {
+        for id in &credit.recipients {
+            if let Some(c) = chars.iter_mut().find(|c| c.id == *id || c.name == *id) {
+                if c.npc {
+                    continue;
+                }
+                award_points(c, amt);
+                names.push(c.name.clone());
+            }
+        }
+    }
+    let who = if names.is_empty() {
+        "—".into()
+    } else {
+        names.join(", ")
+    };
+    let kill = if credit.killer_name.trim().is_empty() {
+        "unknown".into()
+    } else {
+        credit.killer_name.clone()
+    };
+    let unit = if chars.iter().any(|c| !c.npc && c.is_blight()) && !chars.iter().any(|c| !c.npc && !c.is_blight()) {
+        "IP"
+    } else {
+        "XP"
+    };
+    format!(
+        "Kill credit · {} defeated by {} · GM awards {} {} to {}.",
+        credit.victim_name, kill, amt, unit, who
+    )
+}
+
+/// Mark a sheet defeated (0 HP / downed). Returns kill-credit draft when newly defeated.
+pub fn mark_defeated(
+    c: &mut Character,
+    killer_id: &str,
+    killer_name: &str,
+) -> Option<KillCredit> {
+    let already = c.dead || (c.hp <= 0 && c.downed);
+    c.hp = 0;
+    c.downed = true;
+    if c.npc {
+        c.dead = true;
+        c.downed = false;
+    }
+    if already {
+        return None;
+    }
+    Some(KillCredit::from_defeat(c, killer_id, killer_name))
+}
+
 /// Short or long rest every non-NPC sheet (party clerical one-click).
 pub fn party_rest(chars: &mut [Character], long: bool, log: &mut Vec<String>) {
     for c in chars.iter_mut() {
@@ -770,13 +987,20 @@ pub fn confirm_blight_spend(c: &mut Character) -> bool {
     true
 }
 
-/// Apply Hearthsong level (+ HD/HP, ASI spend, feature line). False if ASI incomplete.
+/// Apply Hearthsong level (+ HD/HP, ASI or feat, feature line, caster slots).
+/// False if ASI incomplete (need 2 pts) or feat pick with empty name.
 pub fn confirm_hearth_level(c: &mut Character) -> bool {
     let next = (c.level + 1).min(20);
     let asi = is_asi_level(&c.class_name, next);
     let spent: i32 = c.pending_asi.values().copied().sum();
-    if asi && spent != 2 {
-        return false;
+    if asi {
+        if c.level_feat {
+            if c.pending_feat.trim().is_empty() {
+                return false;
+            }
+        } else if spent != 2 {
+            return false;
+        }
     }
     let hd = class_hd(&c.class_name);
     let con = Character::modifier(c.abil("con"));
@@ -785,18 +1009,40 @@ pub fn confirm_hearth_level(c: &mut Character) -> bool {
     c.hp_max += gain;
     c.hp += gain;
     c.hit_dice = format!("{}d{hd}", c.level);
-    for (id, n) in c.pending_asi.clone() {
-        let v = (c.abil(&id) + n).min(20);
-        c.abilities.insert(id, v);
-    }
-    let feat = features_for(&c.class_name, next);
-    if !feat.is_empty() {
+    if asi && c.level_feat {
+        let name = c.pending_feat.trim().to_string();
+        let note = c.pending_feat_note.trim().to_string();
+        let line = if note.is_empty() {
+            name.clone()
+        } else {
+            format!("{name} — {note}")
+        };
+        if !c.feats.is_empty() {
+            c.feats.push('\n');
+        }
+        c.feats.push_str(&line);
         if !c.features.is_empty() {
             c.features.push('\n');
         }
-        c.features.push_str(&format!("Lv{next}: {feat}"));
+        c.features.push_str(&format!("Lv{next}: Feat: {name}"));
+    } else {
+        for (id, n) in c.pending_asi.clone() {
+            let v = (c.abil(&id) + n).min(20);
+            c.abilities.insert(id, v);
+        }
+        let feat = features_for(&c.class_name, next);
+        if !feat.is_empty() {
+            if !c.features.is_empty() {
+                c.features.push('\n');
+            }
+            c.features.push_str(&format!("Lv{next}: {feat}"));
+        }
     }
+    apply_spell_slots(c);
     c.pending_asi.clear();
+    c.pending_feat.clear();
+    c.pending_feat_note.clear();
+    c.level_feat = false;
     c.leveling = false;
     true
 }
@@ -804,6 +1050,9 @@ pub fn confirm_hearth_level(c: &mut Character) -> bool {
 pub fn cancel_leveling(c: &mut Character) {
     c.pending_asi.clear();
     c.pending_ip.clear();
+    c.pending_feat.clear();
+    c.pending_feat_note.clear();
+    c.level_feat = false;
     c.leveling = false;
 }
 
@@ -826,6 +1075,8 @@ pub fn ui_sheet(
     send: &mut Option<String>,
     // Set true when Confirm level/spend lands so the host can flush + push sheets now.
     sync: &mut bool,
+    // Session kill-credit prompt (GM Confirm). Filled by defeat / 0 HP path.
+    kill_credit: &mut Option<KillCredit>,
 ) {
     if is_gm {
         let drop = ui.interact(ui.clip_rect(), egui::Id::new("sheet-drop"), egui::Sense::hover());
@@ -1016,6 +1267,62 @@ pub fn ui_sheet(
                     save(root, chars);
                 }
             });
+            if let Some(mut credit) = kill_credit.take() {
+                ui.add_space(4.0);
+                let kill = if credit.killer_name.trim().is_empty() {
+                    "unknown"
+                } else {
+                    credit.killer_name.as_str()
+                };
+                wrap(
+                    ui,
+                    &format!(
+                        "KILL CREDIT · {} defeated by {} — edit amount, pick Party or This sheet, then Confirm.",
+                        credit.victim_name, kill
+                    ),
+                    CYAN,
+                    11.0,
+                );
+                let mut clear = false;
+                ui.horizontal_wrapped(|ui| {
+                    ui.label(if blight { "Award IP" } else { "Award XP" });
+                    ui.add(egui::DragValue::new(&mut credit.amount).range(0..=50_000));
+                    if theme::neon_btn_color(ui, "Party", CYAN, credit.party).clicked() {
+                        credit.party = true;
+                        credit.recipients.clear();
+                    }
+                    let i = (*char_i).min(chars.len().saturating_sub(1));
+                    let sheet_on = !credit.party
+                        && chars
+                            .get(i)
+                            .map(|c| credit.recipients.iter().any(|id| id == &c.id))
+                            .unwrap_or(false);
+                    if theme::neon_btn_color(ui, "This sheet", CYAN, sheet_on).clicked() {
+                        credit.party = false;
+                        credit.recipients.clear();
+                        if let Some(c) = chars.get(i) {
+                            credit.recipients.push(c.id.clone());
+                        }
+                    }
+                    if theme::neon_btn(ui, "Confirm").clicked() {
+                        if !credit.party && credit.recipients.is_empty() {
+                            if let Some(c) = chars.get(i) {
+                                credit.recipients.push(c.id.clone());
+                            }
+                        }
+                        let line = apply_kill_credit(chars, &credit);
+                        log.push(line);
+                        *sync = true;
+                        save(root, chars);
+                        clear = true;
+                    } else if theme::muted_btn(ui, "Dismiss").clicked() {
+                        clear = true;
+                    }
+                });
+                if !clear {
+                    *kill_credit = Some(credit);
+                }
+            }
         }
         wrap(
             ui,
@@ -1057,7 +1364,12 @@ pub fn ui_sheet(
                     };
                     let aimed = target.as_deref() == Some(c.id.as_str());
                     let on = *char_i == i;
-                    let label = format!("{mark} {}  {}/{}", c.name, c.hp, c.hp_max);
+                    let chips = conditions_label(c);
+                    let label = if chips.is_empty() {
+                        format!("{mark} {}  {}/{}", c.name, c.hp, c.hp_max)
+                    } else {
+                        format!("{mark} {}  {}/{} · {}", c.name, c.hp, c.hp_max, chips)
+                    };
                     let sub = if aimed { "aimed" } else { "" };
                     let row_w = (ui.available_width() - 76.0).max(72.0);
                     ui.horizontal(|ui| {
@@ -1126,6 +1438,15 @@ pub fn ui_sheet(
                         .size(11.0)
                         .color(CYAN),
                     );
+                    let chips = conditions_label(c);
+                    if !chips.is_empty() {
+                        ui.label(
+                            RichText::new(chips)
+                                .family(theme::mono())
+                                .size(10.0)
+                                .color(ORANGE),
+                        );
+                    }
                 });
                 if let Some(p) = pic(ui, tex, root, &c.fullbody, body) {
                     *zoom = Some(p);
@@ -1170,11 +1491,14 @@ pub fn ui_sheet(
             c.leveling = true;
             c.pending_asi.clear();
             c.pending_ip.clear();
+            c.level_feat = false;
+            c.pending_feat.clear();
+            c.pending_feat_note.clear();
         }
     });
     if c.leveling {
         // Persist via sync flag → app force_sheets (avoid reborrow of chars while `c` is live).
-        if ui_level_up(ui, c, blight_sheet) {
+        if ui_level_up(ui, root, c, blight_sheet) {
             *sync = true;
         }
     }
@@ -1195,7 +1519,20 @@ pub fn ui_sheet(
         (_, 0) => ui_bio(ui, c, blight_sheet, names),
         (false, 1) => ui_stats_5e(ui, c),
         (true, 1) => ui_stats_red(ui, c),
-        (_, 2) => ui_combat(ui, c, blight_sheet, dice, log, luck, roll, target),
+        (_, 2) => ui_combat(
+            ui,
+            c,
+            blight_sheet,
+            dice,
+            log,
+            luck,
+            roll,
+            target,
+            is_gm,
+            viewer_id,
+            sync,
+            kill_credit,
+        ),
         (false, 3) => ui_magic(ui, c),
         (true, 3) => ui_red_skills(ui, c),
         (false, 4) => ui_features(ui, c),
@@ -1438,6 +1775,10 @@ fn ui_combat(
     luck: &mut crate::dice::Luck,
     roll: &mut Option<crate::dice::Roll>,
     target: &mut Option<String>,
+    is_gm: bool,
+    viewer_id: &str,
+    sync: &mut bool,
+    kill_credit: &mut Option<KillCredit>,
 ) {
     ui.horizontal_wrapped(|ui| {
         ui.label("HP");
@@ -1474,6 +1815,45 @@ fn ui_combat(
         }
         ui.checkbox(&mut c.downed, "Downed");
         ui.checkbox(&mut c.dead, "Dead");
+        if is_gm && theme::neon_btn_color(ui, "Mark defeated", KILL, false).clicked() {
+            let draft = mark_defeated(c, "", "GM");
+            if let Some(d) = draft {
+                *kill_credit = Some(d);
+            } else if kill_credit.is_none() {
+                *kill_credit = Some(KillCredit::from_defeat(c, "", "GM"));
+            }
+            *sync = true;
+        }
+    });
+    let can_cond = can_edit_sheet(c, is_gm, viewer_id);
+    wrap(
+        ui,
+        if blight {
+            "CONDITIONS · Stunned / Immobilized (Blight Role). GM or sheet owner toggles."
+        } else {
+            "CONDITIONS · common 5e statuses. Flags and display only — not a full rules engine."
+        },
+        MUTED,
+        11.0,
+    );
+    ui.horizontal_wrapped(|ui| {
+        for name in conditions_catalog(blight) {
+            let on = has_condition(c, name);
+            let lab = format!("{} {}", condition_abbrev(name), name);
+            if can_cond {
+                if theme::neon_btn_color(ui, &lab, if on { ORANGE } else { CYAN }, on).clicked() {
+                    toggle_condition(c, name);
+                    *sync = true;
+                }
+            } else {
+                ui.label(
+                    RichText::new(if on { lab } else { condition_abbrev(name).to_string() })
+                        .family(theme::mono())
+                        .size(11.0)
+                        .color(if on { ORANGE } else { DIM }),
+                );
+            }
+        }
     });
     if c.hp <= 0 && !c.dead {
         c.downed = true;
@@ -1534,13 +1914,14 @@ fn ui_combat(
         let name = c.attacks[i].name.clone();
         let low = name.to_lowercase();
         let heal = low.contains("heal") || low.contains("cure") || low.contains("aid");
-        let r = crate::dice::fire(
+        let mut r = crate::dice::fire(
             &name,
             &dmg,
             heal,
             *luck,
             target.as_deref().unwrap_or(""),
         );
+        r.attacker = c.id.clone();
         *dice = format!(
             "{}: {}% {}{}",
             name,
@@ -1782,6 +2163,184 @@ fn class_hd(name: &str) -> i32 {
     }
 }
 
+/// Small built-in feat kit for Hearthsong ASI|feat picker.
+pub const HEARTH_FEATS: &[&str] = &[
+    "Alert",
+    "Athlete",
+    "Charger",
+    "Crossbow Expert",
+    "Dual Wielder",
+    "Durable",
+    "Great Weapon Master",
+    "Healer",
+    "Lucky",
+    "Mage Slayer",
+    "Magic Initiate",
+    "Mobile",
+    "Observant",
+    "Polearm Master",
+    "Resilient",
+    "Savage Attacker",
+    "Sentinel",
+    "Sharpshooter",
+    "Shield Master",
+    "Skilled",
+    "Tough",
+    "War Caster",
+    "Weapon Master",
+];
+
+/// Optional `data/feats.json` — strings or `{ "name" }`. Missing → built-in kit.
+pub fn feat_catalog(root: &Path) -> Vec<String> {
+    let path = root.join("data/feats.json");
+    let fallback = || HEARTH_FEATS.iter().map(|s| (*s).to_string()).collect::<Vec<_>>();
+    let Ok(raw) = std::fs::read_to_string(&path) else {
+        return fallback();
+    };
+    let Ok(v) = serde_json::from_str::<serde_json::Value>(&raw) else {
+        return fallback();
+    };
+    let mut out = Vec::new();
+    if let Some(arr) = v.as_array() {
+        for row in arr {
+            if let Some(s) = row.as_str() {
+                let t = s.trim();
+                if !t.is_empty() {
+                    out.push(t.to_string());
+                }
+            } else if let Some(s) = row.get("name").and_then(|x| x.as_str()) {
+                let t = s.trim();
+                if !t.is_empty() {
+                    out.push(t.to_string());
+                }
+            }
+        }
+    }
+    if out.is_empty() {
+        fallback()
+    } else {
+        out
+    }
+}
+
+/// Full-caster slot progression (lv 1–20). Index 0 pad.
+const FULL_CASTER_SLOTS: &[[i32; 9]] = &[
+    [0, 0, 0, 0, 0, 0, 0, 0, 0],
+    [2, 0, 0, 0, 0, 0, 0, 0, 0],
+    [3, 0, 0, 0, 0, 0, 0, 0, 0],
+    [4, 2, 0, 0, 0, 0, 0, 0, 0],
+    [4, 3, 0, 0, 0, 0, 0, 0, 0],
+    [4, 3, 2, 0, 0, 0, 0, 0, 0],
+    [4, 3, 3, 0, 0, 0, 0, 0, 0],
+    [4, 3, 3, 1, 0, 0, 0, 0, 0],
+    [4, 3, 3, 2, 0, 0, 0, 0, 0],
+    [4, 3, 3, 3, 1, 0, 0, 0, 0],
+    [4, 3, 3, 3, 2, 0, 0, 0, 0],
+    [4, 3, 3, 3, 2, 1, 0, 0, 0],
+    [4, 3, 3, 3, 2, 1, 0, 0, 0],
+    [4, 3, 3, 3, 2, 1, 1, 0, 0],
+    [4, 3, 3, 3, 2, 1, 1, 0, 0],
+    [4, 3, 3, 3, 2, 1, 1, 1, 0],
+    [4, 3, 3, 3, 2, 1, 1, 1, 0],
+    [4, 3, 3, 3, 2, 1, 1, 1, 1],
+    [4, 3, 3, 3, 3, 1, 1, 1, 1],
+    [4, 3, 3, 3, 3, 2, 1, 1, 1],
+    [4, 3, 3, 3, 3, 2, 2, 1, 1],
+];
+
+const HALF_CASTER_SLOTS: &[[i32; 9]] = &[
+    [0, 0, 0, 0, 0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0, 0, 0, 0, 0],
+    [2, 0, 0, 0, 0, 0, 0, 0, 0],
+    [3, 0, 0, 0, 0, 0, 0, 0, 0],
+    [3, 0, 0, 0, 0, 0, 0, 0, 0],
+    [4, 2, 0, 0, 0, 0, 0, 0, 0],
+    [4, 2, 0, 0, 0, 0, 0, 0, 0],
+    [4, 3, 0, 0, 0, 0, 0, 0, 0],
+    [4, 3, 0, 0, 0, 0, 0, 0, 0],
+    [4, 3, 2, 0, 0, 0, 0, 0, 0],
+    [4, 3, 2, 0, 0, 0, 0, 0, 0],
+    [4, 3, 3, 0, 0, 0, 0, 0, 0],
+    [4, 3, 3, 0, 0, 0, 0, 0, 0],
+    [4, 3, 3, 1, 0, 0, 0, 0, 0],
+    [4, 3, 3, 1, 0, 0, 0, 0, 0],
+    [4, 3, 3, 2, 0, 0, 0, 0, 0],
+    [4, 3, 3, 2, 0, 0, 0, 0, 0],
+    [4, 3, 3, 3, 1, 0, 0, 0, 0],
+    [4, 3, 3, 3, 1, 0, 0, 0, 0],
+    [4, 3, 3, 3, 2, 0, 0, 0, 0],
+    [4, 3, 3, 3, 2, 0, 0, 0, 0],
+];
+
+/// Core caster spell-slot table. Unknown class → None (leave slots alone / manual).
+pub fn spell_slots_for(class: &str, level: i32) -> Option<[i32; 9]> {
+    let lv = level.clamp(1, 20) as usize;
+    match class.trim().to_lowercase().as_str() {
+        "wizard" | "cleric" | "bard" | "druid" | "sorcerer" => Some(FULL_CASTER_SLOTS[lv]),
+        "paladin" | "ranger" => Some(HALF_CASTER_SLOTS[lv]),
+        "warlock" => {
+            let (n, tier) = match lv {
+                1..=2 => (1, 1),
+                3..=4 => (2, 2),
+                5..=6 => (2, 3),
+                7..=8 => (2, 4),
+                9..=10 => (2, 5),
+                11..=16 => (3, 5),
+                _ => (4, 5),
+            };
+            let mut slots = [0; 9];
+            slots[tier - 1] = n;
+            Some(slots)
+        }
+        _ => None,
+    }
+}
+
+/// Update Magic tab slots_max for known casters. Unknown class → no change.
+pub fn apply_spell_slots(c: &mut Character) {
+    let Some(slots) = spell_slots_for(&c.class_name, c.level) else {
+        return;
+    };
+    if c.slots_max.len() < 9 {
+        c.slots_max.resize(9, 0);
+    }
+    if c.slots_used.len() < 9 {
+        c.slots_used.resize(9, 0);
+    }
+    for i in 0..9 {
+        c.slots_max[i] = slots[i];
+        if c.slots_used[i] > c.slots_max[i] {
+            c.slots_used[i] = c.slots_max[i];
+        }
+    }
+}
+
+/// Initiative bonus: imported `init` if set, else REF (Blight) or DEX mod (Hearth).
+pub fn initiative_bonus(c: &Character) -> i32 {
+    if c.init != 0 {
+        return c.init;
+    }
+    if c.is_blight() {
+        c.red("ref")
+    } else {
+        Character::modifier(c.abil("dex"))
+    }
+}
+
+/// Roll initiative. Blight uses datashard `init` when present; else d10+REF. Hearth d20+DEX.
+pub fn roll_initiative(c: &Character) -> i32 {
+    let mut rng = rand::thread_rng();
+    if c.is_blight() {
+        if c.init != 0 {
+            c.init
+        } else {
+            rng.gen_range(1..=10) + c.red("ref")
+        }
+    } else {
+        rng.gen_range(1..=20) + initiative_bonus(c)
+    }
+}
+
 fn is_asi_level(class: &str, lv: i32) -> bool {
     let fighterish = matches!(class.to_lowercase().as_str(), "fighter");
     let rogue = class.eq_ignore_ascii_case("rogue");
@@ -1821,7 +2380,7 @@ fn features_for(class: &str, lv: i32) -> &'static str {
     }
 }
 
-fn ui_level_up(ui: &mut egui::Ui, c: &mut Character, blight: bool) -> bool {
+fn ui_level_up(ui: &mut egui::Ui, root: &Path, c: &mut Character, blight: bool) -> bool {
     let mut confirmed = false;
     let next = (c.level + 1).min(if blight { 10 } else { 20 });
     wrap(
@@ -1829,7 +2388,7 @@ fn ui_level_up(ui: &mut egui::Ui, c: &mut Character, blight: bool) -> bool {
         if blight {
             "Spend IP in one pass, then confirm. Role rank, STATs, and skills you click are queued until you confirm."
         } else {
-            "One level at a time. If this level grants ability points, spend every point here before you confirm."
+            "One level at a time. If this level grants ability points, spend every point here before you confirm — or pick a feat."
         },
         MUTED,
         12.0,
@@ -1901,7 +2460,7 @@ fn ui_level_up(ui: &mut egui::Ui, c: &mut Character, blight: bool) -> bool {
     }
     let asi = is_asi_level(&c.class_name, next);
     let spent: i32 = c.pending_asi.values().copied().sum();
-    let need = if asi { 2 } else { 0 };
+    let need = if asi && !c.level_feat { 2 } else { 0 };
     wrap(
         ui,
         &format!(
@@ -1915,40 +2474,98 @@ fn ui_level_up(ui: &mut egui::Ui, c: &mut Character, blight: bool) -> bool {
         12.0,
     );
     if asi {
-        wrap(
-            ui,
-            &format!(
-                "Ability points {spent}/{need}. Put them all in now — two in one score, or split."
-            ),
-            CYAN,
-            12.0,
-        );
+        wrap(ui, "ASI level — pick Ability Score Improvement or a Feat.", MUTED, 11.0);
         ui.horizontal_wrapped(|ui| {
-            for (id, lab) in ABILS {
-                let now = c.abil(id);
-                let extra = *c.pending_asi.get(*id).unwrap_or(&0);
-                if theme::neon_btn(
-                    ui,
-                    &format!(
-                        "{lab} {now}{}",
-                        if extra > 0 {
-                            format!("+{extra}")
-                        } else {
-                            String::new()
-                        }
-                    ),
-                )
-                .clicked()
-                    && spent < need
-                    && now + extra < 20
-                {
-                    c.pending_asi.insert((*id).into(), extra + 1);
-                }
+            if theme::neon_btn_color(ui, "ASI", CYAN, !c.level_feat).clicked() {
+                c.level_feat = false;
+                c.pending_feat.clear();
+                c.pending_feat_note.clear();
+            }
+            if theme::neon_btn_color(ui, "Feat", CYAN, c.level_feat).clicked() {
+                c.level_feat = true;
+                c.pending_asi.clear();
             }
         });
+        if c.level_feat {
+            let feats = feat_catalog(root);
+            wrap(
+                ui,
+                if feats.is_empty() {
+                    "No feat catalog — type a feat name below. Confirm never waits on the kit."
+                } else {
+                    "Pick from the kit, or type any feat name. Catalog gaps never block Confirm."
+                },
+                MUTED,
+                11.0,
+            );
+            if !feats.is_empty() {
+                ui.horizontal_wrapped(|ui| {
+                    for name in &feats {
+                        let on = c.pending_feat == *name;
+                        if theme::neon_btn_color(ui, name, CYAN, on).clicked() {
+                            c.pending_feat = name.clone();
+                        }
+                    }
+                });
+            }
+            ui.horizontal(|ui| {
+                ui.label(RichText::new("Feat").color(DIM).small());
+                ui.add(
+                    egui::TextEdit::singleline(&mut c.pending_feat)
+                        .hint_text("feat name…")
+                        .desired_width(180.0),
+                );
+            });
+            ui.horizontal(|ui| {
+                ui.label(RichText::new("Note").color(DIM).small());
+                ui.add(
+                    egui::TextEdit::singleline(&mut c.pending_feat_note)
+                        .hint_text("optional…")
+                        .desired_width(220.0),
+                );
+            });
+        } else {
+            wrap(
+                ui,
+                &format!(
+                    "Ability points {spent}/{need}. Put them all in now — two in one score, or split."
+                ),
+                CYAN,
+                12.0,
+            );
+            ui.horizontal_wrapped(|ui| {
+                for (id, lab) in ABILS {
+                    let now = c.abil(id);
+                    let extra = *c.pending_asi.get(*id).unwrap_or(&0);
+                    if theme::neon_btn(
+                        ui,
+                        &format!(
+                            "{lab} {now}{}",
+                            if extra > 0 {
+                                format!("+{extra}")
+                            } else {
+                                String::new()
+                            }
+                        ),
+                    )
+                    .clicked()
+                        && spent < need
+                        && now + extra < 20
+                    {
+                        c.pending_asi.insert((*id).into(), extra + 1);
+                    }
+                }
+            });
+        }
     }
     ui.horizontal(|ui| {
-        let ready = !asi || spent == need;
+        let ready = if !asi {
+            true
+        } else if c.level_feat {
+            !c.pending_feat.trim().is_empty()
+        } else {
+            spent == need
+        };
         if ready && theme::neon_btn(ui, "Confirm level").clicked() {
             if confirm_hearth_level(c) {
                 confirmed = true;
@@ -2484,7 +3101,7 @@ fn attack_stat<'a>(c: &'a Character, name: &str, dmg: &str) -> &'a str {
     }
 }
 
-fn scaled_attack(c: &Character, atk: &Attack) -> (String, String, i32) {
+pub fn scaled_attack(c: &Character, atk: &Attack) -> (String, String, i32) {
     let blight = c.is_blight();
     let stat = attack_stat(c, &atk.name, &atk.damage);
     let magic = atk
@@ -2687,6 +3304,7 @@ fn sheet_from_red(row: &serde_json::Value, existing: &[Character], cat: &str) ->
         json_i32(row, "ac", 11)
     };
     ch.humanity = json_i32(row, "humanity", 50);
+    ch.init = json_i32(row, "init", 0);
     if row.get("move").is_some() {
         ch.speed = format!("{} m", json_i32(row, "move", 6));
     }
@@ -3483,5 +4101,159 @@ mod tests {
         cancel_leveling(&mut c);
         assert!(!c.leveling);
         assert!(c.pending_asi.is_empty());
+        assert!(!c.level_feat);
+        assert!(c.pending_feat.is_empty());
+    }
+
+    #[test]
+    fn confirm_hearth_feat_pick_skips_asi_and_writes_feats() {
+        let mut c = Character::new("hearthsong");
+        c.class_name = "Wizard".into();
+        c.level = 3;
+        c.hp = 10;
+        c.hp_max = 10;
+        c.abilities.insert("int".into(), 14);
+        c.leveling = true;
+        c.level_feat = true;
+        assert!(!confirm_hearth_level(&mut c), "empty feat name blocks");
+        c.pending_feat = "War Caster".into();
+        c.pending_feat_note = "conc check".into();
+        assert!(confirm_hearth_level(&mut c));
+        assert_eq!(c.level, 4);
+        assert_eq!(c.abil("int"), 14, "ASI not applied");
+        assert!(c.feats.contains("War Caster"));
+        assert!(c.feats.contains("conc check"));
+        assert!(c.features.contains("Feat: War Caster"));
+        assert_eq!(c.slots_max[0], 4);
+        assert_eq!(c.slots_max[1], 3);
+        assert!(!c.leveling);
+        assert!(!c.level_feat);
+    }
+
+    #[test]
+    fn spell_slots_known_casters_unknown_untouched() {
+        assert_eq!(spell_slots_for("Wizard", 1).unwrap()[0], 2);
+        assert_eq!(spell_slots_for("cleric", 5).unwrap()[2], 2);
+        assert_eq!(spell_slots_for("Paladin", 2).unwrap()[0], 2);
+        assert_eq!(spell_slots_for("warlock", 5).unwrap()[2], 2);
+        assert!(spell_slots_for("Fighter", 5).is_none());
+        assert!(spell_slots_for("Solo", 3).is_none());
+        let mut c = Character::new("hearthsong");
+        c.class_name = "Rogue".into();
+        c.level = 4;
+        c.slots_max = vec![1, 0, 0, 0, 0, 0, 0, 0, 0];
+        apply_spell_slots(&mut c);
+        assert_eq!(c.slots_max[0], 1, "unknown class leaves slots");
+        c.class_name = "Sorcerer".into();
+        c.level = 3;
+        apply_spell_slots(&mut c);
+        assert_eq!(c.slots_max, vec![4, 2, 0, 0, 0, 0, 0, 0, 0]);
+    }
+
+    #[test]
+    fn initiative_uses_datashard_init_and_dex_fallback() {
+        let mut b = Character::new("blight");
+        b.init = 8;
+        assert_eq!(initiative_bonus(&b), 8);
+        assert_eq!(roll_initiative(&b), 8);
+        b.init = 0;
+        b.stats_red.insert("ref".into(), 7);
+        let r = roll_initiative(&b);
+        assert!((8..=17).contains(&r), "d10+REF got {r}");
+        let mut h = Character::new("hearthsong");
+        h.abilities.insert("dex".into(), 16);
+        assert_eq!(initiative_bonus(&h), 3);
+    }
+
+    #[test]
+    fn feat_catalog_falls_back_when_file_missing() {
+        let dir = std::env::temp_dir().join(format!("bn-feats-{}", rand::random::<u32>()));
+        let _ = std::fs::create_dir_all(&dir);
+        let list = feat_catalog(&dir);
+        assert!(!list.is_empty());
+        assert!(list.iter().any(|f| f == "Lucky"));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn sheet_from_red_imports_datashard_init() {
+        let row = serde_json::json!({
+            "name": "Solo · Street",
+            "role": "Solo",
+            "rank": 2,
+            "hp": 35,
+            "init": 7,
+            "ref": 7,
+            "body": 6
+        });
+        let ch = sheet_from_catalog("Datashard", &row, &[]);
+        assert_eq!(ch.init, 7);
+        assert!(ch.is_blight());
+    }
+
+    #[test]
+    fn condition_toggle_adds_clears_and_labels() {
+        let mut h = Character::new("hearthsong");
+        assert!(conditions_label(&h).is_empty());
+        assert!(toggle_condition(&mut h, "Poisoned"));
+        assert!(has_condition(&h, "poisoned"));
+        assert_eq!(conditions_label(&h), "POI");
+        assert!(!toggle_condition(&mut h, "Poisoned"));
+        assert!(!has_condition(&h, "Poisoned"));
+        assert!(toggle_condition(&mut h, "Blinded"));
+        assert!(toggle_condition(&mut h, "Prone"));
+        assert_eq!(conditions_label(&h), "BLI PRN");
+        let mut b = Character::new("blight");
+        assert!(toggle_condition(&mut b, "Immobilized"));
+        assert!(toggle_condition(&mut b, "Stunned"));
+        assert_eq!(conditions_label(&b), "IMB STU");
+        assert_eq!(conditions_catalog(false).len(), 13);
+        assert_eq!(conditions_catalog(true), CONDITIONS_RED);
+    }
+
+    #[test]
+    fn kill_credit_award_needs_explicit_apply() {
+        let mut rows = vec![
+            Character::new("hearthsong"),
+            Character::new("hearthsong"),
+            Character::new("hearthsong"),
+        ];
+        rows[0].name = "Ada".into();
+        rows[0].id = "pc-a".into();
+        rows[0].xp = 100;
+        rows[1].name = "Bea".into();
+        rows[1].id = "pc-b".into();
+        rows[1].xp = 100;
+        rows[2].name = "Goblin".into();
+        rows[2].id = "npc-g".into();
+        rows[2].npc = true;
+        rows[2].level = 2;
+        rows[2].xp = 0;
+        let draft = mark_defeated(&mut rows[2], "pc-a", "Ada").expect("new defeat");
+        assert!(rows[2].dead);
+        assert_eq!(rows[2].hp, 0);
+        assert_eq!(draft.killer_name, "Ada");
+        assert!(draft.amount > 0);
+        // No silent award — XP unchanged until apply_kill_credit.
+        assert_eq!(rows[0].xp, 100);
+        assert_eq!(rows[1].xp, 100);
+        let mut credit = draft;
+        credit.party = true;
+        credit.amount = 50;
+        let line = apply_kill_credit(&mut rows, &credit);
+        assert!(line.contains("Goblin"));
+        assert!(line.contains("Ada"));
+        assert!(line.contains("50"));
+        assert_eq!(rows[0].xp, 150);
+        assert_eq!(rows[1].xp, 150);
+        assert_eq!(rows[2].xp, 0, "NPC does not receive kill XP");
+        // Selected PC path
+        let mut credit = KillCredit::from_defeat(&rows[2], "pc-a", "Ada");
+        credit.party = false;
+        credit.recipients = vec!["pc-b".into()];
+        credit.amount = 10;
+        apply_kill_credit(&mut rows, &credit);
+        assert_eq!(rows[0].xp, 150);
+        assert_eq!(rows[1].xp, 160);
     }
 }

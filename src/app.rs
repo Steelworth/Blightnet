@@ -445,6 +445,107 @@ struct LiveSend {
     started: Instant,
 }
 
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+struct InitRow {
+    id: String,
+    name: String,
+    score: i32,
+    ready: bool,
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+struct InitWire {
+    rows: Vec<InitRow>,
+    turn: usize,
+}
+
+fn pack_init(rows: &[InitRow], turn: usize) -> String {
+    serde_json::to_string(&InitWire {
+        rows: rows.to_vec(),
+        turn,
+    })
+    .unwrap_or_else(|_| r#"{"rows":[],"turn":0}"#.into())
+}
+
+fn unpack_init(body: &str) -> Option<(Vec<InitRow>, usize)> {
+    let w: InitWire = serde_json::from_str(body).ok()?;
+    let turn = if w.rows.is_empty() {
+        0
+    } else {
+        w.turn.min(w.rows.len().saturating_sub(1))
+    };
+    Some((w.rows, turn))
+}
+
+/// Aim victim wins; else open roster sheet if different from attacker.
+fn resolve_roll_victim(aim: Option<&str>, open_id: Option<&str>, attacker_id: &str) -> String {
+    if let Some(a) = aim {
+        if !a.is_empty() && a != attacker_id {
+            return a.to_string();
+        }
+    }
+    if let Some(o) = open_id {
+        if !o.is_empty() && o != attacker_id {
+            return o.to_string();
+        }
+    }
+    String::new()
+}
+
+/// Build combat init roster: living PCs plus map-token sheets (NPC or otherwise).
+fn build_init_roster(chars: &[Character], tokens: &[maps::MapTok]) -> Vec<InitRow> {
+    let mut rows: Vec<InitRow> = Vec::new();
+    let mut seen = HashSet::new();
+    for c in chars {
+        if c.dead {
+            continue;
+        }
+        if !c.npc {
+            seen.insert(c.id.clone());
+            rows.push(InitRow {
+                id: c.id.clone(),
+                name: c.name.clone(),
+                score: 0,
+                ready: false,
+            });
+        }
+    }
+    for tok in tokens {
+        if tok.sheet.is_empty() {
+            continue;
+        }
+        let sid = tok.sheet.as_str();
+        if seen.contains(sid) {
+            continue;
+        }
+        if let Some(c) = chars.iter().find(|c| c.id == sid) {
+            if c.dead {
+                continue;
+            }
+            seen.insert(c.id.clone());
+            rows.push(InitRow {
+                id: c.id.clone(),
+                name: c.name.clone(),
+                score: 0,
+                ready: false,
+            });
+        } else {
+            seen.insert(sid.to_string());
+            rows.push(InitRow {
+                id: sid.to_string(),
+                name: tok.name.clone(),
+                score: 0,
+                ready: false,
+            });
+        }
+    }
+    rows
+}
+
+fn sort_init_roster(rows: &mut [InitRow]) {
+    rows.sort_by(|a, b| b.score.cmp(&a.score).then_with(|| a.name.cmp(&b.name)));
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Overlay {
     None,
@@ -591,6 +692,10 @@ pub struct Blightnet {
     chat_saved: usize,
     is_gm: bool,
     target: Option<String>,
+    /// Secondary Aim — combat HP victim (map `target` stays primary / attacker).
+    aim: Option<String>,
+    /// True while local INIT DragValue is focused — skip remote stomps.
+    init_editing: bool,
     viewing: Option<String>,
     remote_chars: HashMap<String, Vec<Character>>,
     token_sig: u64,
@@ -600,6 +705,8 @@ pub struct Blightnet {
     mix_at: Instant,
     luck: Luck,
     roll: Option<Roll>,
+    /// Session kill-credit Confirm plate (Track E). Not persisted.
+    kill_credit: Option<crate::chars::KillCredit>,
     names: Names,
     jack_at: Instant,
     netspace: crate::netspace::Netspace,
@@ -637,6 +744,11 @@ pub struct Blightnet {
     cat_cache_key: String,
     devices_on: bool,
     combat_log: Vec<String>,
+    /// Session-local initiative tracker (TABLE combat rail). Not autopilot.
+    init_rows: Vec<InitRow>,
+    init_turn: usize,
+    /// Attack index for map-token NPC Roll.
+    map_atk_i: usize,
     notes: String,
     notes_dirty: bool,
     notes_at: Instant,
@@ -1105,6 +1217,8 @@ impl Blightnet {
             chat_saved: 0,
             is_gm: true,
             target: None,
+            aim: None,
+            init_editing: false,
             viewing: None,
             remote_chars: HashMap::new(),
             token_sig: 0,
@@ -1114,6 +1228,7 @@ impl Blightnet {
             mix_at: Instant::now(),
             luck: Luck::Norm,
             roll: None,
+            kill_credit: None,
             names,
             jack_at: Instant::now(),
             netspace,
@@ -1149,6 +1264,9 @@ impl Blightnet {
             cat_cache_key: String::new(),
             devices_on: false,
             combat_log,
+            init_rows: Vec::new(),
+            init_turn: 0,
+            map_atk_i: 0,
             notes,
             notes_dirty: false,
             notes_at: Instant::now(),
@@ -2865,6 +2983,7 @@ impl Blightnet {
                     self.net.send_map_tokens_ask();
                     self.net.send_map_image_ask();
                     self.net.send_sheet_ask();
+                    self.net.send_pit("init", "ask");
                     self.push_sheets();
                 }
                 NetEvent::Left => {
@@ -2881,6 +3000,7 @@ impl Blightnet {
                         self.net.send_map_marks(self.map.marks.clone());
                     }
                     self.push_map_image();
+                    self.push_init();
                 }
                 NetEvent::Chat {
                     from,
@@ -9243,6 +9363,132 @@ impl Blightnet {
                 }
             }
         }
+        self.ui_map_token_roll(ui);
+    }
+
+    /// NPC / token Roll attack from map selection (no Seat open required).
+    fn ui_map_token_roll(&mut self, ui: &mut egui::Ui) {
+        let Some(tid) = self.target.clone() else {
+            return;
+        };
+        let on_map = self.map.tokens.iter().any(|t| {
+            let id = if t.sheet.is_empty() {
+                t.id.as_str()
+            } else {
+                t.sheet.as_str()
+            };
+            id == tid
+        });
+        if !on_map {
+            return;
+        }
+        let Some(ci) = self
+            .chars
+            .iter()
+            .position(|c| c.id == tid || c.name == tid)
+        else {
+            ui.label(
+                RichText::new("Selected token has no sheet — drop a catalog face or Aim a roster row.")
+                    .color(MUTED)
+                    .size(11.0),
+            );
+            return;
+        };
+        let cname = self.chars[ci].name.clone();
+        let attacker_id = self.chars[ci].id.clone();
+        let attacks = self.chars[ci].attacks.clone();
+        if attacks.is_empty() {
+            return;
+        }
+        let open_id = self.chars.get(self.char_i).map(|c| c.id.as_str());
+        let victim = resolve_roll_victim(self.aim.as_deref(), open_id, &attacker_id);
+        let victim_name = if victim.is_empty() {
+            "—".into()
+        } else {
+            self.chars
+                .iter()
+                .find(|c| c.id == victim || c.name == victim)
+                .map(|c| c.name.clone())
+                .unwrap_or_else(|| victim.clone())
+        };
+        let victim_src = if self
+            .aim
+            .as_deref()
+            .is_some_and(|a| a == victim.as_str())
+        {
+            "Aim"
+        } else if !victim.is_empty() {
+            "open sheet"
+        } else {
+            "set Aim on roster"
+        };
+        ui.add_space(6.0);
+        ui.label(
+            RichText::new(format!("TOKEN ROLL · {cname}"))
+                .family(theme::mono())
+                .size(11.0)
+                .color(theme::chrome().cyan),
+        );
+        ui.label(
+            RichText::new(format!(
+                "Attacker · {cname} (map) · Victim · {victim_name} ({victim_src})"
+            ))
+            .color(DIM)
+            .size(11.0),
+        );
+        if self.map_atk_i >= attacks.len() {
+            self.map_atk_i = 0;
+        }
+        ui.horizontal_wrapped(|ui| {
+            for (i, atk) in attacks.iter().enumerate() {
+                let on = self.map_atk_i == i;
+                let lab = if atk.name.trim().is_empty() {
+                    format!("Atk {}", i + 1)
+                } else {
+                    atk.name.clone()
+                };
+                if theme::neon_btn_color(ui, &lab, CYAN, on).clicked() {
+                    self.map_atk_i = i;
+                }
+            }
+        });
+        let atk = &attacks[self.map_atk_i];
+        let (hit, dmg, _) = crate::chars::scaled_attack(&self.chars[ci], atk);
+        ui.label(
+            RichText::new(format!("hit {hit}  {dmg}"))
+                .family(theme::mono())
+                .size(12.0)
+                .color(CYAN),
+        );
+        if theme::neon_btn(ui, "Roll attack").clicked() {
+            let name = atk.name.clone();
+            let low = name.to_lowercase();
+            let heal = low.contains("heal") || low.contains("cure") || low.contains("aid");
+            let r = crate::dice::fire(&name, &dmg, heal, self.luck, &victim);
+            self.dice = format!(
+                "{}: {}% {}{}",
+                name,
+                r.pct,
+                r.grade,
+                r.damage.map(|d| format!(" · {d}")).unwrap_or_default()
+            );
+            let line = format!(
+                "{} uses {} → {} ({}){}",
+                cname,
+                name,
+                if r.target.is_empty() { "—" } else { &r.target },
+                r.grade,
+                r.damage.map(|d| format!(" {d}")).unwrap_or_default()
+            );
+            self.combat_log.push(line.clone());
+            save_combat_log(&self.root, &self.combat_log);
+            if self.table_live() {
+                self.net.send_chat(&format!("{COMBAT_MARK}{line}"), None, false);
+            }
+            self.roll = Some(r);
+            self.apply_roll_hp();
+            self.force_sheets();
+        }
     }
 
     fn ui_overlay_chess(&mut self, ui: &mut egui::Ui) {
@@ -9301,6 +9547,10 @@ impl Blightnet {
     }
 
     fn apply_pit(&mut self, game: &str, body: &str, from: &str) {
+        if game == "init" {
+            self.apply_init_wire(body);
+            return;
+        }
         if game == "chess" {
             if let Some(g) = crate::chess::Game::unpack(body) {
                 self.chess = g;
@@ -10197,11 +10447,13 @@ impl Blightnet {
             ui,
             "TABLE://LOG",
             "COMBAT LOG",
-            "Shared rolls · press Log or CLOSE",
+            "Init tracker · shared rolls · press Log or CLOSE",
         ) {
             self.toggle_overlay(Overlay::Log);
             return;
         }
+        self.ui_init_tracker(ui);
+        ui.add_space(4.0);
         let combat_h = ui.available_height().max(80.0);
         ui.label(
             RichText::new("ROLLS")
@@ -10231,6 +10483,201 @@ impl Blightnet {
                     );
                 }
             });
+    }
+
+    fn can_drive_init(&self) -> bool {
+        !self.table_live() || self.net.role == Role::Host || self.is_gm
+    }
+
+    fn push_init(&self) {
+        if !self.table_live() {
+            return;
+        }
+        if !(self.net.role == Role::Host || self.is_gm) {
+            return;
+        }
+        self.net.send_pit("init", &pack_init(&self.init_rows, self.init_turn));
+    }
+
+    fn apply_init_wire(&mut self, body: &str) {
+        if body == "ask" {
+            if self.net.role == Role::Host || self.is_gm {
+                self.push_init();
+            }
+            return;
+        }
+        // Graceful: seat mid-edit keeps local scores until DragValue blurs.
+        if self.init_editing {
+            return;
+        }
+        if let Some((rows, turn)) = unpack_init(body) {
+            self.init_rows = rows;
+            self.init_turn = turn;
+        }
+    }
+
+    fn ui_init_tracker(&mut self, ui: &mut egui::Ui) {
+        ui.label(
+            RichText::new("INIT")
+                .family(theme::mono())
+                .size(11.0)
+                .color(theme::chrome().cyan),
+        );
+        let drive = self.can_drive_init();
+        ui.label(
+            RichText::new(if self.table_live() {
+                if drive {
+                    "Host/GM drives order — peers sync over Pit. Roll or set, then Next."
+                } else {
+                    "Host/GM drives order — you see the live roster."
+                }
+            } else {
+                "Clerical turn order — roll or set, then Next. No auto tactics."
+            })
+            .color(DIM)
+            .size(11.0),
+        );
+        let mut dirty = false;
+        ui.horizontal_wrapped(|ui| {
+            if drive && theme::neon_btn(ui, "Sync roster").clicked() {
+                let prev: HashMap<String, (i32, bool)> = self
+                    .init_rows
+                    .iter()
+                    .map(|r| (r.id.clone(), (r.score, r.ready)))
+                    .collect();
+                let mut rows = build_init_roster(&self.chars, &self.map.tokens);
+                for r in &mut rows {
+                    if let Some((sc, ready)) = prev.get(&r.id) {
+                        r.score = *sc;
+                        r.ready = *ready;
+                    }
+                }
+                sort_init_roster(&mut rows);
+                self.init_rows = rows;
+                if self.init_turn >= self.init_rows.len() {
+                    self.init_turn = 0;
+                }
+                dirty = true;
+            }
+            if drive && theme::neon_btn(ui, "Roll all").clicked() {
+                if self.init_rows.is_empty() {
+                    self.init_rows = build_init_roster(&self.chars, &self.map.tokens);
+                }
+                for r in &mut self.init_rows {
+                    if let Some(c) = self.chars.iter().find(|c| c.id == r.id) {
+                        r.score = crate::chars::roll_initiative(c);
+                        r.ready = true;
+                    } else {
+                        r.score = rand::thread_rng().gen_range(1..=20);
+                        r.ready = true;
+                    }
+                }
+                sort_init_roster(&mut self.init_rows);
+                self.init_turn = 0;
+                let line = format!(
+                    "Init rolled · {}",
+                    self.init_rows
+                        .iter()
+                        .map(|r| format!("{} {}", r.name, r.score))
+                        .collect::<Vec<_>>()
+                        .join(" · ")
+                );
+                self.push_combat_silent(line);
+                dirty = true;
+            }
+            if drive && theme::neon_btn(ui, "Next").clicked() && !self.init_rows.is_empty() {
+                self.init_turn = (self.init_turn + 1) % self.init_rows.len();
+                dirty = true;
+            }
+            if drive && theme::muted_btn(ui, "Clear").clicked() {
+                self.init_rows.clear();
+                self.init_turn = 0;
+                dirty = true;
+            }
+        });
+        if self.init_rows.is_empty() {
+            ui.label(
+                RichText::new(if drive {
+                    "Sync roster to pull PCs + map tokens, then Roll all or set scores."
+                } else {
+                    "Waiting for Host/GM init sync…"
+                })
+                .color(MUTED)
+                .size(12.0),
+            );
+            if dirty {
+                self.push_init();
+            }
+            return;
+        }
+        let mut resort = false;
+        let mut editing = false;
+        let turn = self.init_turn;
+        let n = self.init_rows.len();
+        for i in 0..n {
+            let is_turn = i == turn;
+            let id = self.init_rows[i].id.clone();
+            let name = self.init_rows[i].name.clone();
+            ui.horizontal(|ui| {
+                let mark = if is_turn { "►" } else { "·" };
+                ui.label(
+                    RichText::new(format!("{mark} {name}"))
+                        .family(theme::mono())
+                        .size(12.0)
+                        .color(if is_turn {
+                            theme::chrome().acid
+                        } else {
+                            CREAM
+                        }),
+                );
+                let mut score = self.init_rows[i].score;
+                if drive {
+                    let resp = ui.add(egui::DragValue::new(&mut score).range(-20..=40).speed(1.0));
+                    if resp.has_focus() || resp.dragged() {
+                        editing = true;
+                    }
+                    if resp.changed() {
+                        self.init_rows[i].score = score;
+                        self.init_rows[i].ready = true;
+                        resort = true;
+                        dirty = true;
+                    }
+                    if theme::neon_btn(ui, "Roll").clicked() {
+                        if let Some(c) = self.chars.iter().find(|c| c.id == id) {
+                            self.init_rows[i].score = crate::chars::roll_initiative(c);
+                        } else {
+                            self.init_rows[i].score = rand::thread_rng().gen_range(1..=20);
+                        }
+                        self.init_rows[i].ready = true;
+                        resort = true;
+                        dirty = true;
+                    }
+                } else {
+                    ui.label(
+                        RichText::new(format!("{score}"))
+                            .family(theme::mono())
+                            .size(12.0)
+                            .color(CYAN),
+                    );
+                }
+            });
+        }
+        self.init_editing = editing;
+        if resort {
+            let cur_id = self
+                .init_rows
+                .get(self.init_turn)
+                .map(|r| r.id.clone());
+            sort_init_roster(&mut self.init_rows);
+            if let Some(id) = cur_id {
+                if let Some(ni) = self.init_rows.iter().position(|r| r.id == id) {
+                    self.init_turn = ni;
+                }
+            }
+        }
+        if dirty {
+            self.push_init();
+        }
     }
 
     fn ui_rail_notes(&mut self, ui: &mut egui::Ui) {
@@ -10707,13 +11154,14 @@ impl Blightnet {
                 &mut self.combat_log,
                 false,
                 "",
-                &mut self.target,
+                &mut self.aim,
                 &mut self.luck,
                 &mut self.roll,
                 &self.names,
                 &mut self.zoom_path,
                 &mut None,
                 &mut remote_sync,
+                &mut self.kill_credit,
             );
             self.remote_chars.insert(id, chars);
             if self.zoom_path.is_some() {
@@ -10747,13 +11195,14 @@ impl Blightnet {
             &mut self.combat_log,
             self.is_gm,
             &oid,
-            &mut self.target,
+            &mut self.aim,
             &mut self.luck,
             &mut self.roll,
             &self.names,
             &mut self.zoom_path,
             &mut sheet_send,
             &mut sheet_sync,
+            &mut self.kill_credit,
         );
         if let Some(body) = sheet_send {
             let label = self
@@ -14913,6 +15362,87 @@ mod tests {
         let hello = std::fs::read_to_string(fresh.join("hello.txt")).unwrap_or_default();
         assert_eq!(hello, "v2", "fresh download did not get the file");
         let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn init_roster_includes_pcs_and_token_sheets_sorted() {
+        let mut pc = Character::new("hearthsong");
+        pc.id = "pc1".into();
+        pc.name = "Ada".into();
+        pc.npc = false;
+        let mut npc = Character::new("blight");
+        npc.id = "npc1".into();
+        npc.name = "Boost".into();
+        npc.npc = true;
+        npc.init = 7;
+        let toks = vec![maps::MapTok {
+            id: "t1".into(),
+            name: "Boost".into(),
+            x: 0.5,
+            y: 0.5,
+            size: 0.08,
+            image: String::new(),
+            sheet: "npc1".into(),
+        }];
+        let mut rows = build_init_roster(&[pc, npc], &toks);
+        assert_eq!(rows.len(), 2);
+        assert!(rows.iter().any(|r| r.id == "pc1"));
+        assert!(rows.iter().any(|r| r.id == "npc1"));
+        rows[0].score = 5;
+        rows[1].score = 12;
+        sort_init_roster(&mut rows);
+        assert_eq!(rows[0].score, 12);
+        assert_eq!(rows[1].score, 5);
+    }
+
+    #[test]
+    fn init_wire_pack_unpack_preserves_order_and_turn() {
+        let rows = vec![
+            InitRow {
+                id: "a".into(),
+                name: "Ada".into(),
+                score: 18,
+                ready: true,
+            },
+            InitRow {
+                id: "b".into(),
+                name: "Boost".into(),
+                score: 12,
+                ready: true,
+            },
+        ];
+        let body = pack_init(&rows, 1);
+        let (got, turn) = unpack_init(&body).expect("init wire");
+        assert_eq!(turn, 1);
+        assert_eq!(got.len(), 2);
+        assert_eq!(got[0].id, "a");
+        assert_eq!(got[0].score, 18);
+        assert_eq!(got[1].name, "Boost");
+        assert!(unpack_init("ask").is_none());
+        let (empty, t0) = unpack_init("{\"rows\":[],\"turn\":9}").unwrap();
+        assert!(empty.is_empty());
+        assert_eq!(t0, 0);
+    }
+
+    #[test]
+    fn resolve_roll_victim_prefers_aim_over_open_sheet() {
+        assert_eq!(
+            resolve_roll_victim(Some("victim"), Some("open"), "attacker"),
+            "victim"
+        );
+        assert_eq!(
+            resolve_roll_victim(Some("attacker"), Some("open"), "attacker"),
+            "open"
+        );
+        assert_eq!(
+            resolve_roll_victim(None, Some("open"), "attacker"),
+            "open"
+        );
+        assert_eq!(
+            resolve_roll_victim(Some("attacker"), Some("attacker"), "attacker"),
+            ""
+        );
+        assert_eq!(resolve_roll_victim(None, None, "attacker"), "");
     }
 
     #[test]
