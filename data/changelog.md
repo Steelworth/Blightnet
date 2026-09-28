@@ -4,6 +4,9 @@ The deck writes here so you can see what changed after an update. Newest first. 
 
 ## 2026-09-28
 
+- Blinded, Frightened, or Poisoned set disadvantage on attacks; Invisible sets advantage. Disadvantage wins if both apply. Blight sheets stay normal.
+- Defeating an NPC proposes XP from the catalog or sheet (Hearthsong) or an IP beat (Blight). The GM still Confirms or Dismisses before anything is awarded.
+
 - Hearthsong level-up can take a feat instead of ASI, and caster spell slots refresh on Confirm.
 - Table initiative tracks Sync, Roll, set, Next, and Clear. Host and GM drive it; guests see it over the wire.
 - Map TOKEN ROLL uses the selected token as attacker and Aim (or another open sheet) as the victim, then can apply HP.

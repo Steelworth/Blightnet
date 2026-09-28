@@ -834,6 +834,37 @@ pub fn conditions_label(c: &Character) -> String {
         .join(" ")
 }
 
+/// Attack-roll Luck hint from common 5e conditions (display + light preset — not a rules engine).
+/// Blinded / Frightened / Poisoned → DIS; Invisible attacker → ADV. DIS wins if both apply.
+pub fn attack_condition_luck(c: &Character) -> (crate::dice::Luck, &'static str) {
+    if c.is_blight() {
+        return (crate::dice::Luck::Norm, "");
+    }
+    for (name, label) in [
+        ("Blinded", "DIS · Blinded"),
+        ("Frightened", "DIS · Frightened"),
+        ("Poisoned", "DIS · Poisoned"),
+    ] {
+        if has_condition(c, name) {
+            return (crate::dice::Luck::Dis, label);
+        }
+    }
+    if has_condition(c, "Invisible") {
+        return (crate::dice::Luck::Adv, "ADV · Invisible");
+    }
+    (crate::dice::Luck::Norm, "")
+}
+
+/// Luck used for an attack roll: condition hint when present, else the manual Norm/Adv/Dis toggle.
+pub fn effective_attack_luck(c: &Character, manual: crate::dice::Luck) -> (crate::dice::Luck, &'static str) {
+    let (hint, note) = attack_condition_luck(c);
+    if hint != crate::dice::Luck::Norm {
+        (hint, note)
+    } else {
+        (manual, "")
+    }
+}
+
 /// GM or sheet owner may toggle conditions.
 pub fn can_edit_sheet(c: &Character, is_gm: bool, viewer_id: &str) -> bool {
     can_level_up(c, is_gm, viewer_id)
@@ -847,6 +878,8 @@ pub struct KillCredit {
     pub killer_id: String,
     pub killer_name: String,
     pub amount: i32,
+    /// True when `amount` came from a Hearthsong catalog/bestiary `xp` field on the NPC sheet.
+    pub from_catalog: bool,
     /// Award every non-NPC when true; otherwise `recipients`.
     pub party: bool,
     pub recipients: Vec<String>,
@@ -854,26 +887,37 @@ pub struct KillCredit {
 
 impl KillCredit {
     pub fn from_defeat(victim: &Character, killer_id: &str, killer_name: &str) -> Self {
+        let (amount, from_catalog) = propose_defeat_award(victim);
         Self {
             victim_id: victim.id.clone(),
             victim_name: victim.name.clone(),
             killer_id: killer_id.to_string(),
             killer_name: killer_name.to_string(),
-            amount: suggest_defeat_xp(victim),
+            amount,
+            from_catalog,
             party: true,
             recipients: Vec::new(),
         }
     }
 }
 
-/// Rough table award suggestion from victim level (GM can edit before Confirm).
-pub fn suggest_defeat_xp(victim: &Character) -> i32 {
-    let lv = victim.level.max(1);
+/// Propose a defeat award: Hearthsong NPC catalog `xp` when present; else level table.
+/// Blight sheets get an optional IP beat from role rank/level — never D&D catalog XP.
+pub fn propose_defeat_award(victim: &Character) -> (i32, bool) {
     if victim.is_blight() {
-        (lv * 20).clamp(10, 500)
-    } else {
-        (lv * 50).clamp(25, 2_500)
+        let lv = victim.level.max(1);
+        return ((lv * 20).clamp(10, 500), false);
     }
+    if victim.npc && victim.xp > 0 {
+        return (victim.xp, true);
+    }
+    let lv = victim.level.max(1);
+    ((lv * 50).clamp(25, 2_500), false)
+}
+
+/// Rough table / catalog award suggestion (GM can edit before Confirm).
+pub fn suggest_defeat_xp(victim: &Character) -> i32 {
+    propose_defeat_award(victim).0
 }
 
 /// Apply a confirmed kill-credit award. Returns the combat-log line.
@@ -1162,6 +1206,10 @@ pub fn ui_sheet(
         });
         ui.horizontal_wrapped(|ui| {
             let ch = theme::chrome();
+            let (_, hint_lab) = chars
+                .get(*char_i)
+                .map(attack_condition_luck)
+                .unwrap_or((crate::dice::Luck::Norm, ""));
             if theme::neon_btn_color(ui, "Norm", ch.cyan, *luck == crate::dice::Luck::Norm).clicked() {
                 *luck = crate::dice::Luck::Norm;
             }
@@ -1170,6 +1218,14 @@ pub fn ui_sheet(
             }
             if theme::neon_btn_color(ui, "Dis", ch.cyan, *luck == crate::dice::Luck::Dis).clicked() {
                 *luck = crate::dice::Luck::Dis;
+            }
+            if !hint_lab.is_empty() {
+                ui.label(
+                    RichText::new(hint_lab)
+                        .family(theme::mono())
+                        .size(11.0)
+                        .color(ORANGE),
+                );
             }
             if theme::neon_btn(ui, "d%").clicked() {
                 let name = chars
@@ -1274,11 +1330,18 @@ pub fn ui_sheet(
                 } else {
                     credit.killer_name.as_str()
                 };
+                let src = if credit.from_catalog {
+                    "catalog XP"
+                } else if blight {
+                    "suggested IP"
+                } else {
+                    "suggested XP"
+                };
                 wrap(
                     ui,
                     &format!(
-                        "KILL CREDIT · {} defeated by {} — edit amount, pick Party or This sheet, then Confirm.",
-                        credit.victim_name, kill
+                        "KILL CREDIT · {} defeated by {} — proposed {} {} · edit amount, pick Party or This sheet, then Confirm. Dismiss leaves sheets untouched.",
+                        credit.victim_name, kill, credit.amount, src
                     ),
                     CYAN,
                     11.0,
@@ -1843,6 +1906,10 @@ fn ui_combat(
             if can_cond {
                 if theme::neon_btn_color(ui, &lab, if on { ORANGE } else { CYAN }, on).clicked() {
                     toggle_condition(c, name);
+                    let (hint, _) = attack_condition_luck(c);
+                    if hint != crate::dice::Luck::Norm {
+                        *luck = hint;
+                    }
                     *sync = true;
                 }
             } else {
@@ -1914,25 +1981,36 @@ fn ui_combat(
         let name = c.attacks[i].name.clone();
         let low = name.to_lowercase();
         let heal = low.contains("heal") || low.contains("cure") || low.contains("aid");
+        let (use_luck, luck_note) = effective_attack_luck(c, *luck);
+        if use_luck != crate::dice::Luck::Norm {
+            *luck = use_luck;
+        }
         let mut r = crate::dice::fire(
             &name,
             &dmg,
             heal,
-            *luck,
+            use_luck,
             target.as_deref().unwrap_or(""),
         );
         r.attacker = c.id.clone();
+        let note = if luck_note.is_empty() {
+            String::new()
+        } else {
+            format!(" [{luck_note}]")
+        };
         *dice = format!(
-            "{}: {}% {}{}",
+            "{}{}: {}% {}{}",
             name,
+            note,
             r.pct,
             r.grade,
             r.damage.map(|d| format!(" · {d}")).unwrap_or_default()
         );
         log.push(format!(
-            "{} uses {} → {} ({}){}",
+            "{} uses {}{} → {} ({}){}",
             c.name,
             name,
+            note,
             if r.target.is_empty() {
                 "—"
             } else {
@@ -4212,7 +4290,79 @@ mod tests {
     }
 
     #[test]
+    fn attack_condition_luck_blinded_dis_invisible_adv() {
+        let mut h = Character::new("hearthsong");
+        assert_eq!(attack_condition_luck(&h).0, crate::dice::Luck::Norm);
+        assert!(attack_condition_luck(&h).1.is_empty());
+        toggle_condition(&mut h, "Blinded");
+        let (luck, note) = attack_condition_luck(&h);
+        assert_eq!(luck, crate::dice::Luck::Dis);
+        assert_eq!(note, "DIS · Blinded");
+        let (eff, note2) = effective_attack_luck(&h, crate::dice::Luck::Adv);
+        assert_eq!(eff, crate::dice::Luck::Dis);
+        assert_eq!(note2, "DIS · Blinded");
+        toggle_condition(&mut h, "Blinded");
+        toggle_condition(&mut h, "Invisible");
+        let (luck, note) = attack_condition_luck(&h);
+        assert_eq!(luck, crate::dice::Luck::Adv);
+        assert_eq!(note, "ADV · Invisible");
+        toggle_condition(&mut h, "Poisoned");
+        // DIS conditions win over Invisible.
+        let (luck, note) = attack_condition_luck(&h);
+        assert_eq!(luck, crate::dice::Luck::Dis);
+        assert_eq!(note, "DIS · Poisoned");
+        let mut b = Character::new("blight");
+        toggle_condition(&mut b, "Stunned");
+        assert_eq!(attack_condition_luck(&b).0, crate::dice::Luck::Norm);
+    }
+
+    #[test]
+    fn catalog_xp_propose_uses_sheet_xp_for_hearth_npc() {
+        let root = root();
+        let bestiary = load_list(&root, "bestiary.json");
+        let goblin = bestiary
+            .iter()
+            .find(|r| r.get("id").and_then(|x| x.as_str()) == Some("goblin"))
+            .expect("goblin");
+        let catalog_xp = json_i32(goblin, "xp", 0);
+        assert!(catalog_xp > 0, "goblin catalog xp");
+        let mut npc = sheet_from_catalog("Bestiary", goblin, &[]);
+        assert!(npc.npc);
+        assert_eq!(npc.xp, catalog_xp);
+        let (amt, from_cat) = propose_defeat_award(&npc);
+        assert!(from_cat);
+        assert_eq!(amt, catalog_xp);
+        assert_eq!(suggest_defeat_xp(&npc), catalog_xp);
+        let credit = KillCredit::from_defeat(&npc, "pc-a", "Ada");
+        assert!(credit.from_catalog);
+        assert_eq!(credit.amount, catalog_xp);
+        // No catalog xp → level table fallback.
+        npc.xp = 0;
+        npc.level = 2;
+        let (amt, from_cat) = propose_defeat_award(&npc);
+        assert!(!from_cat);
+        assert_eq!(amt, 100);
+        // Blight never takes Hearthsong catalog XP.
+        let mut red = Character::new("blight");
+        red.npc = true;
+        red.xp = 5900; // would-be D&D xp must not win
+        red.level = 3;
+        let (amt, from_cat) = propose_defeat_award(&red);
+        assert!(!from_cat);
+        assert_eq!(amt, 60);
+        // PC sheet xp is progress, not a defeat award.
+        let mut pc = Character::new("hearthsong");
+        pc.npc = false;
+        pc.xp = 12_000;
+        pc.level = 5;
+        let (amt, from_cat) = propose_defeat_award(&pc);
+        assert!(!from_cat);
+        assert_eq!(amt, 250);
+    }
+
+    #[test]
     fn kill_credit_award_needs_explicit_apply() {
+
         let mut rows = vec![
             Character::new("hearthsong"),
             Character::new("hearthsong"),

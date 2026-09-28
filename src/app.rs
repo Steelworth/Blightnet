@@ -6,7 +6,7 @@ use crate::images::{self, TexCache};
 use crate::maps::{self, MapBoard, MapOp, TokenSpec};
 use crate::names::Names;
 use crate::net::{self, Contact, NetEvent, NetHub, Role};
-use crate::theme::{self, CREAM, CYAN, DIM, KILL, MUTED, PANEL, RAIL};
+use crate::theme::{self, CREAM, CYAN, DIM, KILL, MUTED, ORANGE, PANEL, RAIL};
 use eframe::egui::{self, Color32, FontId, Rect, RichText, Vec2};
 use rand::seq::SliceRandom;
 use rand::Rng;
@@ -9460,22 +9460,43 @@ impl Blightnet {
                 .size(12.0)
                 .color(CYAN),
         );
+        let (use_luck, luck_note) =
+            crate::chars::effective_attack_luck(&self.chars[ci], self.luck);
+        if !luck_note.is_empty() {
+            ui.label(
+                RichText::new(luck_note)
+                    .family(theme::mono())
+                    .size(11.0)
+                    .color(ORANGE),
+            );
+        }
         if theme::neon_btn(ui, "Roll attack").clicked() {
             let name = atk.name.clone();
             let low = name.to_lowercase();
             let heal = low.contains("heal") || low.contains("cure") || low.contains("aid");
-            let r = crate::dice::fire(&name, &dmg, heal, self.luck, &victim);
+            if use_luck != Luck::Norm {
+                self.luck = use_luck;
+            }
+            let mut r = crate::dice::fire(&name, &dmg, heal, use_luck, &victim);
+            r.attacker = attacker_id.clone();
+            let note = if luck_note.is_empty() {
+                String::new()
+            } else {
+                format!(" [{luck_note}]")
+            };
             self.dice = format!(
-                "{}: {}% {}{}",
+                "{}{}: {}% {}{}",
                 name,
+                note,
                 r.pct,
                 r.grade,
                 r.damage.map(|d| format!(" · {d}")).unwrap_or_default()
             );
             let line = format!(
-                "{} uses {} → {} ({}){}",
+                "{} uses {}{} → {} ({}){}",
                 cname,
                 name,
+                note,
                 if r.target.is_empty() { "—" } else { &r.target },
                 r.grade,
                 r.damage.map(|d| format!(" {d}")).unwrap_or_default()
@@ -11265,6 +11286,17 @@ impl Blightnet {
             .get(self.char_i)
             .map(|c| c.id.clone())
             .unwrap_or_default();
+        let killer_id = if r.attacker.is_empty() {
+            attacker.clone()
+        } else {
+            r.attacker.clone()
+        };
+        let killer_name = self
+            .chars
+            .iter()
+            .find(|x| x.id == killer_id || x.name == killer_id)
+            .map(|x| x.name.clone())
+            .unwrap_or_else(|| killer_id.clone());
         let tid = if r.taken {
             attacker
         } else if r.target.is_empty() {
@@ -11272,6 +11304,7 @@ impl Blightnet {
         } else {
             r.target.clone()
         };
+        let mut credit = None;
         if let Some(c) = self.chars.iter_mut().find(|c| c.id == tid || c.name == tid) {
             if r.heal && !r.taken {
                 c.hp = (c.hp + amt).min(c.hp_max);
@@ -11293,8 +11326,17 @@ impl Blightnet {
                 left -= soak;
                 c.hp = (c.hp - left).max(0);
                 if c.hp <= 0 && !c.dead {
-                    c.downed = true;
+                    if c.npc {
+                        credit = crate::chars::mark_defeated(c, &killer_id, &killer_name);
+                    } else {
+                        c.downed = true;
+                    }
                 }
+            }
+        }
+        if self.kill_credit.is_none() {
+            if let Some(draft) = credit {
+                self.kill_credit = Some(draft);
             }
         }
         crate::chars::save(&self.root, &self.chars);
@@ -11349,6 +11391,20 @@ impl Blightnet {
             FontId::new(num_size, theme::display()),
             color,
         );
+        let luck_tag = match r.luck {
+            Luck::Adv => "ADV",
+            Luck::Dis => "DIS",
+            Luck::Norm => "",
+        };
+        if !luck_tag.is_empty() {
+            paint.text(
+                boxr.center() + Vec2::new(0.0, -52.0),
+                egui::Align2::CENTER_CENTER,
+                luck_tag,
+                FontId::new(12.0, theme::mono()),
+                ORANGE,
+            );
+        }
         if r.done() {
             paint.text(
                 boxr.center() + Vec2::new(0.0, 22.0),

@@ -1,7 +1,7 @@
 use rand::Rng;
 use std::time::Instant;
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Luck {
     Norm,
     Adv,
