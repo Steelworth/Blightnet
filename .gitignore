@@ -80,3 +80,6 @@ feedback_drafts.json
 .env.*
 .blightnet-sha
 *.blightnet-new
+
+# Local capture scratch (not shipped)
+tmp/

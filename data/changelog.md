@@ -4,6 +4,7 @@ The deck writes here so you can see what changed after an update. Newest first. 
 
 ## 2026-09-28
 
+- README shows screenshots of INDEX, TABLE, NETSPACE, TREE, TERMINAL, RECON, NETHOOKS, and ROTN.
 - Page tabs are INDEX, TABLE, NETSPACE, TREE, TERMINAL, RECON, NETHOOKS, and ROTN. CHAT, CONTACTS, VOICE, VIDEO, and PLAYER stay pinned on that row.
 - Pages and overlays share one chrome: location id, title, and a short next line. Table overlays and Catalog / Chars follow it.
 - The permission ledger (INDEX 09) stays closed until you open it.

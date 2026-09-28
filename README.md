@@ -10,6 +10,50 @@ Repo: [github.com/Steelworth/Blightnet](https://github.com/Steelworth/Blightnet)
 
 ---
 
+## Screenshots
+
+### INDEX
+![INDEX — front desk](docs/screenshots/index.png)
+
+Front desk: stamp a Handle, go Online, Host or Join, and open deck tiles.
+
+### TABLE
+![TABLE — session table](docs/screenshots/table.png)
+
+Session table: scenes, mix, maps, sheets, and the side tools.
+
+### NETSPACE
+![NETSPACE — walkable city](docs/screenshots/netspace.png)
+
+Walkable city on its own tab (WASD, look, map).
+
+### TREE
+![TREE — local folders](docs/screenshots/tree.png)
+
+Folders on this computer. Nothing here is sent to the table.
+
+### TERMINAL
+![TERMINAL — local shell](docs/screenshots/terminal.png)
+
+Local shell. Text stays on this machine.
+
+### RECON
+![RECON — case desk](docs/screenshots/recon.png)
+
+Local case desk for people and companies.
+
+### NETHOOKS
+![NETHOOKS — pages](docs/screenshots/nethooks.png)
+
+Pages you write; post to the table board when you want.
+
+### ROTN
+![ROTN — local fixer](docs/screenshots/rotn.png)
+
+Local fixer. Talks only to a model on this computer.
+
+---
+
 ## Download for the first time
 
 Pick **one** method. Keep the whole folder together (`start.sh` / `start.bat`, `audio`, `assets`, `data`). Do not scatter those files.
