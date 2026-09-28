@@ -102,6 +102,14 @@ enum IpcCmd {
     Online,
     Dial { addr: String },
     Send { wire: Wire },
+    SendMedia {
+        from: String,
+        opus: String,
+        #[serde(default)]
+        to: Option<String>,
+        #[serde(default)]
+        crew: Option<String>,
+    },
     SetHandle { handle: String },
     RefreshInvite,
 }
@@ -133,7 +141,14 @@ enum IpcEvent {
         to: Option<String>,
         crew: Option<String>,
     },
-    VoicePcm { from: String, pcm: String },
+    VoicePcm {
+        from: String,
+        pcm: String,
+        #[serde(default)]
+        to: Option<String>,
+        #[serde(default)]
+        crew: Option<String>,
+    },
     Mix {
         layers: HashMap<String, f32>,
         blight: bool,
@@ -415,9 +430,16 @@ fn event_out(ev: &NetEvent) -> IpcEvent {
             to: to.clone(),
             crew: crew.clone(),
         },
-        NetEvent::VoicePcm { from, samples } => IpcEvent::VoicePcm {
+        NetEvent::VoicePcm {
+            from,
+            samples,
+            to,
+            crew,
+        } => IpcEvent::VoicePcm {
             from: from.clone(),
             pcm: pcm_b64(samples),
+            to: to.clone(),
+            crew: crew.clone(),
         },
         NetEvent::Mix {
             layers,
@@ -609,9 +631,11 @@ fn event_in(ev: IpcEvent) -> NetEvent {
             to,
             crew,
         },
-        IpcEvent::VoicePcm { from, pcm } => NetEvent::VoicePcm {
+        IpcEvent::VoicePcm { from, pcm, to, crew } => NetEvent::VoicePcm {
             from,
             samples: pcm_from_b64(&pcm),
+            to,
+            crew,
         },
         IpcEvent::Mix {
             layers,
@@ -754,6 +778,12 @@ fn cmd_from_ipc(c: IpcCmd, root: &Path) -> Cmd {
         IpcCmd::Online => Cmd::Online,
         IpcCmd::Dial { addr } => Cmd::Dial(addr),
         IpcCmd::Send { wire } => Cmd::Send(wire),
+        IpcCmd::SendMedia { from, opus, to, crew } => Cmd::SendMedia {
+            from,
+            opus: unb64(&opus),
+            to,
+            crew,
+        },
         IpcCmd::SetHandle { handle } => Cmd::SetHandle(handle),
         IpcCmd::RefreshInvite => Cmd::RefreshInvite,
     }
@@ -769,6 +799,12 @@ fn ipc_from_cmd(c: &Cmd) -> Option<IpcCmd> {
         Cmd::Online => IpcCmd::Online,
         Cmd::Dial(a) => IpcCmd::Dial { addr: a.clone() },
         Cmd::Send(w) => IpcCmd::Send { wire: w.clone() },
+        Cmd::SendMedia { from, opus, to, crew } => IpcCmd::SendMedia {
+            from: from.clone(),
+            opus: b64(opus),
+            to: to.clone(),
+            crew: crew.clone(),
+        },
         Cmd::SetHandle(h) => IpcCmd::SetHandle { handle: h.clone() },
         Cmd::RefreshInvite => IpcCmd::RefreshInvite,
     })
@@ -1535,6 +1571,30 @@ mod tests {
                 assert!(whisper);
             }
             _ => panic!("chat"),
+        }
+        let pcm = NetEvent::VoicePcm {
+            from: "a".into(),
+            samples: vec![0.5, -0.25],
+            to: Some("b".into()),
+            crew: None,
+        };
+        match event_in(event_out(&pcm)) {
+            NetEvent::VoicePcm { from, to, crew, samples } => {
+                assert_eq!(from, "a");
+                assert_eq!(to.as_deref(), Some("b"));
+                assert!(crew.is_none());
+                assert_eq!(samples.len(), 2);
+            }
+            _ => panic!("voice-pcm"),
+        }
+        // Old IPC shape without to/crew still deserializes.
+        let raw = r#"{"event":"VoicePcm","from":"a","pcm":"AA=="}"#;
+        let ie: IpcEvent = serde_json::from_str(raw).unwrap();
+        match event_in(ie) {
+            NetEvent::VoicePcm { to, crew, .. } => {
+                assert!(to.is_none() && crew.is_none());
+            }
+            _ => panic!("old VoicePcm"),
         }
         let ev = NetEvent::Hosting {
             port: 8766,

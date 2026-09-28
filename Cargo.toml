@@ -35,3 +35,8 @@ vte = "0.13"
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
+
+# Wayland screenshare: xdg-desktop-portal Screencast → PipeWire (same stack rfd already pulls).
+[target.'cfg(any(target_os = "linux", target_os = "freebsd", target_os = "dragonfly", target_os = "netbsd", target_os = "openbsd"))'.dependencies]
+ashpd = { version = "0.11", default-features = false, features = ["async-std"] }
+pollster = "0.4"

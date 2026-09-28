@@ -553,6 +553,7 @@ dependencies = [
 name = "blightnet"
 version = "1.0.0"
 dependencies = [
+ "ashpd",
  "base64",
  "chacha20poly1305",
  "cpal",
@@ -564,6 +565,7 @@ dependencies = [
  "image",
  "libc",
  "native-tls",
+ "pollster",
  "portable-pty",
  "rand 0.8.8",
  "rfd",

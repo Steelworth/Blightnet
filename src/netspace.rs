@@ -2206,7 +2206,7 @@ fn draw_cruise_hud(ui: &mut egui::Ui, ns: &mut Netspace, pad: Rect, ping_ms: Opt
         text_clip.left_center(),
         Align2::LEFT_CENTER,
         format!(
-            "NETSPACE  ·  {}  ·  {}  ·  {}  ·  PING {}  ·  CLICK LOOK  M MAP  E BOOTH  F DOOR  C AUTO",
+            "NETSPACE://{}  ·  {}  ·  {}  ·  PING {}  ·  LOOK · M MAP · E BOOTH · F DOOR · C AUTO",
             ns.district(),
             ns.street(),
             ns.look,
@@ -2602,7 +2602,7 @@ pub fn hud(ui: &mut egui::Ui, ns: &Netspace, t: f32, ping_ms: Option<u128>) {
     };
     ui.label(
         RichText::new(format!(
-            "NETSPACE  ·  {}  ·  {:02.0},{:02.0}  ·  LOOK {}  ·  PING {}  ·  SEATS {}  ·  WASD  Q/E  drag  SHIFT",
+            "NETSPACE://{}  ·  {:02.0},{:02.0}  ·  LOOK {}  ·  PING {}  ·  SEATS {}  ·  WASD · Q/E · drag · SHIFT",
             ns.district(),
             ns.x,
             ns.z,

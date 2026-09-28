@@ -48,7 +48,7 @@ If Windows SmartScreen warns about an unknown app: **More info** → **Run anywa
 
 If Windows Firewall asks, allow **Blightnet** on a private network for TCP and UDP **8766** so friends can Join.
 
-Video call and screen share on Windows need [FFmpeg](https://ffmpeg.org) on PATH (camera uses DirectShow, screen uses gdigrab). Mic, speakers, chat, maps, and Host/Join work without it.
+Video call and screen share on Windows need [FFmpeg](https://ffmpeg.org) on PATH (camera uses DirectShow, screen uses gdigrab). Live compressed voice needs system **libopus** on the link path (same as Linux). Mic, speakers, chat, maps, and Host/Join work without FFmpeg. Screenshare is **LAN-good / WAN best-effort** (JPEG frames over the table wire).
 
 ### Linux
 
@@ -61,6 +61,22 @@ chmod +x start.sh
 ```
 
 That runs the native window. Install Rust from [rustup.rs](https://rustup.rs) if `cargo` is missing.
+
+#### Live calls (Linux)
+
+- **Voice** needs system **libopus** (`libopus` / `libopus-dev`) to build and run compressed call audio.
+- **Echo cancel** is optional: install **speexdsp** / `libspeexdsp` (pkg-config name `speexdsp`). The build probes at compile time; without it Blightnet still builds and voice still runs.
+
+#### Video call and screen share (Linux)
+
+- **Camera** needs [FFmpeg](https://ffmpeg.org) on PATH (V4L2).
+- **Screen share on Wayland** prefers **xdg-desktop-portal** + **PipeWire**:
+  - Portal: `xdg-desktop-portal` plus a desktop backend (`xdg-desktop-portal-kde`, `-gnome`, or `-wlr`).
+  - Capture: GStreamer `pipewiresrc` (`gst-plugin-pipewire` / `gstreamer` tools) plus either `jpegenc` from **gst-plugins-good** or `avenc_mjpeg` from **gst-libav**; alternatively use an FFmpeg build with `-f pipewire`.
+  - First share: click **Share** / **Allow** in the system portal dialog (monitor or window).
+- **X11** (or XWayland fallback) uses FFmpeg `x11grab` when PipeWire portal tools are missing — on pure Wayland that path is often blank for native windows.
+- Screenshare is **one GM share**, **LAN-good / WAN best-effort**. If camera or screen capture dies mid-call, **voice stays up**.
+- Mic, speakers, chat, maps, and Host/Join work without FFmpeg or portal packages. Compressed live voice still needs **libopus**.
 
 To build a double-click launcher after the release binary exists:
 
@@ -93,11 +109,13 @@ chmod +x start.sh
 
 If macOS blocks the binary: System Settings → Privacy & Security → **Open Anyway**. Install Rust from [rustup.rs](https://rustup.rs) if `cargo` is missing.
 
+Video call and screen share need [FFmpeg](https://ffmpeg.org) on PATH. Live compressed voice needs system **libopus**. Mic, speakers, chat, maps, and Host/Join work without FFmpeg.
+
 ---
 
 ## After it is running
 
-The command bar is the top row. Tabs are **INDEX**, **TABLE**, **NETHOOKS**, **NETSPACE**, **ROTN**, **TERMINAL**, and **RECON**. **CHAT**, **CONTACTS**, **VOICE**, **VIDEO**, and **PLAYER** sit on that same row. **Online** starts the node. Press it again to stop the node and leave the window open. CPU, GPU (or a dash), RAM, and free disk stay on the bar. Those numbers are not sent to anyone.
+The command bar is the top row. Tabs are **INDEX**, **TABLE**, **NETSPACE**, **TREE**, **TERMINAL**, **RECON**, **NETHOOKS**, and **ROTN**. **CHAT**, **CONTACTS**, **VOICE**, **VIDEO**, and **PLAYER** stay pinned on that row. **Online** starts the node. Press it again to stop the node and leave the window open. CPU, GPU (or a dash), RAM, and free disk stay on the bar. Those numbers are not sent to anyone.
 
 INDEX:
 
@@ -158,6 +176,9 @@ Chat, the mix, sheets, map tokens, fog, and a posted nethook sync between seats.
 | Friends cannot join | Both seats need this build. Paste the full `blightnet://` invite. Across the internet, forward TCP and UDP 8766 on the host. Host status lists UPnP/public IP/udp mesh as reachability hints only. |
 | Deck AppImage node fails | Keep data beside the image. Use `APPIMAGE_EXTRACT_AND_RUN=1`. The UI embeds the node if spawn from the mount path fails. Run `daemon-status` to check. |
 | Cargo errors | `cargo build --release` from the folder that contains `Cargo.toml`. |
+| Wayland screen share asks for permission | Click **Share** / **Allow** in the portal dialog. Needs `xdg-desktop-portal` + kde/gnome/wlr backend, GStreamer `pipewiresrc`, and either **gst-plugins-good** (`jpegenc`) or **gst-libav** (`avenc_mjpeg`) (or FFmpeg `-f pipewire`). |
+| Screen share black on Wayland | x11grab fallback cannot see most Wayland windows — install the portal + PipeWire path above. Voice stays if video fails. |
+| Cargo cannot find Opus / voice encode fails | Install system **libopus** (and headers). Optional **speexdsp** for echo cancel; missing SpeexDSP still builds. |
 
 ---
 

@@ -781,11 +781,177 @@ pub fn kicker(ui: &mut Ui, text: &str) {
     });
 }
 
+/// Light page chrome shared by major destinations.
+/// Mono location ID · Oxanium title · one-line kicker ("what to do next").
+pub fn page_chrome(ui: &mut Ui, loc: &str, title: &str, next: &str) {
+    let ch = chrome();
+    ui.horizontal_wrapped(|ui| {
+        ui.spacing_mut().item_spacing.x = 10.0;
+        ui.label(
+            egui::RichText::new(loc)
+                .family(mono())
+                .size(11.0)
+                .color(ch.cyan),
+        );
+        ui.label(
+            egui::RichText::new(title)
+                .family(display())
+                .size(22.0)
+                .color(ch.acid),
+        );
+    });
+    if !next.is_empty() {
+        kicker(ui, next);
+    }
+    ui.add_space(4.0);
+}
+
+/// Selected-state language for command bar + dock (proposal C sync).
+/// Acid fill + hot underline when on; chrome accents follow the active theme.
+pub fn chrome_tab(ui: &mut Ui, label: &str, on: bool) -> egui::Response {
+    let ch = chrome();
+    let galley = ui.painter().layout_no_wrap(
+        label.to_string(),
+        FontId::new(13.0, display()),
+        if on { ch.acid } else { CREAM },
+    );
+    let size = Vec2::new(galley.size().x + 22.0, 32.0);
+    let (rect, resp) = ui.allocate_exact_size(size, Sense::click());
+    let hover = resp.hovered();
+    let fill = if on {
+        Color32::from_rgb(18, 20, 8)
+    } else if hover {
+        fade(ch.acid, 22)
+    } else {
+        Color32::TRANSPARENT
+    };
+    let stroke = if on {
+        ch.acid
+    } else if hover {
+        ch.cyan
+    } else {
+        fade(ch.hot, 110)
+    };
+    fill_chamfer(ui, rect, 4.0, fill, Stroke::new(1.0, stroke));
+    if on {
+        ui.painter().hline(
+            (rect.left() + 6.0)..=(rect.right() - 6.0),
+            rect.bottom() - 1.0,
+            Stroke::new(2.0, ch.hot),
+        );
+    }
+    ui.painter().text(
+        rect.center(),
+        egui::Align2::CENTER_CENTER,
+        label,
+        FontId::new(13.0, display()),
+        if on || hover { ch.acid } else { CREAM },
+    );
+    attach_tip(resp, hint_for(label))
+}
+
+/// Overlay tile chrome — where-am-I · title · next · CLOSE (secondary).
+/// Returns true when CLOSE is pressed. Evolve existing section_head language; do not invent new product lines.
+pub fn overlay_chrome(ui: &mut Ui, loc: &str, title: &str, next: &str) -> bool {
+    let ch = chrome();
+    let mut close = false;
+    ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing.x = 8.0;
+        ui.label(
+            egui::RichText::new(loc)
+                .family(mono())
+                .size(11.0)
+                .color(ch.cyan),
+        );
+        ui.label(
+            egui::RichText::new(title)
+                .family(display())
+                .size(18.0)
+                .color(ch.acid),
+        );
+        let spare = ui.available_width();
+        if spare > 72.0 {
+            ui.add_space((spare - 68.0).max(4.0));
+        }
+        if muted_btn(ui, "CLOSE").on_hover_text("Close this overlay. Rail button also toggles.").clicked() {
+            close = true;
+        }
+    });
+    if !next.is_empty() {
+        kicker(ui, next);
+    }
+    ui.add_space(2.0);
+    close
+}
+
+/// Secondary / ghost chrome control — muted edge, cream label, no acid fill.
+/// Use for CLOSE, Cancel, Aim-off, and other non-primary actions.
+pub fn muted_btn(ui: &mut Ui, label: &str) -> egui::Response {
+    let ch = chrome();
+    let galley = ui.painter().layout_no_wrap(
+        label.to_uppercase(),
+        FontId::new(12.0, ui_font()),
+        MUTED,
+    );
+    let size = Vec2::new((galley.size().x + 18.0).max(36.0), 28.0);
+    let (rect, resp) = ui.allocate_exact_size(size, Sense::click());
+    let hover = resp.hovered();
+    let edge = if hover { ch.cyan } else { fade(MUTED, 140) };
+    let fill = if hover { fade(ch.cyan, 28) } else { Color32::TRANSPARENT };
+    fill_chamfer(ui, rect, 4.0, fill, Stroke::new(1.0, edge));
+    ui.painter().galley(
+        Pos2::new(
+            rect.center().x - galley.size().x * 0.5,
+            rect.center().y - galley.size().y * 0.5,
+        ),
+        galley,
+        if hover { CREAM } else { MUTED },
+    );
+    attach_tip(resp, hint_for(label))
+}
+
+/// Dense scannable catalog / roster row. Selection = acid edge; sub line = filter context.
+pub fn catalog_row(ui: &mut Ui, label: &str, sub: &str, on: bool) -> egui::Response {
+    let ch = chrome();
+    let w = ui.available_width().max(40.0);
+    let h = if sub.is_empty() { 30.0 } else { 42.0 };
+    let (rect, resp) = ui.allocate_exact_size(Vec2::new(w, h), Sense::click());
+    let hover = resp.hovered();
+    let edge = if on || hover { ch.acid } else { fade(ch.cyan, 70) };
+    fill_chamfer(
+        ui,
+        rect,
+        4.0,
+        if on { fade(ch.acid, 18) } else { glass() },
+        Stroke::new(if on { 1.4 } else { 1.0 }, edge),
+    );
+    let clip = rect.shrink2(Vec2::new(10.0, 3.0));
+    let p = ui.painter().with_clip_rect(clip);
+    p.text(
+        clip.left_top() + Vec2::new(0.0, if sub.is_empty() { 5.0 } else { 2.0 }),
+        egui::Align2::LEFT_TOP,
+        label,
+        FontId::new(14.0, ui_font()),
+        if on || hover { ch.acid } else { CREAM },
+    );
+    if !sub.is_empty() {
+        p.text(
+            clip.left_bottom() + Vec2::new(0.0, -3.0),
+            egui::Align2::LEFT_BOTTOM,
+            sub,
+            FontId::new(10.0, mono()),
+            ch.cyan,
+        );
+    }
+    attach_tip(resp, if sub.is_empty() { hint_for(label).into_owned() } else { format!("{label} — {sub}") })
+}
+
 /// Full-width row for the table rail. Acid edge when it is on or under the pointer.
 pub fn rail_row(ui: &mut Ui, label: &str, on: bool, danger: bool) -> egui::Response {
     let ch = chrome();
     let w = ui.available_width().max(40.0);
-    let (rect, resp) = ui.allocate_exact_size(Vec2::new(w, 26.0), Sense::click());
+    // 30px hit target — light Design-scope gamepad / deck thumb reach on INDEX/TABLE rail.
+    let (rect, resp) = ui.allocate_exact_size(Vec2::new(w, 30.0), Sense::click());
     let hover = resp.hovered();
     let edge = if danger {
         NEON_RED
@@ -978,7 +1144,7 @@ fn hint_for(label: &str) -> Cow<'static, str> {
         "Norm" => "Straight d% rolls.",
         "Adv" => "Roll twice, keep the higher.",
         "Dis" => "Roll twice, keep the lower.",
-        "Aim" => "Target this character for rolls.",
+        "Aim" => "Mark this character as the roll target. Secondary — does not select the sheet.",
         "Target this sheet" => "Aim table rolls at this character.",
         "Upload close-up" => "Choose a portrait image stored on this deck.",
         "Upload full body" => "Choose a full-body image stored on this deck.",
@@ -1012,7 +1178,7 @@ fn hint_for(label: &str) -> Cow<'static, str> {
         "Unequip" => "Take this item off.",
         "Equip" => "Put this item on.",
         "Drop" => "Remove this item from the sheet.",
-        "Cancel" => "Abort this action.",
+        "Cancel" => "Back out. Nothing is changed.",
         "Confirm spend" => "Spend improvement points on the queued rank.",
         "Confirm level" => "Lock in this level-up.",
         "+ Attack" => "Add a blank attack row.",
@@ -1026,6 +1192,8 @@ fn hint_for(label: &str) -> Cow<'static, str> {
         "Decline" => "Refuse this incoming call.",
         "Mute" => "Stop sending your microphone.",
         "Muted" => "Unmute your microphone.",
+        "Deaf" => "Stop hearing remote voice. Mute still only stops your mic.",
+        "Deafened" => "Start hearing remote voice again.",
         "Camera" => "Toggle sending this camera.",
         "Share screen" => "Toggle sending this screen.",
         "Rescan cameras" => "Look for cameras again.",
@@ -1056,6 +1224,7 @@ fn hint_for(label: &str) -> Cow<'static, str> {
         "Off air" => "Turn the Night City radio off.",
         "Stop" => "Stop the station. The table mix keeps playing.",
         "×" => "Close this window. The node keeps running until Online is pressed again, or INDEX 00 DISCONNECT.",
+        "CLOSE" | "Close" => "Close this overlay. Press the same rail button to toggle.",
         "□" => "Maximize this window.",
         "❐" => "Restore this window.",
         _ => "",

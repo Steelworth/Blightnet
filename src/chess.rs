@@ -1,6 +1,6 @@
 //! One board. Acid and cyan squares. No engine.
 
-use crate::theme::{self, CREAM, CYAN, DIM};
+use crate::theme::{self, CREAM, DIM};
 use eframe::egui::{self, Color32, Pos2, Rect, RichText, Sense, Vec2};
 
 #[derive(Clone)]
@@ -168,17 +168,12 @@ fn glyph(p: u8) -> &'static str {
 
 pub fn paint(ui: &mut egui::Ui, game: &mut Game, can_move: bool) -> bool {
     let mut changed = false;
-    ui.label(
-        RichText::new("CHESS")
-            .family(theme::display())
-            .size(22.0)
-            .color(theme::ACID),
-    );
+    let ch = theme::chrome();
     ui.label(
         RichText::new(format!("{}  vs  {}", game.white, game.black))
             .family(theme::mono())
             .size(12.0)
-            .color(CYAN),
+            .color(ch.cyan),
     );
     ui.label(RichText::new(&game.msg).color(CREAM).size(13.0));
     let side = ui.available_width().min(420.0);
@@ -193,7 +188,7 @@ pub fn paint(ui: &mut egui::Ui, game: &mut Game, can_move: bool) -> bool {
             let sq = Rect::from_min_size(Pos2::new(x, y), Vec2::splat(cell - 1.0));
             let dark = (r + f) % 2 == 1;
             let fill = if game.sel == Some(i) {
-                theme::ACID
+                ch.acid
             } else if dark {
                 Color32::from_rgb(12, 28, 36)
             } else {
@@ -202,7 +197,7 @@ pub fn paint(ui: &mut egui::Ui, game: &mut Game, can_move: bool) -> bool {
             ui.painter().rect_filled(sq, 2.0, fill);
             let p = game.sq[i as usize];
             if p != 0 {
-                let col = if p < 8 { theme::ACID } else { CYAN };
+                let col = if p < 8 { ch.acid } else { ch.cyan };
                 ui.painter().text(
                     sq.center(),
                     egui::Align2::CENTER_CENTER,

@@ -137,6 +137,26 @@ impl Cipher {
             .ok()?;
         serde_json::from_slice(&pt).ok()
     }
+
+    /// Compact binary AEAD for media packets (nonce || ciphertext+tag). No JSON.
+    pub fn seal_bin(&self, pt: &[u8]) -> Option<Vec<u8>> {
+        let mut nonce = [0u8; NONCE_LEN];
+        rand::thread_rng().fill_bytes(&mut nonce);
+        let ct = self.send.encrypt(Nonce::from_slice(&nonce), pt).ok()?;
+        let mut blob = Vec::with_capacity(NONCE_LEN + ct.len());
+        blob.extend_from_slice(&nonce);
+        blob.extend_from_slice(&ct);
+        Some(blob)
+    }
+
+    pub fn open_bin(&self, blob: &[u8]) -> Option<Vec<u8>> {
+        if blob.len() < NONCE_LEN + 16 {
+            return None;
+        }
+        self.recv
+            .decrypt(Nonce::from_slice(&blob[..NONCE_LEN]), &blob[NONCE_LEN..])
+            .ok()
+    }
 }
 
 pub fn write_sealed<W: Write>(w: &mut W, cipher: &Cipher, msg: &impl serde::Serialize) -> bool {
@@ -346,5 +366,18 @@ mod tests {
         assert!(parse_invite("blightnet://not-a-valid-key@10.0.0.1:8766").is_none());
         let legacy = parse_invite("blightnet://10.0.0.1:8766").unwrap();
         assert!(legacy.key.is_empty());
+    }
+
+    #[test]
+    fn seal_bin_roundtrip() {
+        let key = mint_key();
+        let (sec, pubk, cn) = new_secret();
+        let hello = hello_line(&pubk, &cn);
+        let (server, reply) = finish_server(&hello, &key).unwrap();
+        let client = finish_client(sec, &cn, &reply, &key).unwrap();
+        let pt = b"opus-frame-bytes-here";
+        let sealed = client.seal_bin(pt).unwrap();
+        assert_eq!(server.open_bin(&sealed).unwrap(), pt);
+        assert!(server.open_bin(b"short").is_none());
     }
 }

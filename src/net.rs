@@ -70,7 +70,14 @@ pub enum Wire {
         crew: Option<String>,
     },
     #[serde(rename = "voice-pcm")]
-    VoicePcm { from: String, pcm: String },
+    VoicePcm {
+        from: String,
+        pcm: String,
+        #[serde(default)]
+        to: Option<String>,
+        #[serde(default)]
+        crew: Option<String>,
+    },
     #[serde(rename = "mix")]
     Mix {
         layers: HashMap<String, f32>,
@@ -216,7 +223,12 @@ pub enum NetEvent {
         to: Option<String>,
         crew: Option<String>,
     },
-    VoicePcm { from: String, samples: Vec<f32> },
+    VoicePcm {
+        from: String,
+        samples: Vec<f32>,
+        to: Option<String>,
+        crew: Option<String>,
+    },
     Mix {
         layers: HashMap<String, f32>,
         blight: bool,
@@ -302,6 +314,13 @@ pub(crate) enum Cmd {
     Join(String),
     Leave,
     Send(Wire),
+    /// Opus media frame (binary path). Not stuffed into Wire JSON.
+    SendMedia {
+        from: String,
+        opus: Vec<u8>,
+        to: Option<String>,
+        crew: Option<String>,
+    },
     Online,
     Dial(String),
     SetHandle(String),
@@ -656,6 +675,12 @@ impl NetHub {
     }
 
     pub fn send_pcm(&self, samples: &[f32]) {
+        self.send_pcm_to(samples, None, None);
+    }
+
+    /// Call-scoped PCM: set `to` / `crew` like VideoFrame. `None`/`None` = table talk broadcast.
+    /// Kept as Wire fallback for old peers; live path prefers [`Self::send_opus_to`].
+    pub fn send_pcm_to(&self, samples: &[f32], to: Option<String>, crew: Option<String>) {
         if samples.is_empty() {
             return;
         }
@@ -667,7 +692,22 @@ impl NetHub {
         let _ = self.tx.send(Cmd::Send(Wire::VoicePcm {
             from: self.self_id.clone(),
             pcm: base64::Engine::encode(&base64::engine::general_purpose::STANDARD, bytes),
+            to,
+            crew,
         }));
+    }
+
+    /// Live Opus media (binary AEAD path on mesh UDP / LAN TCP). Call-scoped like PCM.
+    pub fn send_opus_to(&self, opus: &[u8], to: Option<String>, crew: Option<String>) {
+        if opus.is_empty() {
+            return;
+        }
+        let _ = self.tx.send(Cmd::SendMedia {
+            from: self.self_id.clone(),
+            opus: opus.to_vec(),
+            to,
+            crew,
+        });
     }
 
     pub fn send_mix(
@@ -859,6 +899,127 @@ fn write_line(
     crate::crypt::write_sealed(stream, cipher, msg)
 }
 
+const TCP_MEDIA_MAGIC: &[u8; 4] = b"BNM1";
+
+fn write_media_tcp(
+    stream: &mut TcpStream,
+    frame: &crate::media::MediaFrame,
+    cipher: &crate::crypt::Cipher,
+) -> bool {
+    let Some(pt) = frame.pack() else {
+        return false;
+    };
+    let Some(sealed) = cipher.seal_bin(&pt) else {
+        return false;
+    };
+    if sealed.len() > 4096 {
+        return false;
+    }
+    let mut pkt = Vec::with_capacity(8 + sealed.len());
+    pkt.extend_from_slice(TCP_MEDIA_MAGIC);
+    pkt.extend_from_slice(&(sealed.len() as u32).to_be_bytes());
+    pkt.extend_from_slice(&sealed);
+    stream.write_all(&pkt).is_ok() && stream.flush().is_ok()
+}
+
+fn write_out(
+    stream: &mut TcpStream,
+    msg: &OutMsg,
+    cipher: &crate::crypt::Cipher,
+) -> bool {
+    match msg {
+        OutMsg::Wire(w) => write_line(stream, w, cipher),
+        OutMsg::Media(f) => write_media_tcp(stream, f, cipher),
+    }
+}
+
+enum TcpIn {
+    Wire(String),
+    Media(Vec<u8>),
+}
+
+/// After handshake, multiplex BN1 wire lines with length-prefixed BNM1 media.
+struct FrameReader {
+    stream: TcpStream,
+    buf: Vec<u8>,
+}
+
+impl FrameReader {
+    fn from_bufreader(reader: BufReader<TcpStream>) -> Self {
+        let leftover = reader.buffer().to_vec();
+        let stream = reader.into_inner();
+        Self {
+            stream,
+            buf: leftover,
+        }
+    }
+
+    fn fill(&mut self) -> bool {
+        let mut tmp = [0u8; 2048];
+        match self.stream.read(&mut tmp) {
+            Ok(0) => false,
+            Ok(n) => {
+                self.buf.extend_from_slice(&tmp[..n]);
+                true
+            }
+            Err(e)
+                if e.kind() == std::io::ErrorKind::WouldBlock
+                    || e.kind() == std::io::ErrorKind::TimedOut =>
+            {
+                true
+            }
+            Err(_) => false,
+        }
+    }
+
+    fn next_frame(&mut self) -> Option<TcpIn> {
+        loop {
+            if self.buf.len() >= 4 && &self.buf[..4] == TCP_MEDIA_MAGIC {
+                if self.buf.len() < 8 {
+                    if !self.fill() {
+                        return None;
+                    }
+                    continue;
+                }
+                let len = u32::from_be_bytes([
+                    self.buf[4],
+                    self.buf[5],
+                    self.buf[6],
+                    self.buf[7],
+                ]) as usize;
+                if len == 0 || len > 4096 {
+                    return None;
+                }
+                if self.buf.len() < 8 + len {
+                    if !self.fill() {
+                        return None;
+                    }
+                    continue;
+                }
+                let blob = self.buf[8..8 + len].to_vec();
+                self.buf.drain(..8 + len);
+                return Some(TcpIn::Media(blob));
+            }
+            if let Some(pos) = self.buf.iter().position(|&b| b == b'\n') {
+                let line = String::from_utf8_lossy(&self.buf[..=pos]).into_owned();
+                self.buf.drain(..=pos);
+                return Some(TcpIn::Wire(line));
+            }
+            if !self.fill() {
+                return None;
+            }
+        }
+    }
+}
+
+fn open_media_event(
+    sealed: &[u8],
+    cipher: &crate::crypt::Cipher,
+) -> Option<crate::media::MediaFrame> {
+    let pt = cipher.open_bin(sealed)?;
+    crate::media::MediaFrame::unpack(&pt)
+}
+
 fn decode_pcm(b64: &str) -> Vec<f32> {
     let Ok(bytes) = base64::Engine::decode(&base64::engine::general_purpose::STANDARD, b64) else {
         return vec![];
@@ -869,20 +1030,35 @@ fn decode_pcm(b64: &str) -> Vec<f32> {
         .collect()
 }
 
-pub(crate) type ClientMap = Arc<Mutex<HashMap<String, SyncSender<Wire>>>>;
+/// Outbound peer message: sealed Wire JSON line, or binary Opus media frame.
+#[derive(Clone, Debug)]
+pub(crate) enum OutMsg {
+    Wire(Wire),
+    Media(crate::media::MediaFrame),
+}
+
+pub(crate) type ClientMap = Arc<Mutex<HashMap<String, SyncSender<OutMsg>>>>;
 
 const WIRE_CAP: usize = 16;
 
-pub(crate) fn wire_chan() -> (SyncSender<Wire>, Receiver<Wire>) {
+pub(crate) fn wire_chan() -> (SyncSender<OutMsg>, Receiver<OutMsg>) {
     mpsc::sync_channel(WIRE_CAP)
 }
 
-fn push_wire(tx: &SyncSender<Wire>, msg: Wire) {
-    let _ = tx.try_send(msg);
+fn push_wire(tx: &SyncSender<OutMsg>, msg: Wire) {
+    let _ = tx.try_send(OutMsg::Wire(msg));
 }
 
-fn push_wire_hold(tx: &SyncSender<Wire>, msg: Wire) {
-    let _ = tx.send(msg);
+fn push_wire_hold(tx: &SyncSender<OutMsg>, msg: Wire) {
+    let _ = tx.send(OutMsg::Wire(msg));
+}
+
+fn push_media(tx: &SyncSender<OutMsg>, frame: crate::media::MediaFrame) {
+    let _ = tx.try_send(OutMsg::Media(frame));
+}
+
+fn push_media_hold(tx: &SyncSender<OutMsg>, frame: crate::media::MediaFrame) {
+    let _ = tx.send(OutMsg::Media(frame));
 }
 
 fn wire_hold(msg: &Wire) -> bool {
@@ -902,6 +1078,7 @@ fn wire_hold(msg: &Wire) -> bool {
             | Wire::SheetAsk
             | Wire::MapImageAsk
             | Wire::Mix { .. }
+            | Wire::VoicePcm { .. }
     )
 }
 
@@ -925,7 +1102,33 @@ fn relay_like_image(clients: &ClientMap, host_id: &str, to: &Option<String>, ski
     }
 }
 
-fn take_wires(wrx: &Receiver<Wire>) -> Vec<Wire> {
+fn relay_media_like(
+    clients: &ClientMap,
+    host_id: &str,
+    to: &Option<String>,
+    skip: Option<&str>,
+    frame: &crate::media::MediaFrame,
+) {
+    // try_send: drop under backlog rather than block (voice latency > reliability).
+    if let Some(tid) = to {
+        if tid != host_id {
+            if let Ok(map) = clients.lock() {
+                if let Some(tx) = map.get(tid) {
+                    push_media(tx, frame.clone());
+                }
+            }
+        }
+    } else if let Ok(map) = clients.lock() {
+        for (id, tx) in map.iter() {
+            if skip == Some(id.as_str()) {
+                continue;
+            }
+            push_media(tx, frame.clone());
+        }
+    }
+}
+
+fn take_wires(wrx: &Receiver<OutMsg>) -> Vec<OutMsg> {
     let mut batch = Vec::new();
     while let Ok(m) = wrx.try_recv() {
         batch.push(m);
@@ -933,10 +1136,10 @@ fn take_wires(wrx: &Receiver<Wire>) -> Vec<Wire> {
             break;
         }
     }
-    coalesce_video(batch)
+    coalesce_out(batch)
 }
 
-pub(crate) fn recv_batch(wrx: &Receiver<Wire>) -> Option<Vec<Wire>> {
+pub(crate) fn recv_batch(wrx: &Receiver<OutMsg>) -> Option<Vec<OutMsg>> {
     let first = wrx.recv().ok()?;
     let mut batch = vec![first];
     while let Ok(m) = wrx.try_recv() {
@@ -945,26 +1148,55 @@ pub(crate) fn recv_batch(wrx: &Receiver<Wire>) -> Option<Vec<Wire>> {
             break;
         }
     }
-    Some(coalesce_video(batch))
+    Some(coalesce_out(batch))
 }
 
-fn coalesce_video(batch: Vec<Wire>) -> Vec<Wire> {
-    if batch.len() < 2 {
+/// Voice-first outbound order: Opus MEDIA, then control Wire, then VideoFrame JPEG last.
+pub(crate) fn prioritize_out(mut batch: Vec<OutMsg>) -> Vec<OutMsg> {
+    batch.sort_by_key(|m| match m {
+        OutMsg::Media(_) => 0u8,
+        OutMsg::Wire(Wire::VideoFrame { .. }) => 2,
+        OutMsg::Wire(_) => 1,
+    });
+    batch
+}
+
+fn coalesce_out(batch: Vec<OutMsg>) -> Vec<OutMsg> {
+    if batch.is_empty() {
         return batch;
     }
-    let mut last: HashMap<(String, String), usize> = HashMap::new();
+    // Latest-wins for VideoFrame only. Never coalesce-drop Opus MEDIA —
+    // voice intelligibility > screenshare freshness under load.
+    let mut last_video: HashMap<(String, String), usize> = HashMap::new();
     let mut keep = vec![true; batch.len()];
     for (i, m) in batch.iter().enumerate() {
-        if let Wire::VideoFrame { from, kind, .. } = m {
-            if let Some(prev) = last.insert((from.clone(), kind.clone()), i) {
+        if let OutMsg::Wire(Wire::VideoFrame { from, kind, .. }) = m {
+            if let Some(prev) = last_video.insert((from.clone(), kind.clone()), i) {
                 keep[prev] = false;
             }
         }
     }
-    batch
+    let mut out: Vec<OutMsg> = batch
         .into_iter()
         .zip(keep)
         .filter_map(|(m, k)| k.then_some(m))
+        .collect();
+    // Adaptive drop: if voice is in this batch and the queue is busy, drop video
+    // rather than stall MEDIA (screenshare WAN is best-effort).
+    let has_media = out.iter().any(|m| matches!(m, OutMsg::Media(_)));
+    if has_media && out.len() >= WIRE_CAP / 2 {
+        out.retain(|m| !matches!(m, OutMsg::Wire(Wire::VideoFrame { .. })));
+    }
+    prioritize_out(out)
+}
+
+fn coalesce_video(batch: Vec<Wire>) -> Vec<Wire> {
+    coalesce_out(batch.into_iter().map(OutMsg::Wire).collect())
+        .into_iter()
+        .filter_map(|m| match m {
+            OutMsg::Wire(w) => Some(w),
+            _ => None,
+        })
         .collect()
 }
 
@@ -1091,7 +1323,7 @@ pub(crate) fn run_hub(
     let mut handle = handle;
     let mut stop = Arc::new(AtomicBool::new(false));
     let mut clients: ClientMap = Arc::new(Mutex::new(HashMap::new()));
-    let mut guest_tx: Option<SyncSender<Wire>> = None;
+    let mut guest_tx: Option<SyncSender<OutMsg>> = None;
     let mut names: HashMap<String, String> = HashMap::new();
     names.insert(self_id.clone(), handle.clone());
     let mut relay_child: Option<std::process::Child> = None;
@@ -1424,10 +1656,27 @@ pub(crate) fn run_hub(
                     } else {
                         push_wire(tx, msg);
                     }
+                } else if let Wire::VoicePcm { to, .. } = &msg {
+                    // Call-scoped PCM: unicast like VideoFrame; table talk (to=None) broadcasts.
+                    relay_like_image(&clients, &self_id, to, None, &msg);
                 } else if hold {
                     broadcast_hold(&clients, &msg, None);
                 } else {
                     broadcast(&clients, &msg, None);
+                }
+            }
+            Cmd::SendMedia { from, opus, to, crew } => {
+                let frame = crate::media::MediaFrame {
+                    from,
+                    to: to.clone(),
+                    crew,
+                    opus,
+                };
+                if let Some(tx) = &guest_tx {
+                    push_media_hold(tx, frame);
+                } else {
+                    // Host TX: call-scoped fanout (same rules as VoicePcm / VideoFrame).
+                    relay_media_like(&clients, &self_id, &to, None, &frame);
                 }
             }
         }
@@ -1489,8 +1738,8 @@ fn spawn_accept(
 
 fn handle_client(
     stream: TcpStream,
-    wtx: SyncSender<Wire>,
-    wrx: Receiver<Wire>,
+    wtx: SyncSender<OutMsg>,
+    wrx: Receiver<OutMsg>,
     clients: ClientMap,
     roster: Arc<Mutex<Vec<PeerInfo>>>,
     ev_tx: Sender<NetEvent>,
@@ -1560,7 +1809,7 @@ fn handle_client(
             let mut dead = false;
             if let Some(ref mut w) = writer2 {
                 for msg in &batch {
-                    if !write_line(w, msg, &cipher_w) {
+                    if !write_out(w, msg, &cipher_w) {
                         dead = true;
                         break;
                     }
@@ -1574,21 +1823,22 @@ fn handle_client(
         }
     });
 
-    loop {
-        if stop.load(Ordering::SeqCst) {
-            break;
-        }
-        line.clear();
-        match reader.read_line(&mut line) {
-            Ok(0) => break,
-            Ok(_) => {
+    let mut frames = FrameReader::from_bufreader(reader);
+    while !stop.load(Ordering::SeqCst) {
+        match frames.next_frame() {
+            Some(TcpIn::Wire(line)) => {
                 let Some(msg) = cipher.open_line::<Wire>(line.trim()) else {
                     continue;
                 };
                 host_incoming(msg, &cid, &host_id, &clients, &ev_tx);
                 let _ = (host_name.clone(),);
             }
-            Err(_) => break,
+            Some(TcpIn::Media(sealed)) => {
+                if let Some(frame) = open_media_event(&sealed, &cipher) {
+                    host_media_incoming(frame, &cid, &host_id, &clients, &ev_tx);
+                }
+            }
+            None => break,
         }
     }
     {
@@ -1606,9 +1856,9 @@ fn handle_client(
 }
 
 fn spawn_guest(
-    mut reader: BufReader<TcpStream>,
+    reader: BufReader<TcpStream>,
     writer: TcpStream,
-    wrx: Receiver<Wire>,
+    wrx: Receiver<OutMsg>,
     ev_tx: Sender<NetEvent>,
     stop: Arc<AtomicBool>,
     self_id: String,
@@ -1622,7 +1872,7 @@ fn spawn_guest(
             let mut dead = false;
             if let Some(ref mut w) = writer_out {
                 for msg in &batch {
-                    if !write_line(w, msg, &cipher_w) {
+                    if !write_out(w, msg, &cipher_w) {
                         dead = true;
                         break;
                     }
@@ -1637,18 +1887,21 @@ fn spawn_guest(
         let _ = writer;
     });
     thread::spawn(move || {
-        let mut line = String::new();
+        let mut frames = FrameReader::from_bufreader(reader);
         while !stop.load(Ordering::SeqCst) {
-            line.clear();
-            match reader.read_line(&mut line) {
-                Ok(0) => break,
-                Ok(_) => {
+            match frames.next_frame() {
+                Some(TcpIn::Wire(line)) => {
                     let Some(msg) = cipher.open_line::<Wire>(line.trim()) else {
                         continue;
                     };
                     guest_incoming(msg, &self_id, &ev_tx);
                 }
-                Err(_) => break,
+                Some(TcpIn::Media(sealed)) => {
+                    if let Some(frame) = open_media_event(&sealed, &cipher) {
+                        guest_media_incoming(frame, &self_id, &ev_tx);
+                    }
+                }
+                None => break,
             }
         }
         let _ = ev_tx.send(NetEvent::Left);
@@ -1707,12 +1960,22 @@ pub(crate) fn host_incoming(
                         });
                         relay_to(&clients, &host_id, to, Some(&cid), &msg);
                     }
-                    Wire::VoicePcm { from, pcm } => {
-                        let _ = ev_tx.send(NetEvent::VoicePcm {
-                            from: from.clone(),
-                            samples: decode_pcm(pcm),
-                        });
-                        broadcast(&clients, &msg, Some(&cid));
+                    Wire::VoicePcm { from, pcm, to, crew } => {
+                        let for_host = match to {
+                            Some(tid) => tid == &host_id,
+                            None => true,
+                        };
+                        if for_host {
+                            let _ = ev_tx.send(NetEvent::VoicePcm {
+                                from: from.clone(),
+                                samples: decode_pcm(pcm),
+                                to: to.clone(),
+                                crew: crew.clone(),
+                            });
+                        }
+                        // `to` set → unicast (and host already handled); crew alone mirrors
+                        // Video (app unicasts per member with `to`); neither → table broadcast.
+                        relay_like_image(&clients, &host_id, to, Some(&cid), &msg);
                     }
                     Wire::Mix {
                         layers,
@@ -1955,7 +2218,7 @@ pub(crate) fn host_incoming(
 pub(crate) fn finish_join(
     cid: String,
     cname: String,
-    wtx: SyncSender<Wire>,
+    wtx: SyncSender<OutMsg>,
     clients: &ClientMap,
     roster: &Arc<Mutex<Vec<PeerInfo>>>,
     ev_tx: &Sender<NetEvent>,
@@ -2163,7 +2426,7 @@ fn dial_peer(
                 let mut dead = false;
                 if let Some(ref mut w) = w2 {
                     for msg in &batch {
-                        if !write_line(w, msg, &cipher_w) {
+                        if !write_out(w, msg, &cipher_w) {
                             dead = true;
                             break;
                         }
@@ -2176,12 +2439,10 @@ fn dial_peer(
                 }
             }
         });
-        let mut line = String::new();
+        let mut frames = FrameReader::from_bufreader(reader);
         while !stop.load(Ordering::SeqCst) {
-            line.clear();
-            match reader.read_line(&mut line) {
-                Ok(0) => break,
-                Ok(_) => {
+            match frames.next_frame() {
+                Some(TcpIn::Wire(line)) => {
                     let Some(msg) = cipher.open_line::<Wire>(line.trim()) else {
                         continue;
                     };
@@ -2197,7 +2458,12 @@ fn dial_peer(
                     }
                     guest_incoming(msg, &self_id, &ev_tx);
                 }
-                Err(_) => break,
+                Some(TcpIn::Media(sealed)) => {
+                    if let Some(frame) = open_media_event(&sealed, &cipher) {
+                        guest_media_incoming(frame, &self_id, &ev_tx);
+                    }
+                }
+                None => break,
             }
         }
         return;
@@ -2213,6 +2479,60 @@ fn dial_peer(
         stop,
         self_id,
     );
+}
+
+pub(crate) fn host_media_incoming(
+    frame: crate::media::MediaFrame,
+    cid: &str,
+    host_id: &str,
+    clients: &ClientMap,
+    ev_tx: &Sender<NetEvent>,
+) {
+    let for_host = match &frame.to {
+        Some(tid) => tid == host_id,
+        None => true,
+    };
+    if for_host {
+        let samples = crate::media::decode_opus_pcm(&frame.opus);
+        if !samples.is_empty() {
+            let _ = ev_tx.send(NetEvent::VoicePcm {
+                from: frame.from.clone(),
+                samples,
+                to: frame.to.clone(),
+                crew: frame.crew.clone(),
+            });
+        }
+    }
+    // Re-seal per peer at the writer edge; fanout like VoicePcm / VideoFrame.
+    relay_media_like(clients, host_id, &frame.to, Some(cid), &frame);
+}
+
+pub(crate) fn guest_media_incoming(
+    frame: crate::media::MediaFrame,
+    self_id: &str,
+    ev_tx: &Sender<NetEvent>,
+) {
+    if frame.from == self_id {
+        return;
+    }
+    let mine = frame
+        .to
+        .as_deref()
+        .map(|id| id == self_id)
+        .unwrap_or(true);
+    if !mine {
+        return;
+    }
+    let samples = crate::media::decode_opus_pcm(&frame.opus);
+    if samples.is_empty() {
+        return;
+    }
+    let _ = ev_tx.send(NetEvent::VoicePcm {
+        from: frame.from,
+        samples,
+        to: frame.to,
+        crew: frame.crew,
+    });
 }
 
 pub(crate) fn guest_incoming(msg: Wire, self_id: &str, ev_tx: &Sender<NetEvent>) {
@@ -2253,11 +2573,13 @@ pub(crate) fn guest_incoming(msg: Wire, self_id: &str, ev_tx: &Sender<NetEvent>)
                 });
             }
         }
-        Wire::VoicePcm { from, pcm } => {
+        Wire::VoicePcm { from, pcm, to, crew } => {
             if from != self_id {
                 let _ = ev_tx.send(NetEvent::VoicePcm {
                     from,
                     samples: decode_pcm(&pcm),
+                    to,
+                    crew,
                 });
             }
         }
@@ -2894,6 +3216,12 @@ mod tests {
                 crew: None,
                 data: "abcd".into(),
             },
+            Wire::VoicePcm {
+                from: "a".into(),
+                pcm: "AA==".into(),
+                to: Some("b".into()),
+                crew: Some("crew-1".into()),
+            },
             Wire::Mix {
                 layers: HashMap::from([("rain".into(), 0.4)]),
                 blight: true,
@@ -2945,6 +3273,137 @@ mod tests {
             Wire::VideoFrame { data, .. } => assert_eq!(data, "new"),
             _ => panic!("expected frame"),
         }
+    }
+
+    #[test]
+    fn prioritize_media_before_video_frame() {
+        let batch = vec![
+            OutMsg::Wire(Wire::VideoFrame {
+                from: "p".into(),
+                name: "P".into(),
+                kind: "screen".into(),
+                to: None,
+                crew: None,
+                data: "jpeg".into(),
+            }),
+            OutMsg::Wire(Wire::Chat {
+                from: "a".into(),
+                name: "A".into(),
+                text: "hi".into(),
+                whisper: false,
+                to: None,
+            }),
+            OutMsg::Media(crate::media::MediaFrame {
+                from: "a".into(),
+                to: Some("b".into()),
+                crew: None,
+                opus: vec![1, 2, 3, 4],
+            }),
+        ];
+        let out = prioritize_out(batch);
+        assert!(matches!(out[0], OutMsg::Media(_)), "MEDIA first");
+        assert!(matches!(out[1], OutMsg::Wire(Wire::Chat { .. })), "control Wire next");
+        assert!(
+            matches!(out[2], OutMsg::Wire(Wire::VideoFrame { .. })),
+            "VideoFrame last"
+        );
+    }
+
+    #[test]
+    fn coalesce_keeps_all_media_drops_stale_video() {
+        let batch = vec![
+            OutMsg::Media(crate::media::MediaFrame {
+                from: "a".into(),
+                to: None,
+                crew: None,
+                opus: vec![1],
+            }),
+            OutMsg::Wire(Wire::VideoFrame {
+                from: "p".into(),
+                name: "P".into(),
+                kind: "cam".into(),
+                to: None,
+                crew: None,
+                data: "old".into(),
+            }),
+            OutMsg::Media(crate::media::MediaFrame {
+                from: "a".into(),
+                to: None,
+                crew: None,
+                opus: vec![2],
+            }),
+            OutMsg::Wire(Wire::VideoFrame {
+                from: "p".into(),
+                name: "P".into(),
+                kind: "cam".into(),
+                to: None,
+                crew: None,
+                data: "new".into(),
+            }),
+        ];
+        let out = coalesce_out(batch);
+        let media: Vec<_> = out
+            .iter()
+            .filter_map(|m| match m {
+                OutMsg::Media(f) => Some(f.opus.clone()),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(media, vec![vec![1], vec![2]], "never drop Opus MEDIA in coalesce");
+        assert!(
+            matches!(out[0], OutMsg::Media(_)),
+            "prioritized: media before video"
+        );
+        let videos: Vec<_> = out
+            .iter()
+            .filter(|m| matches!(m, OutMsg::Wire(Wire::VideoFrame { .. })))
+            .collect();
+        assert_eq!(videos.len(), 1, "latest-wins VideoFrame");
+        match &videos[0] {
+            OutMsg::Wire(Wire::VideoFrame { data, .. }) => assert_eq!(data, "new"),
+            _ => unreachable!(),
+        }
+    }
+
+    #[test]
+    fn coalesce_adaptive_drops_video_when_voice_backs_up() {
+        // > WIRE_CAP/2 with Media present → drop VideoFrame (voice-first under load).
+        let mut batch = Vec::new();
+        for i in 0..6 {
+            batch.push(OutMsg::Wire(Wire::Chat {
+                from: "a".into(),
+                name: "A".into(),
+                text: format!("c{i}"),
+                whisper: false,
+                to: None,
+            }));
+        }
+        batch.push(OutMsg::Media(crate::media::MediaFrame {
+            from: "a".into(),
+            to: None,
+            crew: None,
+            opus: vec![9, 9],
+        }));
+        batch.push(OutMsg::Wire(Wire::VideoFrame {
+            from: "p".into(),
+            name: "P".into(),
+            kind: "screen".into(),
+            to: None,
+            crew: None,
+            data: "big".into(),
+        }));
+        assert!(batch.len() >= WIRE_CAP / 2);
+        let out = coalesce_out(batch);
+        assert!(
+            out.iter().any(|m| matches!(m, OutMsg::Media(_))),
+            "keep MEDIA"
+        );
+        assert!(
+            !out
+                .iter()
+                .any(|m| matches!(m, OutMsg::Wire(Wire::VideoFrame { .. }))),
+            "drop VideoFrame under voice backpressure"
+        );
     }
 
     #[test]
@@ -3319,4 +3778,162 @@ mod tests {
         assert!(err.is_err());
         let _ = std::fs::remove_dir_all(&dir);
     }
+
+    #[test]
+    fn voice_pcm_serde_defaults_old_messages() {
+        let old = r#"{"type":"voice-pcm","from":"a","pcm":"AA=="}"#;
+        let msg: Wire = serde_json::from_str(old).unwrap();
+        match msg {
+            Wire::VoicePcm { from, pcm, to, crew } => {
+                assert_eq!(from, "a");
+                assert_eq!(pcm, "AA==");
+                assert!(to.is_none());
+                assert!(crew.is_none());
+            }
+            _ => panic!("expected VoicePcm"),
+        }
+        let scoped = Wire::VoicePcm {
+            from: "a".into(),
+            pcm: "AA==".into(),
+            to: Some("b".into()),
+            crew: Some("c1".into()),
+        };
+        let s = serde_json::to_string(&scoped).unwrap();
+        let back: Wire = serde_json::from_str(&s).unwrap();
+        match back {
+            Wire::VoicePcm { to, crew, .. } => {
+                assert_eq!(to.as_deref(), Some("b"));
+                assert_eq!(crew.as_deref(), Some("c1"));
+            }
+            _ => panic!("roundtrip"),
+        }
+    }
+
+    #[test]
+    fn voice_pcm_with_to_is_not_broadcast() {
+        let (tx_b, rx_b) = wire_chan();
+        let (tx_c, rx_c) = wire_chan();
+        let clients: ClientMap = Arc::new(Mutex::new(HashMap::from([
+            ("b".into(), tx_b),
+            ("c".into(), tx_c),
+        ])));
+        let (ev_tx, ev_rx) = mpsc::channel();
+        let msg = Wire::VoicePcm {
+            from: "a".into(),
+            pcm: "AA==".into(),
+            to: Some("b".into()),
+            crew: None,
+        };
+        host_incoming(msg, "a", "host", &clients, &ev_tx);
+        match rx_b.try_recv() {
+            Ok(OutMsg::Wire(Wire::VoicePcm { to, .. })) => assert_eq!(to.as_deref(), Some("b")),
+            other => panic!("B should receive targeted PCM, got {other:?}"),
+        }
+        assert!(
+            rx_c.try_recv().is_err(),
+            "C must not receive call-scoped VoicePcm"
+        );
+        assert!(
+            ev_rx.try_recv().is_err(),
+            "host is not the target — no local VoicePcm event"
+        );
+    }
+
+    #[test]
+    fn voice_pcm_to_host_emits_local_not_peers() {
+        let (tx_b, rx_b) = wire_chan();
+        let clients: ClientMap = Arc::new(Mutex::new(HashMap::from([("b".into(), tx_b)])));
+        let (ev_tx, ev_rx) = mpsc::channel();
+        let msg = Wire::VoicePcm {
+            from: "a".into(),
+            pcm: "AA==".into(),
+            to: Some("host".into()),
+            crew: None,
+        };
+        host_incoming(msg, "a", "host", &clients, &ev_tx);
+        match ev_rx.try_recv() {
+            Ok(NetEvent::VoicePcm { from, to, .. }) => {
+                assert_eq!(from, "a");
+                assert_eq!(to.as_deref(), Some("host"));
+            }
+            _ => panic!("host should get local VoicePcm event"),
+        }
+        assert!(rx_b.try_recv().is_err(), "peers must not get host-targeted PCM");
+    }
+
+    #[test]
+    fn voice_pcm_table_talk_still_broadcasts() {
+        let (tx_b, rx_b) = wire_chan();
+        let (tx_c, rx_c) = wire_chan();
+        let clients: ClientMap = Arc::new(Mutex::new(HashMap::from([
+            ("b".into(), tx_b),
+            ("c".into(), tx_c),
+        ])));
+        let (ev_tx, ev_rx) = mpsc::channel();
+        let msg = Wire::VoicePcm {
+            from: "a".into(),
+            pcm: "AA==".into(),
+            to: None,
+            crew: None,
+        };
+        host_incoming(msg, "a", "host", &clients, &ev_tx);
+        assert!(matches!(rx_b.try_recv(), Ok(OutMsg::Wire(Wire::VoicePcm { .. }))));
+        assert!(matches!(rx_c.try_recv(), Ok(OutMsg::Wire(Wire::VoicePcm { .. }))));
+        assert!(matches!(ev_rx.try_recv(), Ok(NetEvent::VoicePcm { .. })));
+    }
+
+    #[test]
+    fn media_frame_call_scoped_fanout() {
+        let (tx_b, rx_b) = wire_chan();
+        let (tx_c, rx_c) = wire_chan();
+        let clients: ClientMap = Arc::new(Mutex::new(HashMap::from([
+            ("b".into(), tx_b),
+            ("c".into(), tx_c),
+        ])));
+        let (ev_tx, ev_rx) = mpsc::channel();
+        let frame = crate::media::MediaFrame {
+            from: "a".into(),
+            to: Some("b".into()),
+            crew: Some("crew-1".into()),
+            opus: vec![7, 7, 7, 7],
+        };
+        host_media_incoming(frame, "a", "host", &clients, &ev_tx);
+        match rx_b.try_recv() {
+            Ok(OutMsg::Media(f)) => {
+                assert_eq!(f.to.as_deref(), Some("b"));
+                assert_eq!(f.opus, vec![7, 7, 7, 7]);
+            }
+            other => panic!("B should get media, got {other:?}"),
+        }
+        assert!(rx_c.try_recv().is_err(), "C must not get call-scoped media");
+        assert!(ev_rx.try_recv().is_err(), "host not target — no local play");
+    }
+
+    #[test]
+    fn media_frame_to_host_emits_pcm_event() {
+        let (tx_b, rx_b) = wire_chan();
+        let clients: ClientMap = Arc::new(Mutex::new(HashMap::from([("b".into(), tx_b)])));
+        let (ev_tx, ev_rx) = mpsc::channel();
+        // Use a real Opus packet so decode yields samples.
+        let mut enc = crate::media::Encoder::new().expect("opus");
+        let pcm = crate::media::sine_frame(440.0, 0.3);
+        let opus = enc.encode(&pcm).expect("encode");
+        let frame = crate::media::MediaFrame {
+            from: "a".into(),
+            to: Some("host".into()),
+            crew: None,
+            opus,
+        };
+        host_media_incoming(frame, "a", "host", &clients, &ev_tx);
+        match ev_rx.try_recv() {
+            Ok(NetEvent::VoicePcm { from, to, samples, .. }) => {
+                assert_eq!(from, "a");
+                assert_eq!(to.as_deref(), Some("host"));
+                assert!(!samples.is_empty());
+            }
+            _ => panic!("expected host VoicePcm from media"),
+        }
+        assert!(rx_b.try_recv().is_err(), "peers must not get host-targeted media");
+    }
+
 }

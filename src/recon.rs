@@ -1,6 +1,6 @@
 //! Local case files. Nothing here is sent on the wire.
 
-use crate::theme::{self, CREAM, CYAN, DIM, KILL, MUTED, PANEL};
+use crate::theme::{self, CREAM, CYAN, DIM, KILL, PANEL};
 use eframe::egui::{self, Color32, RichText, Vec2};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -356,20 +356,11 @@ pub fn paint(
         .show(&mut file_ui, |ui| {
             ui.set_width((right.width() - 18.0).max(40.0));
             if files.is_empty() {
-                ui.label(
-                    RichText::new("NO OPEN FILE")
-                        .family(theme::display())
-                        .size(28.0)
-                        .color(theme::ACID),
-                );
-                theme::kicker(ui, "RECON://EMPTY");
-                ui.add(
-                    egui::Label::new(
-                        RichText::new("New person or New company. The file stays on this computer.")
-                            .color(MUTED)
-                            .size(13.0),
-                    )
-                    .wrap(),
+                theme::page_chrome(
+                    ui,
+                    "RECON://EMPTY",
+                    "NO OPEN FILE",
+                    "New person or New company · file stays on this computer",
                 );
                 return;
             }
@@ -383,13 +374,12 @@ pub fn paint(
 
 fn paint_index(ui: &mut egui::Ui, files: &mut Vec<Dossier>, index: &mut usize, query: &mut String) -> bool {
     let mut changed = false;
-    ui.label(
-        RichText::new("RECON")
-            .family(theme::display())
-            .size(26.0)
-            .color(theme::ACID),
+    theme::page_chrome(
+        ui,
+        "RECON://LOCAL",
+        "RECON",
+        "New person or company · files stay on this computer",
     );
-    theme::kicker(ui, "CASE://LOCAL");
     ui.label(
         RichText::new(format!("{:02} FILES ON THIS DECK", files.len()))
             .family(theme::mono())

@@ -9,6 +9,8 @@ mod deskfile;
 mod dice;
 mod images;
 mod maps;
+mod media;
+mod aec;
 mod mesh;
 mod names;
 mod net;

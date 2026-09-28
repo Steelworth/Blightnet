@@ -673,12 +673,11 @@ pub fn paint(
 ) -> Vec<Act> {
     let mut acts = Vec::new();
     ui.set_clip_rect(ui.max_rect().intersect(ui.clip_rect()));
-    theme::kicker(ui, "NETDIR://TREE");
-    ui.label(
-        RichText::new("Local deck filesystem. Nothing here is sent to the table.")
-            .family(theme::ui_font())
-            .size(12.0)
-            .color(MUTED),
+    theme::page_chrome(
+        ui,
+        "TREE://LOCAL",
+        "TREE",
+        "Browse this deck · nothing is sent to the table",
     );
 
     // Bookmarks

@@ -484,13 +484,17 @@ fn spawn_ask(rotn: &mut Rotn, root: &Path, ask: String, desk: Desk) {
 }
 
 pub fn paint(ui: &mut egui::Ui, root: &Path, rotn: &mut Rotn, desk: &Desk) {
+    theme::page_chrome(
+        ui,
+        "ROTN://LOCAL",
+        "ROTN",
+        if rotn.loaded {
+            "Ask the fixer · rumor / job / NPC · nothing leaves this deck"
+        } else {
+            "Tools only · add a local model when you want a runner"
+        },
+    );
     ui.horizontal_wrapped(|ui| {
-        ui.label(
-            RichText::new("REBELS OF THE NET")
-                .family(theme::display())
-                .size(26.0)
-                .color(theme::ACID),
-        );
         ui.label(
             RichText::new(if rotn.loaded { "RUNNER READY" } else { "TOOLS ONLY" })
                 .family(theme::mono())
@@ -498,16 +502,7 @@ pub fn paint(ui: &mut egui::Ui, root: &Path, rotn: &mut Rotn, desk: &Desk) {
                 .color(if rotn.loaded { CYAN } else { DIM }),
         );
     });
-    theme::kicker(ui, "ROTN://LOCAL  ·  NO WIRE");
-    wrap_text_local(
-        ui,
-        "How this works. The fixer sits on your computer and knows this table. Press Hour, Table, or Place for the facts. Press Rumor, Job, or NPC and they make something up for where you are. You can type a question too. None of that is sent to anyone.",
-    );
-    wrap_text_local(
-        ui,
-        "No other service. The fixer answers from this computer. A model file in data/models is optional, and only if llama-cli is on this machine. Nothing is sent away.",
-    );
-    ui.add_space(6.0);
+    ui.add_space(4.0);
     if let Some(rx) = rotn.pending.take() {
         match rx.try_recv() {
             Ok(line) => {

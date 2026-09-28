@@ -18,3 +18,9 @@ The Blightnet **source code** is MIT-licensed. Bundled media keeps its own licen
 The **i** button on the table repeats the same music credit.
 
 Generated portraits, place paintings, and still-life kit photos in `assets/` were made for this table. Treat them as part of the project unless a file says otherwise.
+
+## Native libraries
+
+- **[Opus](https://opus-codec.org/)** — BSD-style (libopus). Linked for live-call voice encode/decode. System package on Linux (`libopus`); not WebRTC. Same system lib expected on Windows/macOS builds.
+- **[SpeexDSP](https://gitlab.xiph.org/xiph/speexdsp)** — BSD-style (libspeexdsp). Acoustic echo cancellation on the capture path before Opus encode. System package on Linux (`speexdsp` / `libspeexdsp`); probed via pkg-config at build time. If missing, Blightnet builds without AEC and voice still works.
+

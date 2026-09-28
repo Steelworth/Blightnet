@@ -791,13 +791,14 @@ pub fn ui_sheet(
             }
         });
         ui.horizontal_wrapped(|ui| {
-            if theme::neon_btn_color(ui, "Norm", CYAN, *luck == crate::dice::Luck::Norm).clicked() {
+            let ch = theme::chrome();
+            if theme::neon_btn_color(ui, "Norm", ch.cyan, *luck == crate::dice::Luck::Norm).clicked() {
                 *luck = crate::dice::Luck::Norm;
             }
-            if theme::neon_btn_color(ui, "Adv", CYAN, *luck == crate::dice::Luck::Adv).clicked() {
+            if theme::neon_btn_color(ui, "Adv", ch.cyan, *luck == crate::dice::Luck::Adv).clicked() {
                 *luck = crate::dice::Luck::Adv;
             }
-            if theme::neon_btn_color(ui, "Dis", CYAN, *luck == crate::dice::Luck::Dis).clicked() {
+            if theme::neon_btn_color(ui, "Dis", ch.cyan, *luck == crate::dice::Luck::Dis).clicked() {
                 *luck = crate::dice::Luck::Dis;
             }
             if theme::neon_btn(ui, "d%").clicked() {
@@ -850,9 +851,15 @@ pub fn ui_sheet(
         return;
     }
     sheet_card(ui, "ROSTER", |ui| {
+        ui.label(
+            egui::RichText::new("SELECT row · AIM is secondary")
+                .family(theme::mono())
+                .size(10.0)
+                .color(MUTED),
+        );
         egui::ScrollArea::vertical()
             .id_salt("char-roster")
-            .max_height(88.0)
+            .max_height(140.0)
             .show(ui, |ui| {
                 for (i, c) in chars.iter().enumerate() {
                     let mark = if c.dead {
@@ -864,36 +871,37 @@ pub fn ui_sheet(
                     };
                     let aimed = target.as_deref() == Some(c.id.as_str());
                     let on = *char_i == i;
-                    ui.horizontal_wrapped(|ui| {
-                        let picked = crate::maps::drag_source(
-                            ui,
-                            ("char-drag", c.id.as_str()),
-                            || crate::maps::TokenSpec {
-                                name: c.name.clone(),
-                                image: c.portrait.clone(),
-                                sheet: c.id.clone(),
-                                cat: String::new(),
-                                src: String::new(),
-                            },
-                            |ui| {
-                                theme::neon_btn_color(
+                    let label = format!("{mark} {}  {}/{}", c.name, c.hp, c.hp_max);
+                    let sub = if aimed { "aimed" } else { "" };
+                    let row_w = (ui.available_width() - 76.0).max(72.0);
+                    ui.horizontal(|ui| {
+                        let picked = ui
+                            .allocate_ui(egui::Vec2::new(row_w, if aimed { 42.0 } else { 30.0 }), |ui| {
+                                crate::maps::drag_source(
                                     ui,
-                                    &format!(
-                                        "{}{mark} {}  {}/{}",
-                                        if aimed { "▸ " } else { "" },
-                                        c.name,
-                                        c.hp,
-                                        c.hp_max
-                                    ),
-                                    CYAN,
-                                    on,
-                                );
-                            },
-                        );
+                                    ("char-drag", c.id.as_str()),
+                                    || crate::maps::TokenSpec {
+                                        name: c.name.clone(),
+                                        image: c.portrait.clone(),
+                                        sheet: c.id.clone(),
+                                        cat: String::new(),
+                                        src: String::new(),
+                                    },
+                                    |ui| {
+                                        theme::catalog_row(ui, &label, sub, on);
+                                    },
+                                )
+                            })
+                            .inner;
                         if picked.clicked() {
                             *char_i = i;
                         }
-                        if theme::neon_btn_color(ui, "Aim", CYAN, aimed).clicked() {
+                        if aimed {
+                            if theme::neon_btn_color(ui, "Aim", theme::chrome().acid, true).clicked()
+                            {
+                                *target = None;
+                            }
+                        } else if theme::muted_btn(ui, "Aim").clicked() {
                             *target = Some(c.id.clone());
                         }
                     });
@@ -1675,7 +1683,7 @@ fn ui_level_up(ui: &mut egui::Ui, c: &mut Character, blight: bool) {
                     c.leveling = false;
                 }
             }
-            if theme::neon_btn_color(ui, "Cancel", KILL, false).clicked() {
+            if theme::muted_btn(ui, "Cancel").clicked() {
                 c.pending_ip.clear();
                 c.leveling = false;
             }
@@ -1736,7 +1744,7 @@ fn ui_level_up(ui: &mut egui::Ui, c: &mut Character, blight: bool) {
             c.pending_asi.clear();
             c.leveling = false;
         }
-        if theme::neon_btn_color(ui, "Cancel", KILL, false).clicked() {
+        if theme::muted_btn(ui, "Cancel").clicked() {
             c.pending_asi.clear();
             c.leveling = false;
         }

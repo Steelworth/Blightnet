@@ -29,6 +29,17 @@ const FILM_W: u32 = 960;
 const FILM_H: u32 = 540;
 const FILM_BYTES: usize = (FILM_W as usize) * (FILM_H as usize) * 3;
 
+/// TX allowed when table/call voice is on, not muted, and net is live.
+fn voice_tx_allowed(voice_on: bool, mute: bool, live: bool) -> bool {
+    voice_on && !mute && live
+}
+
+/// RX allowed for remote PCM when not deafened (mute must not gate hearing).
+fn voice_rx_allowed(from_self: bool, deaf: bool) -> bool {
+    !from_self && !deaf
+}
+
+
 struct MediaJob {
     gen: u64,
     ok: bool,
@@ -298,7 +309,7 @@ const TOUR: &[TourStep] = &[
     },
     TourStep {
         title: "VOICE",
-        body: "Voice is table talk, or a private call from Contacts. Table voice and Mute are here. Mic send is how loud you go out, and it stays on this computer. The mic starts when you turn table voice on. Go Online first.",
+        body: "Voice is table talk, or a private call from Contacts. Table voice, Mute, and Deaf are here. Mic send is how loud you go out, and it stays on this computer. The mic starts when you turn table voice on. Go Online first.",
         page: Page::Table,
         dock: ShellPanel::Voice,
         open: TourOpen::None,
@@ -548,6 +559,8 @@ pub struct Blightnet {
     join_in: String,
     voice_on: bool,
     voice_mute: bool,
+    /// Stop hearing remote voice (independent of mute TX).
+    voice_deaf: bool,
     media_at: Instant,
     incoming: Option<(String, String)>,
     call_id: Option<String>,
@@ -558,6 +571,14 @@ pub struct Blightnet {
     mic_rx: Option<Receiver<Vec<f32>>>,
     mic_rate: u32,
     _mic: Option<cpal::Stream>,
+    /// Opus encoder for live voice (20 ms @ 16 kHz). Created lazily.
+    opus_enc: Option<crate::media::Encoder>,
+    /// Accrues PCM until one Opus frame (320 samples).
+    opus_buf: Vec<f32>,
+    /// Acoustic echo canceller (Speex when linked).
+    aec: crate::aec::Aec,
+    /// Once-per-call notice when Opus encode falls back to Wire PCM (reset on hang-up).
+    opus_fallback_noted: bool,
     crews: Vec<Crew>,
     crew_name: String,
     chat_target: ChatTarget,
@@ -1057,6 +1078,7 @@ impl Blightnet {
             join_in: String::new(),
             voice_on: false,
             voice_mute: false,
+            voice_deaf: false,
             media_at: Instant::now(),
             incoming: None,
             call_id: None,
@@ -1067,6 +1089,10 @@ impl Blightnet {
             mic_rx: None,
             mic_rate: 48000,
             _mic: None,
+            opus_enc: None,
+            opus_buf: Vec::new(),
+            aec: crate::aec::Aec::new(),
+            opus_fallback_noted: false,
             crews,
             crew_name: String::new(),
             chat_target: ChatTarget::Table,
@@ -1109,7 +1135,7 @@ impl Blightnet {
             visuals_on: false,
             chrome: theme::ChromeTheme::NeonDeck,
             theme_pick: false,
-            index_ledger: true,
+            index_ledger: false,
             ui_scale: UI_SCALE_DEFAULT,
             node_live: false,
             path_health: String::new(),
@@ -2927,8 +2953,15 @@ impl Blightnet {
                         _ => {}
                     }
                 }
-                NetEvent::VoicePcm { from, samples } => {
-                    if from != self.net.self_id && !self.voice_mute {
+                NetEvent::VoicePcm { from, samples, to, .. } => {
+                    if let Some(tid) = &to {
+                        if tid != &self.net.self_id {
+                            continue;
+                        }
+                    }
+                    // Deaf = no RX. Mute must not silence remote voice.
+                    if voice_rx_allowed(from == self.net.self_id, self.voice_deaf) {
+                        self.aec.feed_playback(&samples);
                         self.mixer.play_pcm(samples, 16000);
                     }
                 }
@@ -3344,10 +3377,8 @@ impl Blightnet {
 
     fn pump_mic(&mut self) {
         let live = self.net.presence || self.net.role != Role::Idle;
-        if self.voice_on && self.voice_mute && live {
-            self.net.send_pcm(&[0.0; 160]);
-        }
-        let talk = self.voice_on && !self.voice_mute && live;
+        // Mute = no TX (do not spam silence keepalive PCM). Deaf is RX-only.
+        let talk = voice_tx_allowed(self.voice_on, self.voice_mute, live);
         if self.rec_on {
             self.ensure_mic();
         }
@@ -3383,7 +3414,62 @@ impl Blightnet {
             }
         }
         if talk {
-            self.net.send_pcm(&down);
+            // Opus 20 ms frames @ 16 kHz on binary media path (Phase A #2).
+            self.opus_buf.extend_from_slice(&down);
+            if self.opus_enc.is_none() {
+                self.opus_enc = crate::media::Encoder::new();
+                if self.opus_enc.is_none() && !self.opus_fallback_noted {
+                    self.opus_fallback_noted = true;
+                    self.chat.push(
+                        "Voice: Opus encoder missing — using PCM fallback (this call).".into(),
+                    );
+                }
+            }
+            let frame_n = crate::media::FRAME_SAMPLES;
+            while self.opus_buf.len() >= frame_n {
+                let mut frame: Vec<f32> = self.opus_buf.drain(..frame_n).collect();
+                // Phase A #3: AEC on capture before Opus (far-end = recent playout).
+                self.aec.process_frame(&mut frame);
+                let opus = match self.opus_enc.as_mut().and_then(|e| e.encode(&frame)) {
+                    Some(p) => p,
+                    None => {
+                        // Encoder missing / failed — Wire PCM fallback keeps voice up.
+                        if !self.opus_fallback_noted {
+                            self.opus_fallback_noted = true;
+                            self.chat.push(
+                                "Voice: Opus encode unavailable — using PCM fallback (this call).".into(),
+                            );
+                        }
+                        self.send_pcm_scoped(&frame);
+                        continue;
+                    }
+                };
+                self.send_opus_scoped(&opus);
+            }
+        }
+    }
+
+    fn send_opus_scoped(&self, opus: &[u8]) {
+        let targets = self.call_targets();
+        if targets.is_empty() {
+            self.net.send_opus_to(opus, None, None);
+        } else {
+            let crew = self.call_crew.clone();
+            for id in targets {
+                self.net.send_opus_to(opus, Some(id), crew.clone());
+            }
+        }
+    }
+
+    fn send_pcm_scoped(&self, samples: &[f32]) {
+        let targets = self.call_targets();
+        if targets.is_empty() {
+            self.net.send_pcm(samples);
+        } else {
+            let crew = self.call_crew.clone();
+            for id in targets {
+                self.net.send_pcm_to(samples, Some(id), crew.clone());
+            }
         }
     }
 
@@ -5167,21 +5253,16 @@ impl Blightnet {
 
     fn start_screen_share(&mut self) {
         self.screen_cap = None;
-        if !self.refresh_ffmpeg() {
-            self.chat.push(format!(
-                "Screen share needs FFmpeg. {}",
-                crate::sys::ffmpeg_install_tip()
-            ));
-            self.screen_on = false;
-            return;
-        }
+        // PipeWire portal path may use GStreamer (not FFmpeg). Still tip if neither works.
         match crate::video::start_screen() {
-            Some(cap) => {
-                self.screen_cap = Some(cap);
+            Ok(started) => {
+                let _backend = started.backend; // PipeWire / x11grab / gdigrab
+                self.screen_cap = Some(started.capture);
                 self.screen_on = true;
+                self.chat.push(started.note);
             }
-            None => {
-                self.chat.push("Could not share the screen.".into());
+            Err(e) => {
+                self.chat.push(e);
                 self.screen_on = false;
             }
         }
@@ -5430,24 +5511,54 @@ impl Blightnet {
         }
         self.media_at = Instant::now();
         let targets = self.call_targets();
+        // Soft-fail: capture death clears cam/screen only — voice/call stay up.
         if self.cam_on {
-            if let Some(cap) = self.cam_cap.as_ref() {
+            let dead = self
+                .cam_cap
+                .as_mut()
+                .map(|c| !c.alive())
+                .unwrap_or(true);
+            if dead {
+                self.chat.push(
+                    "Camera capture ended — voice stays up. Toggle Camera to retry.".into(),
+                );
+                self.cam_on = false;
+                self.cam_cap = None;
+                self.local_cam.clear();
+            } else if let Some(cap) = self.cam_cap.as_ref() {
                 if let Some(f) = cap.latest() {
                     self.local_cam = f;
-                    if self.local_cam.len() <= 120_000 && !targets.is_empty() {
+                    if self.local_cam.len() <= 160_000 && !targets.is_empty() {
                         let crew = self.call_crew.clone();
                         for id in &targets {
-                            self.net.send_video_frame("cam", Some(id.clone()), crew.clone(), &self.local_cam);
+                            self.net.send_video_frame(
+                                "cam",
+                                Some(id.clone()),
+                                crew.clone(),
+                                &self.local_cam,
+                            );
                         }
                     }
                 }
             }
         }
         if self.screen_on {
-            if let Some(cap) = self.screen_cap.as_ref() {
+            let dead = self
+                .screen_cap
+                .as_mut()
+                .map(|c| !c.alive())
+                .unwrap_or(true);
+            if dead {
+                self.chat.push(
+                    "Screen share ended — voice stays up. Share screen again to retry.".into(),
+                );
+                self.screen_on = false;
+                self.screen_cap = None;
+                self.local_screen.clear();
+            } else if let Some(cap) = self.screen_cap.as_ref() {
                 if let Some(f) = cap.latest() {
                     self.local_screen = f;
-                    if self.local_screen.len() <= 120_000 && !targets.is_empty() {
+                    if self.local_screen.len() <= 160_000 && !targets.is_empty() {
                         let crew = self.call_crew.clone();
                         for id in &targets {
                             self.net.send_video_frame(
@@ -5480,6 +5591,10 @@ impl Blightnet {
         self.local_screen.clear();
         self.remote_vid.clear();
         self.voice_on = false;
+        self.aec.reset();
+        self.opus_buf.clear();
+        // Once-per-call: allow the Opus→PCM notice again on the next call.
+        self.opus_fallback_noted = false;
     }
 
     fn hang_up(&mut self) {
@@ -6026,7 +6141,8 @@ impl Blightnet {
 
     fn page_loc(&self) -> &'static str {
         match self.page {
-            Page::Table => "blightnet://blightnexus",
+            Page::Index => "blightnet://index",
+            Page::Table => "blightnet://table",
             Page::Tutorial => "blightnet://tutorial",
             Page::Audio => "blightnet://audio",
             Page::Blackjack => "blightnet://blackjack",
@@ -6037,7 +6153,9 @@ impl Blightnet {
             Page::Terminal => "blightnet://terminal",
             Page::Recon => "blightnet://recon",
             Page::Tree => "blightnet://tree",
-            _ => "blightnet://start",
+            Page::Chars => "blightnet://chars",
+            Page::Catalog(_) => "blightnet://catalog",
+            Page::Boot => "blightnet://boot",
         }
     }
 
@@ -6196,31 +6314,33 @@ impl Blightnet {
     }
 
     fn command_app_tabs(&mut self, ui: &mut egui::Ui) {
+        // Side-rail destinations (dock). Same chrome_tab selected language as page tabs.
+        // PLAYER here = dock library rail — full-page PLAYER lives on the page tab row.
         for (panel, label, tip) in [
             (
-                ShellPanel::Player,
-                "PLAYER",
-                "Pictures, video, PDF, and music on this deck. Press again to close the side rail.",
-            ),
-            (
-                ShellPanel::Video,
-                "VIDEO",
-                "Open video. Press again to close.",
-            ),
-            (
-                ShellPanel::Voice,
-                "VOICE",
-                "Open the mic and calls. Press again to close.",
+                ShellPanel::Chat,
+                "CHAT",
+                "Side rail · table talk, DMs, and files. Press again to close.",
             ),
             (
                 ShellPanel::Contacts,
                 "CONTACTS",
-                "People saved on this deck. Press again to close.",
+                "Side rail · people saved on this deck. Press again to close.",
             ),
             (
-                ShellPanel::Chat,
-                "CHAT",
-                "Table talk, DMs, and files. Press again to close.",
+                ShellPanel::Voice,
+                "VOICE",
+                "Side rail · mic and calls. Press again to close.",
+            ),
+            (
+                ShellPanel::Video,
+                "VIDEO",
+                "Side rail · video. Press again to close.",
+            ),
+            (
+                ShellPanel::Player,
+                "PLAYER",
+                "Side rail · pictures, video, PDF, and music. Full page via Dock → Full page.",
             ),
         ] {
             let on = self.shell == panel;
@@ -6228,6 +6348,17 @@ impl Blightnet {
                 if on {
                     self.shell = ShellPanel::None;
                 } else {
+                    // Opening a dock rail leaves full-page Player if we were there.
+                    if self.player_full {
+                        self.player_full = false;
+                        if self.page == Page::Player {
+                            self.page = if self.player_back == Page::Player {
+                                Page::Table
+                            } else {
+                                self.player_back
+                            };
+                        }
+                    }
                     self.shell = panel;
                     if panel == ShellPanel::Voice {
                         self.ensure_mic();
@@ -6243,33 +6374,63 @@ impl Blightnet {
     fn command_page_tabs(&mut self, ui: &mut egui::Ui) {
         ui.spacing_mut().item_spacing = Vec2::new(4.0, 0.0);
         ui.horizontal(|ui| {
-            if tab(ui, "INDEX", matches!(self.page, Page::Index)).clicked() {
-            self.page = Page::Index;
-        }
-        if tab(ui, "TABLE", self.page == Page::Table).clicked() {
-            self.page = Page::Table;
-        }
-            if tab(ui, "NETHOOKS", self.page == Page::Nethooks).clicked() {
-                self.page = Page::Nethooks;
-                self.hook_edit = false;
+            // Primary destinations — same chrome_tab language as the side-rail row.
+            if tab(ui, "INDEX", matches!(self.page, Page::Index))
+                .on_hover_text("Deck home · session, link, systems, protocol.")
+                .clicked()
+            {
+                self.page = Page::Index;
             }
-            if tab(ui, "NETSPACE", self.page == Page::Netspace).clicked() {
+            if tab(ui, "TABLE", self.page == Page::Table)
+                .on_hover_text("Blightnexus mix · scenes, sheets, map, overlays.")
+                .clicked()
+            {
+                self.page = Page::Table;
+            }
+            if tab(ui, "NETSPACE", self.page == Page::Netspace)
+                .on_hover_text("Cruise the grid · co-presence when Online.")
+                .clicked()
+            {
                 self.page = Page::Netspace;
                 self.jack_at = Instant::now();
             }
-            if tab(ui, "ROTN", self.page == Page::Rotn).clicked() {
-                self.page = Page::Rotn;
-            }
-            if tab(ui, "TERMINAL", self.page == Page::Terminal).clicked() {
-                self.page = Page::Terminal;
-            }
-            if tab(ui, "RECON", self.page == Page::Recon).clicked() {
-                self.page = Page::Recon;
-            }
-            if tab(ui, "TREE", self.page == Page::Tree).clicked() {
+            if tab(ui, "TREE", self.page == Page::Tree)
+                .on_hover_text("Local filesystem on this deck.")
+                .clicked()
+            {
                 self.page = Page::Tree;
             }
-            if self.player_full && tab(ui, "PLAYER", self.page == Page::Player).clicked() {
+            if tab(ui, "TERMINAL", self.page == Page::Terminal)
+                .on_hover_text("Local shell · nothing leaves this deck.")
+                .clicked()
+            {
+                self.page = Page::Terminal;
+            }
+            if tab(ui, "RECON", self.page == Page::Recon)
+                .on_hover_text("Local dossiers · people and companies.")
+                .clicked()
+            {
+                self.page = Page::Recon;
+            }
+            if tab(ui, "NETHOOKS", self.page == Page::Nethooks)
+                .on_hover_text("User pages on the grid · handouts, rumors, jobs.")
+                .clicked()
+            {
+                self.page = Page::Nethooks;
+                self.hook_edit = false;
+            }
+            if tab(ui, "ROTN", self.page == Page::Rotn)
+                .on_hover_text("Local fixer · rumors and jobs stay on this computer.")
+                .clicked()
+            {
+                self.page = Page::Rotn;
+            }
+            // Full-page Player only when expanded — avoids twin PLAYER destinations.
+            if self.player_full
+                && tab(ui, "PLAYER", self.page == Page::Player)
+                    .on_hover_text("Full-page library · Dock returns to the side rail.")
+                    .clicked()
+            {
                 self.page = Page::Player;
             }
         });
@@ -6298,12 +6459,13 @@ impl Blightnet {
 
         let (mark, mark_resp) =
             bar.allocate_exact_size(Vec2::new(112.0, 36.0), egui::Sense::click_and_drag());
+        let ch_mark = theme::chrome();
         bar.painter().text(
             mark.left_center() + Vec2::new(0.0, -3.0),
             egui::Align2::LEFT_CENTER,
             "BLIGHTNET",
             FontId::new(15.0, theme::display()),
-            theme::ACID,
+            ch_mark.acid,
         );
         bar.painter().rect_filled(
             Rect::from_min_size(
@@ -6311,7 +6473,7 @@ impl Blightnet {
                 Vec2::new(64.0, 2.0),
             ),
             0.0,
-            CYAN,
+            ch_mark.cyan,
         );
         if mark_resp.drag_started() {
             bar.ctx().send_viewport_cmd(egui::ViewportCommand::StartDrag);
@@ -6333,7 +6495,7 @@ impl Blightnet {
                     .send_viewport_cmd(egui::ViewportCommand::Maximized(!maxed));
             }
             if self.node_live {
-                if theme::neon_btn_color(ui, "Online", theme::ACID, true).clicked() {
+                if theme::neon_btn_color(ui, "Online", theme::chrome().acid, true).clicked() {
                     self.go_offline();
                 }
             } else if theme::neon_btn(ui, "Online").clicked() {
@@ -6355,7 +6517,7 @@ impl Blightnet {
                 ui.painter().vline(
                     x,
                     (grip.top() + 4.0)..=(grip.bottom() - 4.0),
-                    egui::Stroke::new(1.0, theme::fade(theme::ACID, 150)),
+                    egui::Stroke::new(1.0, theme::fade(theme::chrome().acid, 150)),
                 );
             }
             if grip_resp.drag_started() {
@@ -6490,13 +6652,13 @@ impl Blightnet {
                     });
                 });
 
-                ui.add_space(6.0);
+                ui.add_space(4.0);
                 self.ui_index_session(ui);
 
                 if !self.err.is_empty() {
                     wrap_text(ui, &self.err.clone(), ch.cyan, 13.0);
                 }
-                ui.add_space(8.0);
+                ui.add_space(4.0);
 
                 // A zones: PRIMARY LINK | DECK SYSTEMS | RUN PROTOCOL (+ settings strip under systems)
                 let wide = ui.available_width() >= 980.0;
@@ -6520,9 +6682,9 @@ impl Blightnet {
                     ui.add_space(8.0);
                     self.ui_index_protocol(ui);
                 }
-                ui.add_space(12.0);
+                ui.add_space(8.0);
                 self.ui_index_log(ui);
-                ui.add_space(16.0);
+                ui.add_space(10.0);
             });
     }
 
@@ -6533,20 +6695,10 @@ impl Blightnet {
         let ch = theme::chrome();
         theme::pane().show(ui, |ui| {
             ui.horizontal_wrapped(|ui| {
-                ui.label(
-                    RichText::new("SESSION · NODE")
-                        .family(theme::mono())
-                        .size(11.0)
-                        .color(ch.acid),
-                );
-                ui.label(
-                    RichText::new("live readout · same signals as Tree / Netspace")
-                        .family(theme::mono())
-                        .size(10.0)
-                        .color(MUTED),
-                );
+                theme::section_head(ui, "SESSION", "NODE");
+                theme::kicker(ui, "Live readout · same signals as Tree / Netspace");
             });
-            ui.add_space(4.0);
+            ui.add_space(2.0);
 
             let (role_lbl, role_col) = if !self.node_live {
                 ("OFFLINE", theme::DIM)
@@ -6640,12 +6792,7 @@ impl Blightnet {
 
     fn ui_index_link_inner(&mut self, ui: &mut egui::Ui, t: f32) {
         let ch = theme::chrome();
-        ui.label(
-            RichText::new("PRIMARY LINK")
-                .family(theme::mono())
-                .size(11.0)
-                .color(ch.acid),
-        );
+        theme::section_head(ui, "01", "PRIMARY LINK");
         if theme::jack_tile(ui, t).clicked() {
             self.page = Page::Table;
         }
@@ -6679,13 +6826,7 @@ impl Blightnet {
     }
 
     fn ui_index_systems_inner(&mut self, ui: &mut egui::Ui) {
-        let ch = theme::chrome();
-        ui.label(
-            RichText::new("DECK SYSTEMS")
-                .family(theme::mono())
-                .size(11.0)
-                .color(ch.acid),
-        );
+        theme::section_head(ui, "02", "DECK SYSTEMS");
         ui.columns(2, |g| {
             if theme::sys_tile(&mut g[0], "02", "CONTACTS", "SAVED PEOPLE", "OPEN", false).clicked()
             {
@@ -6738,10 +6879,10 @@ impl Blightnet {
             self.go_offline();
             ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
         }
-        ui.add_space(10.0);
+        ui.add_space(6.0);
         self.ui_index_settings(ui);
         if self.index_ledger {
-            ui.add_space(10.0);
+            ui.add_space(6.0);
             self.ui_index_ledger(ui);
         }
     }
@@ -6750,12 +6891,7 @@ impl Blightnet {
         self.ensure_devices();
         self.ensure_cameras();
         let ch = theme::chrome();
-        ui.label(
-            RichText::new("SETTINGS")
-                .family(theme::mono())
-                .size(11.0)
-                .color(ch.acid),
-        );
+        theme::section_head(ui, "SET", "SETTINGS");
         wrap_text(
             ui,
             &format!(
@@ -7102,13 +7238,8 @@ impl Blightnet {
         let talk_ok = self.shell != ShellPanel::None || self.chat.len() > 1;
         let player_ok = !self.deck_list.is_empty();
         theme::pane().show(ui, |ui| {
-                ui.label(
-                    RichText::new("RUN PROTOCOL")
-                        .family(theme::mono())
-                        .size(11.0)
-                        .color(ch.acid),
-                );
-                ui.add_space(6.0);
+                theme::section_head(ui, "03", "RUN PROTOCOL");
+                ui.add_space(4.0);
                 let steps: [(&str, bool); 6] = [
                     ("Stamp a Handle in the command bar.", handle_ok),
                     (
@@ -7124,11 +7255,11 @@ impl Blightnet {
                         mix_ok,
                     ),
                     (
-                        "Chat, Contacts, Voice, Video, and Player sit on the top row. Press again to close.",
+                        "CHAT · CONTACTS · VOICE · VIDEO · PLAYER open the side rail. Press again to close. Same tabs live inside the dock.",
                         talk_ok,
                     ),
                     (
-                        "Player is the music library. The track name on the status line plays or pauses.",
+                        "PLAYER rail is the library. Full page via Full page. Status-line track name plays or pauses.",
                         player_ok,
                     ),
                 ];
@@ -7189,23 +7320,31 @@ impl Blightnet {
     }
 
     fn ui_dock(&mut self, ui: &mut egui::Ui) {
+        // Same selected chrome as command_app_tabs (proposal C). HOST/JOIN stay dock-only.
+        theme::kicker(ui, "DOCK://RAIL");
         ui.horizontal_wrapped(|ui| {
+            ui.spacing_mut().item_spacing = Vec2::new(4.0, 0.0);
             for (label, panel) in [
-                ("Chat", ShellPanel::Chat),
-                ("Contacts", ShellPanel::Contacts),
-                ("Voice", ShellPanel::Voice),
-                ("Video", ShellPanel::Video),
-                ("Library", ShellPanel::Player),
-                ("Host", ShellPanel::Host),
-                ("Join", ShellPanel::Join),
+                ("CHAT", ShellPanel::Chat),
+                ("CONTACTS", ShellPanel::Contacts),
+                ("VOICE", ShellPanel::Voice),
+                ("VIDEO", ShellPanel::Video),
+                ("PLAYER", ShellPanel::Player),
+                ("HOST", ShellPanel::Host),
+                ("JOIN", ShellPanel::Join),
             ] {
-                if theme::neon_btn_color(ui, label, theme::ACID, self.shell == panel).clicked() {
-                    self.shell = panel;
-                    if panel == ShellPanel::Voice {
-                        self.ensure_mic();
-                    }
-                    if panel == ShellPanel::Video {
-                        self.cameras = crate::video::list_cameras();
+                let on = self.shell == panel;
+                if tab(ui, label, on).clicked() {
+                    if on {
+                        self.shell = ShellPanel::None;
+                    } else {
+                        self.shell = panel;
+                        if panel == ShellPanel::Voice {
+                            self.ensure_mic();
+                        }
+                        if panel == ShellPanel::Video {
+                            self.cameras = crate::video::list_cameras();
+                        }
                     }
                 }
             }
@@ -7311,7 +7450,16 @@ impl Blightnet {
     }
 
     fn ui_player_stage(&mut self, ui: &mut egui::Ui, full: bool) {
-        theme::kicker(ui, "NETDIR://PLAYER");
+        theme::page_chrome(
+            ui,
+            if full { "PLAYER://PAGE" } else { "PLAYER://DOCK" },
+            "PLAYER",
+            if full {
+                "Pick a track · Dock returns the side rail"
+            } else {
+                "Pick a track · Full page for stage + library"
+            },
+        );
         ui.horizontal_wrapped(|ui| {
             if theme::neon_btn(ui, if self.player_full { "Dock" } else { "Full page" }).clicked() {
                 self.toggle_player_page();
@@ -7548,7 +7696,7 @@ impl Blightnet {
     }
 
     fn ui_host_panel(&mut self, ui: &mut egui::Ui) {
-        theme::kicker(ui, "NETDIR://HOST");
+        theme::page_chrome(ui, "HOST://LINK", "HOST", "Share an address · friends join");
         ui.label(
             RichText::new("Pick how friends reach this table.")
                 .color(MUTED)
@@ -7662,7 +7810,7 @@ impl Blightnet {
     }
 
     fn ui_join_panel(&mut self, ui: &mut egui::Ui) {
-        theme::kicker(ui, "NETDIR://JOIN");
+        theme::page_chrome(ui, "JOIN://LINK", "JOIN", "Paste a host address · sit at the table");
         ui.label(
             RichText::new(
                 "Paste the blightnet:// invite the host copied. This program talks to the table itself.",
@@ -7697,7 +7845,7 @@ impl Blightnet {
     }
 
     fn ui_chat_panel(&mut self, ui: &mut egui::Ui) {
-        theme::kicker(ui, "NETDIR://CHAT");
+        theme::page_chrome(ui, "CHAT://RAIL", "CHAT", "Pick Table, a contact, or a crew");
         wrap_text(
             ui,
             "Pick Table, a contact, or a crew. Send text or any file. Incoming media streams automatically — Download keeps a copy. Chat is permanent until you wipe it.",
@@ -7817,7 +7965,7 @@ impl Blightnet {
     }
 
     fn ui_contacts_panel(&mut self, ui: &mut egui::Ui) {
-        theme::kicker(ui, "NETDIR://CONTACTS");
+        theme::page_chrome(ui, "CONTACTS://RAIL", "CONTACTS", "Save people · open a DM or call");
         wrap_text(
             ui,
             "Add someone once. After that, Go Online — no new invite for text, calls, or pictures. ● online  ○ offline.",
@@ -7967,7 +8115,7 @@ impl Blightnet {
     }
 
     fn ui_voice_panel(&mut self, ui: &mut egui::Ui) {
-        theme::kicker(ui, "NETDIR://VOICE");
+        theme::page_chrome(ui, "VOICE://RAIL", "VOICE", "Mic · calls · press again on VOICE to close");
         wrap_text(
             ui,
             "Table voice talks to everyone at a mix table. Private calls are under Contacts. Go Online and you can call a saved contact with no new invite.",
@@ -7992,6 +8140,11 @@ impl Blightnet {
                 .clicked()
             {
                 self.voice_mute = !self.voice_mute;
+            }
+            if theme::neon_btn_color(ui, if self.voice_deaf { "Deafened" } else { "Deaf" }, CYAN, self.voice_deaf)
+                .clicked()
+            {
+                self.voice_deaf = !self.voice_deaf;
             }
         });
         ui.horizontal(|ui| {
@@ -8072,10 +8225,10 @@ impl Blightnet {
 
     fn ui_video_panel(&mut self, ui: &mut egui::Ui) {
         self.ensure_cameras();
-        theme::kicker(ui, "NETDIR://VIDEO");
+        theme::page_chrome(ui, "VIDEO://RAIL", "VIDEO", "Camera · contacts and crews");
         wrap_text(
             ui,
-            "Call a contact or a crew. Camera is auto-detected. Share your screen on the same call. Go Online first.",
+            "Call a contact or a crew. Camera is auto-detected. Share your screen on the same call (one GM share). On Wayland, approve the system portal dialog. LAN-good; WAN screenshare is best-effort. Video failure leaves voice up. Go Online first.",
             MUTED,
             11.0,
         );
@@ -8166,6 +8319,11 @@ impl Blightnet {
                     .clicked()
                 {
                     self.voice_mute = !self.voice_mute;
+                }
+                if theme::neon_btn_color(ui, if self.voice_deaf { "Deafened" } else { "Deaf" }, CYAN, self.voice_deaf)
+                    .clicked()
+                {
+                    self.voice_deaf = !self.voice_deaf;
                 }
                 if theme::neon_btn_color(ui, "Hang up", KILL, true).clicked() {
                     self.hang_up();
@@ -8319,6 +8477,16 @@ impl Blightnet {
             ui.available_size(),
             egui::Layout::top_down(egui::Align::Min),
             |ui| {
+                theme::page_chrome(
+                    ui,
+                    if self.blight {
+                        "TABLE://BLIGHT"
+                    } else {
+                        "TABLE://HEARTH"
+                    },
+                    "TABLE",
+                    "Rail opens Scenes · Mix · Sheets · Map",
+                );
                 let full = ui.available_rect_before_wrap();
                 let rail_w = 168.0_f32.min(full.width() * 0.34);
                 let (rail, main) = full.split_left_right_at_x(full.left() + rail_w);
@@ -8461,7 +8629,7 @@ impl Blightnet {
                 ui.painter().vline(
                     x,
                     inner.y_range(),
-                    egui::Stroke::new(2.0, if resp.hovered() || resp.dragged() { theme::ACID } else { theme::HOT }),
+                    egui::Stroke::new(2.0, if resp.hovered() || resp.dragged() { theme::chrome().acid } else { theme::HOT }),
                 );
                 vec![a.shrink(4.0), b.shrink(4.0)]
             }
@@ -8476,7 +8644,7 @@ impl Blightnet {
                 ui.painter().hline(
                     inner.x_range(),
                     y,
-                    egui::Stroke::new(2.0, if resp.hovered() || resp.dragged() { theme::ACID } else { theme::HOT }),
+                    egui::Stroke::new(2.0, if resp.hovered() || resp.dragged() { theme::chrome().acid } else { theme::HOT }),
                 );
                 let (a, b) = top.split_left_right_at_x(top.center().x);
                 let mut v = vec![a.shrink(3.0), b.shrink(3.0)];
@@ -8543,7 +8711,7 @@ impl Blightnet {
                                     RichText::new(world)
                                         .family(theme::display())
                                         .size(15.0)
-                                        .color(CYAN),
+                                        .color(theme::chrome().cyan),
                                 )
                                 .frame(false),
                             )
@@ -8563,17 +8731,18 @@ impl Blightnet {
                             })
                             .family(theme::mono())
                             .size(10.0)
-                            .color(CYAN),
+                            .color(theme::chrome().cyan),
                         );
                     });
-                    if theme::neon_btn_color(ui, &self.place_name(), CYAN, true).clicked() {
+                    let ch_top = theme::chrome();
+                    if theme::neon_btn_color(ui, &self.place_name(), ch_top.cyan, true).clicked() {
                         self.place_open = !self.place_open;
                         self.watch_open = false;
                     }
-                    if theme::neon_btn_color(ui, "Outside", CYAN, !self.inside).clicked() {
+                    if theme::neon_btn_color(ui, "Outside", ch_top.cyan, !self.inside).clicked() {
                         self.set_inside(false);
                     }
-                    if theme::neon_btn_color(ui, "Inside", CYAN, self.inside).clicked() {
+                    if theme::neon_btn_color(ui, "Inside", ch_top.cyan, self.inside).clicked() {
                         self.set_inside(true);
                     }
                     if theme::analog_watch(ui, self.clock, pal).clicked() {
@@ -8581,17 +8750,18 @@ impl Blightnet {
                         self.place_open = false;
                     }
                     ui.vertical(|ui| {
+                        let ch_clk = theme::chrome();
                         ui.label(
                             RichText::new(format_clock(self.clock))
                                 .family(theme::mono())
                                 .size(13.0)
-                                .color(CYAN),
+                                .color(ch_clk.cyan),
                         );
                         ui.label(
                             RichText::new(period_label(self.time))
                                 .family(theme::mono())
                                 .size(10.0)
-                                .color(CYAN),
+                                .color(ch_clk.cyan),
                         );
                         if ui
                             .add(
@@ -8602,7 +8772,7 @@ impl Blightnet {
                                     ))
                                     .family(theme::mono())
                                     .size(10.0)
-                                    .color(theme::ACID),
+                                    .color(theme::chrome().acid),
                                 )
                                 .frame(false),
                             )
@@ -8612,8 +8782,9 @@ impl Blightnet {
                             self.toggle_overlay(Overlay::Calendar);
                         }
                     });
+                    let ch_run = theme::chrome();
                     if self.is_gm
-                        && theme::neon_btn_color(ui, "Run clock", theme::ACID, self.clock_run)
+                        && theme::neon_btn_color(ui, "Run clock", ch_run.acid, self.clock_run)
                             .clicked()
                     {
                         self.clock_run = !self.clock_run;
@@ -8624,7 +8795,7 @@ impl Blightnet {
                         ("evening", "Evening"),
                         ("night", "Night"),
                     ] {
-                        if theme::neon_btn_color(ui, lab, CYAN, self.time == id).clicked() {
+                        if theme::neon_btn_color(ui, lab, ch_run.cyan, self.time == id).clicked() {
                             self.set_period(id);
                         }
                     }
@@ -8903,21 +9074,41 @@ impl Blightnet {
 
     fn ui_overlay_catalog(&mut self, ui: &mut egui::Ui, pal: theme::Palette) {
         let _ = pal;
+        let cat = self.overlay_cat.to_uppercase();
+        if theme::overlay_chrome(
+            ui,
+            "TABLE://BOOKS",
+            &cat,
+            "Browse · filter · select a row · drag onto Maps",
+        ) {
+            self.toggle_overlay(Overlay::Catalog);
+            return;
+        }
         ui.horizontal_wrapped(|ui| {
-            theme::section_head(ui, "06", &self.overlay_cat.to_uppercase());
+            ui.label(
+                RichText::new("FILTER")
+                    .family(theme::mono())
+                    .size(10.0)
+                    .color(theme::chrome().cyan),
+            );
             ui.add(
                 egui::TextEdit::singleline(&mut self.catalog_q)
-                    .hint_text("Find…")
-                    .desired_width(180.0),
+                    .hint_text("name or blurb…")
+                    .desired_width(200.0),
             );
-
+            ui.label(
+                RichText::new("SELECT row · ACTIONS on detail")
+                    .family(theme::mono())
+                    .size(10.0)
+                    .color(MUTED),
+            );
         });
         self.refresh_cat_cache();
         ui.columns(2, |cols| {
             let n = self.cat_cache.len();
             egui::ScrollArea::vertical()
                 .id_salt("ov-cat-list")
-                .show_rows(&mut cols[0], 50.0, n, |ui, range| {
+                .show_rows(&mut cols[0], 42.0, n, |ui, range| {
                     for row in range {
                         let (i, name, extra) = &self.cat_cache[row];
                         let i = *i;
@@ -8947,7 +9138,7 @@ impl Blightnet {
                                 src: sheet.clone(),
                             },
                             |ui| {
-                                theme::wide_btn(ui, name, extra, on);
+                                theme::catalog_row(ui, name, extra, on);
                             },
                         );
                         if resp.clicked() {
@@ -8964,8 +9155,8 @@ impl Blightnet {
                             ui.label(
                                 RichText::new(name)
                                     .family(theme::display())
-                                    .size(22.0)
-                                    .color(theme::ACID),
+                                    .size(20.0)
+                                    .color(theme::chrome().acid),
                             );
                         }
                         if let Some(id) = v.get("id").and_then(|x| x.as_str()) {
@@ -8993,12 +9184,19 @@ impl Blightnet {
 
     fn ui_overlay_jackin(&mut self, ui: &mut egui::Ui, pal: theme::Palette) {
         let _ = pal;
+        if theme::overlay_chrome(
+            ui,
+            "TABLE://JACKIN",
+            "JACK-IN",
+            "Walk the grid · WASD · full NETSPACE tab for co-presence",
+        ) {
+            self.toggle_overlay(Overlay::Jackin);
+            return;
+        }
         ui.horizontal_wrapped(|ui| {
-            theme::section_head(ui, "09", "JACK-IN");
             let ping = self.netspace_ping_ms();
             let t = self.jack_at.elapsed().as_secs_f32();
             crate::netspace::hud(ui, &self.netspace, t, ping);
-
         });
         self.netspace.apply_table_seed(&self.net.table_key);
         let ping = self.netspace_ping_ms();
@@ -9008,6 +9206,15 @@ impl Blightnet {
 
     fn ui_overlay_maps(&mut self, ui: &mut egui::Ui, pal: theme::Palette) {
         let _ = pal;
+        if theme::overlay_chrome(
+            ui,
+            "TABLE://MAPS",
+            "MAPS",
+            "Import · tokens · GM ink · press Maps or CLOSE",
+        ) {
+            self.toggle_overlay(Overlay::Maps);
+            return;
+        }
         let (dropped, ops) = maps::ui(
             ui,
             &mut self.map,
@@ -9039,6 +9246,15 @@ impl Blightnet {
     }
 
     fn ui_overlay_chess(&mut self, ui: &mut egui::Ui) {
+        if theme::overlay_chrome(
+            ui,
+            "TABLE://CHESS",
+            "CHESS",
+            "Host deals white · guest is black when Online",
+        ) {
+            self.toggle_overlay(Overlay::Chess);
+            return;
+        }
         let mine = if self.handle.trim().is_empty() {
             "YOU".into()
         } else {
@@ -9158,10 +9374,15 @@ impl Blightnet {
     }
 
     fn ui_overlay_bj(&mut self, ui: &mut egui::Ui, pal: theme::Palette) {
-        ui.horizontal_wrapped(|ui| {
-            theme::section_head(ui, "04", "HOUSE 21");
-
-        });
+        if theme::overlay_chrome(
+            ui,
+            "TABLE://21",
+            "HOUSE 21",
+            "Deal · hit · stand · chips stay on this table",
+        ) {
+            self.toggle_overlay(Overlay::Blackjack);
+            return;
+        }
         egui::ScrollArea::vertical()
             .id_salt("bj-overlay")
             .show(ui, |ui| {
@@ -9179,12 +9400,27 @@ impl Blightnet {
         } else {
             "Armory"
         };
+        let loc = if vendor { "TABLE://VENDORS" } else { "TABLE://ARMORY" };
+        let next = if vendor {
+            "Filter · Buy · equip on Gear"
+        } else {
+            "Filter · GM Give / drag onto sheet"
+        };
+        if theme::overlay_chrome(ui, loc, &title.to_uppercase(), next) {
+            self.toggle_overlay(if vendor { Overlay::Vendors } else { Overlay::Armory });
+            return;
+        }
         ui.horizontal_wrapped(|ui| {
-            theme::section_head(ui, "08", &title.to_uppercase());
+            ui.label(
+                RichText::new("FILTER")
+                    .family(theme::mono())
+                    .size(10.0)
+                    .color(theme::chrome().cyan),
+            );
             ui.add(
                 egui::TextEdit::singleline(&mut self.kit_filter)
-                    .hint_text("Find gear…")
-                    .desired_width(160.0),
+                    .hint_text("name, cat, or blurb…")
+                    .desired_width(180.0),
             );
             if let Some(c) = self.chars.get(self.char_i) {
                 ui.label(
@@ -9193,7 +9429,7 @@ impl Blightnet {
                     } else {
                         format!("{} · {} gp", c.name, c.gp)
                     })
-                    .color(CYAN)
+                    .color(theme::chrome().cyan)
                     .family(theme::mono())
                     .size(12.0),
                 );
@@ -9286,11 +9522,12 @@ impl Blightnet {
                         }
                         ui.vertical(|ui| {
                             let focused = self.kit_focus == spec.id;
+                            let ch_kit = theme::chrome();
                             let row = |ui: &mut egui::Ui| {
                                 ui.label(
                                     RichText::new(&name)
-                                        .color(if focused { theme::ACID } else { CREAM })
-                                        .size(16.0)
+                                        .color(if focused { ch_kit.acid } else { CREAM })
+                                        .size(15.0)
                                         .family(theme::ui_font()),
                                 );
                                 if !cat.is_empty() || !cost.is_empty() || !dmg.is_empty() {
@@ -9302,8 +9539,8 @@ impl Blightnet {
                                                 .collect::<Vec<_>>()
                                                 .join(" · "),
                                         )
-                                        .color(CYAN)
-                                        .size(13.0)
+                                        .color(ch_kit.cyan)
+                                        .size(12.0)
                                         .family(theme::mono()),
                                     );
                                 }
@@ -9390,6 +9627,15 @@ impl Blightnet {
     }
 
     fn ui_place_tile(&mut self, ui: &mut egui::Ui) {
+        if theme::overlay_chrome(
+            ui,
+            "TABLE://PLACE",
+            "PLACE",
+            "Painting for this world · top bar also opens it",
+        ) {
+            self.toggle_overlay(Overlay::Place);
+            return;
+        }
         let rect = ui.available_rect_before_wrap();
         ui.allocate_rect(rect, egui::Sense::hover());
         let path = self.painting_path();
@@ -9399,16 +9645,26 @@ impl Blightnet {
             egui::Align2::LEFT_TOP,
             format!("{}  ·  {}", self.place_name(), period_label(self.time)),
             egui::FontId::new(14.0, theme::display()),
-            theme::ACID,
+            theme::chrome().acid,
         );
     }
 
     fn ui_calendar_tile(&mut self, ui: &mut egui::Ui) {
+        if theme::overlay_chrome(
+            ui,
+            "TABLE://CAL",
+            "CALENDAR",
+            "GM sets the day · vendors restock on change",
+        ) {
+            self.toggle_overlay(Overlay::Calendar);
+            return;
+        }
         let month = [
             "", "January", "February", "March", "April", "May", "June", "July", "August",
             "September", "October", "November", "December",
         ];
         let name = month.get(self.cal_m as usize).copied().unwrap_or("");
+        let ch = theme::chrome();
         ui.horizontal_wrapped(|ui| {
             if self.is_gm && theme::neon_btn(ui, "◀").clicked() {
                 self.advance_month(-1);
@@ -9416,14 +9672,15 @@ impl Blightnet {
             ui.label(
                 RichText::new(format!("{name} {}", self.cal_y))
                     .family(theme::display())
-                    .size(22.0)
-                    .color(theme::ACID),
+                    .size(20.0)
+                    .color(ch.acid),
             );
             if self.is_gm && theme::neon_btn(ui, "▶").clicked() {
                 self.advance_month(1);
             }
         });
         ui.horizontal(|ui| {
+            let ch = theme::chrome();
             for day in ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] {
                 ui.add_sized(
                     [36.0, 18.0],
@@ -9431,7 +9688,7 @@ impl Blightnet {
                         RichText::new(day)
                             .family(theme::mono())
                             .size(11.0)
-                            .color(CYAN),
+                            .color(ch.cyan),
                     ),
                 );
             }
@@ -9451,7 +9708,7 @@ impl Blightnet {
                     } else {
                         let n = day;
                         let on = n == self.cal_d;
-                        if theme::neon_btn_color(ui, &n.to_string(), CYAN, on).clicked() && self.is_gm
+                        if theme::neon_btn_color(ui, &n.to_string(), theme::chrome().cyan, on).clicked() && self.is_gm
                         {
                             self.cal_d = n;
                             save_calendar(&self.root, self.cal_y, self.cal_m, self.cal_d);
@@ -9468,6 +9725,15 @@ impl Blightnet {
     }
 
     fn ui_calc_tile(&mut self, ui: &mut egui::Ui) {
+        if theme::overlay_chrome(
+            ui,
+            "TABLE://CALC",
+            "CALC",
+            "Local only · keys never go to the table",
+        ) {
+            self.toggle_overlay(Overlay::Calc);
+            return;
+        }
         ui.label(
             RichText::new(&self.calc_entry)
                 .family(theme::mono())
@@ -9737,17 +10003,32 @@ impl Blightnet {
 
     fn ui_scenes_panel(&mut self, ui: &mut egui::Ui, pal: theme::Palette) {
         theme::plate(ui, ui.max_rect());
-        ui.add_space(10.0);
-        theme::section_head(ui, "01", "SCENES");
+        ui.add_space(6.0);
+        if theme::overlay_chrome(
+            ui,
+            "TABLE://SCENES",
+            "SCENES",
+            "Pick a look · ★ saved mixes · Save this mix",
+        ) {
+            self.toggle_overlay(Overlay::Scenes);
+            return;
+        }
         let energy = self.mixer.master.max(0.05);
         let phase = ui.input(|i| i.time) as f32 * 0.25;
         paint_viz(ui, ui.available_width().max(40.0), 22.0, energy, phase);
-        theme::kicker(ui, "TABLE://PLAYLIST");
-        ui.add(
-            egui::TextEdit::singleline(&mut self.search)
-                .hint_text("Find a scene…")
-                .desired_width(ui.available_width() - 16.0),
-        );
+        ui.horizontal_wrapped(|ui| {
+            ui.label(
+                RichText::new("FILTER")
+                    .family(theme::mono())
+                    .size(10.0)
+                    .color(theme::chrome().cyan),
+            );
+            ui.add(
+                egui::TextEdit::singleline(&mut self.search)
+                    .hint_text("scene name or blurb…")
+                    .desired_width((ui.available_width() - 16.0).max(80.0)),
+            );
+        });
         let q = self.search.to_lowercase();
         let saved: Vec<(usize, String)> = self
             .saved
@@ -9794,41 +10075,60 @@ impl Blightnet {
 
     fn ui_mix_panel(&mut self, ui: &mut egui::Ui, pal: theme::Palette) {
         theme::plate(ui, ui.max_rect());
-        ui.add_space(10.0);
+        ui.add_space(6.0);
         let n = self
             .mixer
             .playing()
             .filter(|(id, _)| !id.starts_with("__"))
             .count();
+        let note = if n == 0 {
+            "Nothing playing · pick layers or Shuffle"
+        } else if !self.mix_msg.is_empty() {
+            self.mix_msg.as_str()
+        } else {
+            "Layers live · check to play · slider is volume"
+        };
+        if theme::overlay_chrome(ui, "TABLE://MIX", "THE MIX", note) {
+            self.toggle_overlay(Overlay::Mix);
+            return;
+        }
         ui.horizontal_wrapped(|ui| {
-            ui.vertical(|ui| {
-                theme::section_head(ui, "02", "THE MIX");
-                let note = if n == 0 {
-                    "NOTHING PLAYING".into()
-                } else if !self.mix_msg.is_empty() {
-                    self.mix_msg.clone()
-                } else {
-                    format!("{n} LAYERS LIVE")
-                };
-                theme::kicker(ui, &note);
-            });
-            if theme::neon_btn(ui, "Shuffle").clicked() {
+            if theme::neon_btn_color(ui, "Shuffle", theme::chrome().acid, false).clicked() {
                 self.shuffle_music();
             }
+            ui.label(
+                RichText::new(if n == 0 {
+                    "0 LIVE".into()
+                } else {
+                    format!("{n} LIVE")
+                })
+                .family(theme::mono())
+                .size(11.0)
+                .color(theme::chrome().cyan),
+            );
         });
-        ui.add(
-            egui::TextEdit::singleline(&mut self.mix_search)
-                .hint_text("Find a sound…")
-                .desired_width(ui.available_width() - 12.0),
-        );
         ui.horizontal_wrapped(|ui| {
+            ui.label(
+                RichText::new("FILTER")
+                    .family(theme::mono())
+                    .size(10.0)
+                    .color(theme::chrome().cyan),
+            );
+            ui.add(
+                egui::TextEdit::singleline(&mut self.mix_search)
+                    .hint_text("layer name…")
+                    .desired_width((ui.available_width() - 12.0).max(80.0)),
+            );
+        });
+        ui.horizontal_wrapped(|ui| {
+            let ch = theme::chrome();
             let cats: Vec<&str> = if self.blight {
                 vec!["all", "music", "ambience", "animals"]
             } else {
                 vec!["all", "music", "weather", "animals", "ambience"]
             };
             for c in cats {
-                if theme::neon_btn_color(ui, c, CYAN, self.cat_filter == c).clicked() {
+                if theme::neon_btn_color(ui, c, ch.cyan, self.cat_filter == c).clicked() {
                     self.cat_filter = c.into();
                 }
             }
@@ -9893,20 +10193,21 @@ impl Blightnet {
     }
 
     fn ui_overlay_log(&mut self, ui: &mut egui::Ui) {
-        theme::section_head(ui, "10", "COMBAT LOG");
-        wrap_text(
+        if theme::overlay_chrome(
             ui,
-            "Shared with everyone at this table. Press Log again to close.",
-            MUTED,
-            12.0,
-        );
-        ui.add_space(4.0);
+            "TABLE://LOG",
+            "COMBAT LOG",
+            "Shared rolls · press Log or CLOSE",
+        ) {
+            self.toggle_overlay(Overlay::Log);
+            return;
+        }
         let combat_h = ui.available_height().max(80.0);
         ui.label(
             RichText::new("ROLLS")
                 .family(theme::mono())
                 .size(11.0)
-                .color(CYAN),
+                .color(theme::chrome().cyan),
         );
         egui::ScrollArea::vertical()
             .id_salt("combat-log")
@@ -9933,14 +10234,15 @@ impl Blightnet {
     }
 
     fn ui_rail_notes(&mut self, ui: &mut egui::Ui) {
-        theme::section_head(ui, "11", "NOTES");
-        wrap_text(
+        if theme::overlay_chrome(
             ui,
-            "This deck only. Other players never see this. Press Notes again to close.",
-            MUTED,
-            12.0,
-        );
-        ui.add_space(4.0);
+            "TABLE://NOTES",
+            "NOTES",
+            "This deck only · never sent · press Notes or CLOSE",
+        ) {
+            self.toggle_overlay(Overlay::Notes);
+            return;
+        }
         let h = ui.available_height().max(80.0);
         egui::ScrollArea::vertical()
             .id_salt("notes-rail")
@@ -9985,6 +10287,16 @@ impl Blightnet {
     }
 
     fn ui_chars_panel(&mut self, ui: &mut egui::Ui, _pal: theme::Palette) {
+        if theme::overlay_chrome(
+            ui,
+            "TABLE://SHEET",
+            "CHARACTERS",
+            "Roster selects · Aim secondary · Delete is KILL",
+        ) {
+            self.open.retain(|o| *o != Overlay::Chars);
+            self.viewing = None;
+            return;
+        }
         let h = ui.available_height().max(80.0);
         let w = ui.available_width().max(80.0);
         ui.set_max_width(w);
@@ -10074,7 +10386,7 @@ impl Blightnet {
                                 rect,
                                 6.0,
                                 PANEL,
-                                egui::Stroke::new(if on { 2.0 } else { 1.0 }, if on { theme::ACID } else { theme::fade(CYAN, 90) }),
+                                egui::Stroke::new(if on { 2.0 } else { 1.0 }, if on { theme::chrome().acid } else { theme::fade(theme::chrome().cyan, 90) }),
                             );
                             let mut pic = ui.new_child(
                                 egui::UiBuilder::new()
@@ -10087,7 +10399,7 @@ impl Blightnet {
                                 egui::Align2::LEFT_BOTTOM,
                                 name,
                                 egui::FontId::new(11.0, theme::ui_font()),
-                                if on { theme::ACID } else { CREAM },
+                                if on { theme::chrome().acid } else { CREAM },
                             );
                             if resp.clicked() {
                                 self.place = id.clone();
@@ -10117,17 +10429,18 @@ impl Blightnet {
                 egui::Stroke::new(1.5, theme::ACID),
                 egui::StrokeKind::Inside,
             );
+            let ch_pit = theme::chrome();
             ui.label(
                 RichText::new("THE PIT")
                     .family(theme::display())
                     .size(26.0)
-                    .color(theme::ACID),
+                    .color(ch_pit.acid),
             );
             ui.label(
                 RichText::new(&self.bj.msg)
                     .family(theme::mono())
                     .size(14.0)
-                    .color(CYAN),
+                    .color(ch_pit.cyan),
             );
             ui.label(
                 RichText::new(format!("CHIPS {}    BET {}", self.bj.bank, self.bj.bet))
@@ -10248,9 +10561,30 @@ impl Blightnet {
             Page::Catalog(n) => n,
             _ => "Catalog",
         };
-        ui.horizontal(|ui| {
-            ui.heading(RichText::new(title).family(theme::display()).color(CYAN));
-            ui.add(egui::TextEdit::singleline(&mut self.catalog_q).hint_text("search").desired_width(200.0));
+        theme::page_chrome(
+            ui,
+            "CATALOG://BOOKS",
+            &title.to_uppercase(),
+            "Filter · select a row · detail on the right",
+        );
+        ui.horizontal_wrapped(|ui| {
+            ui.label(
+                RichText::new("FILTER")
+                    .family(theme::mono())
+                    .size(10.0)
+                    .color(theme::chrome().cyan),
+            );
+            ui.add(
+                egui::TextEdit::singleline(&mut self.catalog_q)
+                    .hint_text("name or blurb…")
+                    .desired_width(220.0),
+            );
+            ui.label(
+                RichText::new("SELECT · no action until you pick")
+                    .family(theme::mono())
+                    .size(10.0)
+                    .color(MUTED),
+            );
         });
             let q = self.catalog_q.to_lowercase();
             let rows: Vec<(usize, String, String)> = self
@@ -10270,7 +10604,7 @@ impl Blightnet {
                         || name.to_lowercase().contains(&q)
                         || extra.to_lowercase().contains(&q)
                     {
-                        Some((i, name, extra.chars().take(180).collect()))
+                        Some((i, name, extra.chars().take(120).collect()))
                     } else {
                         None
                     }
@@ -10281,7 +10615,7 @@ impl Blightnet {
                 egui::ScrollArea::vertical().max_height(col_h).show(&mut cols[0], |ui| {
                     for (i, name, extra) in &rows {
                         let on = self.catalog_pick == *i;
-                        if ui.selectable_label(on, format!("{name}\n{extra}")).clicked() {
+                        if theme::catalog_row(ui, name, extra, on).clicked() {
                             self.catalog_pick = *i;
                         }
                     }
@@ -10290,7 +10624,12 @@ impl Blightnet {
                     let row = self.catalog_rows.get(self.catalog_pick).cloned();
                     if let Some(v) = row {
                         if let Some(name) = v.get("name").and_then(|x| x.as_str()) {
-                            ui.heading(name);
+                            ui.label(
+                                RichText::new(name)
+                                    .family(theme::display())
+                                    .size(22.0)
+                                    .color(theme::chrome().acid),
+                            );
                         }
                         if let Some(id) = v.get("id").and_then(|x| x.as_str()) {
                             let art = catalog_art(&self.root, title, id);
@@ -10316,6 +10655,12 @@ impl Blightnet {
     }
 
     fn ui_chars(&mut self, ui: &mut egui::Ui) {
+        theme::page_chrome(
+            ui,
+            "CHARS://SHEET",
+            "CHARACTERS",
+            "Roster selects · Aim is secondary · Delete is KILL",
+        );
         let h = ui.available_height().max(80.0);
         ui.set_clip_rect(ui.max_rect().intersect(ui.clip_rect()));
         egui::ScrollArea::vertical()
@@ -10725,6 +11070,12 @@ impl Blightnet {
     }
 
     fn ui_nethooks(&mut self, ui: &mut egui::Ui) {
+        theme::page_chrome(
+            ui,
+            "NETHOOKS://GRID",
+            "NETHOOKS",
+            "Write a page · Post to table · Board on TABLE rail",
+        );
         ui.horizontal_wrapped(|ui| {
             if theme::neon_btn(ui, "← INDEX").clicked() {
                 self.page = Page::Index;
@@ -10765,19 +11116,7 @@ impl Blightnet {
                 self.hook_edit = true;
             }
         });
-        ui.label(
-            RichText::new("NETHOOKS")
-                .family(theme::display())
-                .size(28.0)
-                .color(theme::ACID),
-        );
-        wrap_text(
-            ui,
-            "How this works. A page you can show the table. A handout is notes everyone should read. A rumor is gossip. A job is work someone will pay for. Press Post to table, then Board on the left of TABLE. Press Take down when it should go away. The lessons at the top only teach you how to write a page. Your private notes never become a page.",
-            MUTED,
-            13.0,
-        );
-        ui.add_space(8.0);
+        ui.add_space(4.0);
         let rest = ui.available_rect_before_wrap();
         let _ = ui.allocate_rect(rest, egui::Sense::hover());
         let split = rest.left() + rest.width() * 0.25;
@@ -11343,6 +11682,12 @@ impl Blightnet {
 
     fn ui_terminal(&mut self, ui: &mut egui::Ui) {
         ui.set_clip_rect(ui.max_rect().intersect(ui.clip_rect()));
+        theme::page_chrome(
+            ui,
+            "TERM://LOCAL",
+            "TERMINAL",
+            "Type or click a command · nothing leaves this deck",
+        );
         let rect = ui.available_rect_before_wrap();
         ui.allocate_rect(rect, egui::Sense::hover());
         let side_w = 240.0_f32.min(rect.width() * 0.32).max(140.0);
@@ -11501,6 +11846,12 @@ impl Blightnet {
     }
 
     fn ui_netspace(&mut self, ui: &mut egui::Ui) {
+        theme::page_chrome(
+            ui,
+            "NETSPACE://GRID",
+            "NETSPACE",
+            "Click look · WASD move · seats when Online",
+        );
         self.netspace.apply_table_seed(&self.net.table_key);
         let ping = self.netspace_ping_ms();
         let t = self.jack_at.elapsed().as_secs_f32();
@@ -12065,6 +12416,15 @@ impl Blightnet {
     }
 
     fn ui_table_board(&mut self, ui: &mut egui::Ui) {
+        if theme::overlay_chrome(
+            ui,
+            "TABLE://BOARD",
+            "BOARD",
+            "Posted nethooks · write in NETHOOKS then Post to table",
+        ) {
+            self.toggle_overlay(Overlay::Board);
+            return;
+        }
         let posted = self.nethooks.iter().find(|h| h.posted).cloned();
         let avail = ui.available_height();
         let board_h = if avail.is_finite() {
@@ -12090,7 +12450,7 @@ impl Blightnet {
                     RichText::new("ON THE TABLE")
                         .family(theme::mono())
                         .size(11.0)
-                        .color(theme::ACID),
+                        .color(theme::chrome().acid),
                 );
                 let id = h.id.clone();
                 let html = h.html.clone();
@@ -12436,11 +12796,12 @@ fn start_mic(want: Option<&str>) -> Option<(cpal::Stream, Receiver<Vec<f32>>, u3
 }
 
 fn rail_block(ui: &mut egui::Ui, label: &str, add: impl FnOnce(&mut egui::Ui)) {
+    let ch = theme::chrome();
     ui.label(
         RichText::new(label)
             .family(theme::mono())
             .size(10.0)
-            .color(DIM),
+            .color(theme::fade(ch.cyan, 160)),
     );
     ui.horizontal_wrapped(|ui| {
         ui.spacing_mut().item_spacing = Vec2::new(4.0, 4.0);
@@ -12931,44 +13292,7 @@ fn downsample(samples: &[f32], from: u32, to: u32) -> Vec<f32> {
 }
 
 fn tab(ui: &mut egui::Ui, label: &str, on: bool) -> egui::Response {
-    let galley = ui.painter().layout_no_wrap(
-        label.to_string(),
-        FontId::new(13.0, theme::display()),
-        if on { theme::ACID } else { CREAM },
-    );
-    let size = Vec2::new(galley.size().x + 22.0, 32.0);
-    let (rect, resp) = ui.allocate_exact_size(size, egui::Sense::click());
-    let hover = resp.hovered();
-    let fill = if on {
-        Color32::from_rgb(18, 20, 8)
-    } else if hover {
-        theme::fade(theme::ACID, 22)
-    } else {
-        Color32::TRANSPARENT
-    };
-    let stroke = if on {
-        theme::ACID
-    } else if hover {
-        CYAN
-    } else {
-        theme::fade(theme::HOT, 110)
-    };
-    theme::fill_chamfer(ui, rect, 4.0, fill, egui::Stroke::new(1.0, stroke));
-    if on {
-        ui.painter().hline(
-            (rect.left() + 6.0)..=(rect.right() - 6.0),
-            rect.bottom() - 1.0,
-            egui::Stroke::new(2.0, theme::HOT),
-        );
-    }
-    ui.painter().text(
-        rect.center(),
-        egui::Align2::CENTER_CENTER,
-        label,
-        FontId::new(13.0, theme::display()),
-        if on || hover { theme::ACID } else { CREAM },
-    );
-    resp
+    theme::chrome_tab(ui, label, on)
 }
 
 fn quiet_btn(ui: &mut egui::Ui, label: &str, color: Color32) -> egui::Response {
@@ -14352,6 +14676,25 @@ mod tests {
     }
 
     use super::*;
+
+
+    #[test]
+    fn mute_and_deaf_are_independent() {
+        // Mute gates TX only; deaf gates RX only.
+        assert!(voice_tx_allowed(true, false, true));
+        assert!(!voice_tx_allowed(true, true, true));
+        assert!(!voice_tx_allowed(false, false, true));
+        assert!(!voice_tx_allowed(true, false, false));
+        assert!(voice_rx_allowed(false, false));
+        assert!(!voice_rx_allowed(false, true));
+        assert!(!voice_rx_allowed(true, false));
+        // Mute on + deaf off ⇒ no TX, still hear.
+        assert!(!voice_tx_allowed(true, true, true));
+        assert!(voice_rx_allowed(false, false));
+        // Mute off + deaf on ⇒ TX ok, no RX.
+        assert!(voice_tx_allowed(true, false, true));
+        assert!(!voice_rx_allowed(false, true));
+    }
 
     #[test]
     fn blackjack_totals_and_labels() {

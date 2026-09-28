@@ -2,6 +2,20 @@
 
 The deck writes here so you can see what changed after an update. Newest first. One heading per day. Edit this file only when a build is about to be pushed to GitHub.
 
+## 2026-09-28
+
+- Page tabs are INDEX, TABLE, NETSPACE, TREE, TERMINAL, RECON, NETHOOKS, and ROTN. CHAT, CONTACTS, VOICE, VIDEO, and PLAYER stay pinned on that row.
+- Pages and overlays share one chrome: location id, title, and a short next line. Table overlays and Catalog / Chars follow it.
+- The permission ledger (INDEX 09) stays closed until you open it.
+- The command bar and dock tabs use the same selected look — acid fill and a hot underline. Rail tiles are a bit taller for thumbs and Deck.
+- Chrome theme and UI scale live in data/chrome.json.
+- Live voice on a call uses Opus on its own encrypted media path. You need system libopus to build and run compressed voice.
+- Echo cancel uses SpeexDSP when speexdsp is installed at build time. Without it the build still works and voice still runs.
+- Mute stops sending. Deaf stops hearing. They are separate.
+- A call only sends voice and video to people in that call.
+- Under load, voice frames are preferred over video and screenshare. Screenshare keeps the newest frame.
+- Wayland screen share uses the system portal and PipeWire (GStreamer or FFmpeg). JPEG encode uses jpegenc or avenc_mjpeg. The first share needs Share or Allow in the portal dialog. If camera or screen dies mid-call, voice stays up. X11 can fall back to x11grab. Screenshare is LAN-good / WAN best-effort.
+
 ## 2026-09-27
 
 - A tab stays open after you click it. The bar is one row again.

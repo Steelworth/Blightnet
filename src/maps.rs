@@ -121,7 +121,7 @@ pub fn ui(
         board.draft = None;
     }
     ui.horizontal_wrapped(|ui| {
-        theme::section_head(ui, "07", "MAPS");
+        // Title / CLOSE live in TABLE overlay chrome (app.rs).
         if theme::neon_btn(ui, "Import picture").clicked() {
             if let Some(path) = rfd::FileDialog::new()
                 .add_filter("Image", &["jpg", "jpeg", "png", "webp"])

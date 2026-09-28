@@ -2,7 +2,7 @@
 //! No Cloudflare, no extra binary. The host node listens; the guest node punches.
 
 use crate::crypt::Cipher;
-use crate::net::{self, NetEvent, PeerInfo, Wire};
+use crate::net::{self, NetEvent, OutMsg, PeerInfo, Wire};
 use rand::RngCore;
 use std::collections::HashMap;
 use std::net::{SocketAddr, ToSocketAddrs, UdpSocket};
@@ -16,6 +16,8 @@ const MAGIC: &[u8; 4] = b"BNU1";
 const HELLO: u8 = 0;
 const DATA: u8 = 1;
 const ACK: u8 = 2;
+/// Binary Opus media (ChaCha AEAD). No ACK / no frag — lose frames, keep latency.
+const MEDIA: u8 = 3;
 const CHUNK: usize = 1000;
 
 type ClientMap = net::ClientMap;
@@ -160,6 +162,24 @@ fn send_msg(sock: &UdpSocket, dest: SocketAddr, cipher: &Cipher, seq: u32, msg: 
     true
 }
 
+fn send_media(
+    sock: &UdpSocket,
+    dest: SocketAddr,
+    cipher: &Cipher,
+    seq: u32,
+    frame: &crate::media::MediaFrame,
+) -> bool {
+    let Some(pt) = frame.pack() else {
+        return false;
+    };
+    let Some(sealed) = cipher.seal_bin(&pt) else {
+        return false;
+    };
+    // One UDP datagram — Opus frames are tiny.
+    let pkt = pack(MEDIA, seq, 0, 1, &sealed);
+    sock.send_to(&pkt, dest).is_ok()
+}
+
 fn send_hello(sock: &UdpSocket, dest: SocketAddr, text: &str) -> bool {
     sock.send_to(&pack(HELLO, 0, 0, 1, text.as_bytes()), dest)
         .is_ok()
@@ -264,6 +284,18 @@ fn host_loop(
                 if kind == ACK {
                     continue;
                 }
+                if kind == MEDIA {
+                    // No ACK — realtime. Open AEAD, fan out / play.
+                    if let Some(pt) = sess.cipher.open_bin(payload) {
+                        if let Some(frame) = crate::media::MediaFrame::unpack(&pt) {
+                            let cid = sess.cid.clone();
+                            if !cid.is_empty() {
+                                net::host_media_incoming(frame, &cid, &host_id, &clients, &ev_tx);
+                            }
+                        }
+                    }
+                    continue;
+                }
                 if kind != DATA {
                     continue;
                 }
@@ -310,24 +342,42 @@ fn host_loop(
     }
 }
 
+/// Blind dual-send helps small control DATA survive lossy UDP.
+/// Never dual-send VideoFrame JPEG — frames are huge (many CHUNK frags) and
+/// retransmit stalls Opus MEDIA on the same sock.
+fn mesh_dual_send(msg: &Wire) -> bool {
+    !matches!(msg, Wire::VideoFrame { .. })
+}
+
 fn pump_out(
     sock: UdpSocket,
     dest: SocketAddr,
     cipher: Cipher,
-    wrx: Receiver<Wire>,
+    wrx: Receiver<OutMsg>,
     live: Arc<AtomicBool>,
 ) {
     let mut seq = 1u32;
     while live.load(Ordering::SeqCst) {
+        // recv_batch coalesces VideoFrame + prioritizes MEDIA ahead of JPEG.
         let Some(batch) = net::recv_batch(&wrx) else {
             break;
         };
         for msg in batch {
             let s = seq;
             seq = seq.wrapping_add(1);
-            let _ = send_msg(&sock, dest, &cipher, s, &msg);
-            thread::sleep(Duration::from_millis(4));
-            let _ = send_msg(&sock, dest, &cipher, s, &msg);
+            match msg {
+                OutMsg::Wire(w) => {
+                    let _ = send_msg(&sock, dest, &cipher, s, &w);
+                    if mesh_dual_send(&w) {
+                        thread::sleep(Duration::from_millis(4));
+                        let _ = send_msg(&sock, dest, &cipher, s, &w);
+                    }
+                }
+                OutMsg::Media(f) => {
+                    // Single shot — no ACK / no retransmit (latency budget).
+                    let _ = send_media(&sock, dest, &cipher, s, &f);
+                }
+            }
         }
     }
 }
@@ -336,7 +386,7 @@ pub fn join_guest(
     targets: &[SocketAddr],
     table_key: &[u8],
     hello: Wire,
-    wrx: Receiver<Wire>,
+    wrx: Receiver<OutMsg>,
     ev_tx: std::sync::mpsc::Sender<NetEvent>,
     stop: Arc<AtomicBool>,
     self_id: String,
@@ -404,6 +454,14 @@ pub fn join_guest(
                     if kind == ACK {
                         continue;
                     }
+                    if kind == MEDIA {
+                        if let Some(pt) = cipher.open_bin(payload) {
+                            if let Some(frame) = crate::media::MediaFrame::unpack(&pt) {
+                                net::guest_media_incoming(frame, &self_id, &ev_tx);
+                            }
+                        }
+                        continue;
+                    }
                     if kind != DATA {
                         continue;
                     }
@@ -442,6 +500,13 @@ mod tests {
         assert_eq!(n, 3);
         assert_eq!(body, b"abc");
         assert!(unpack(b"nope").is_none());
+        let m = pack(MEDIA, 3, 0, 1, b"opus");
+        let (k, seq, f, n, body) = unpack(&m).unwrap();
+        assert_eq!(k, MEDIA);
+        assert_eq!(seq, 3);
+        assert_eq!(f, 0);
+        assert_eq!(n, 1);
+        assert_eq!(body, b"opus");
     }
 
     #[test]
@@ -458,6 +523,30 @@ mod tests {
         let u = udp_targets(&addrs);
         assert!(u.iter().any(|a| a.port() == 40111));
         assert!(u.iter().any(|a| a.port() == 8766));
+    }
+
+    #[test]
+    fn mesh_dual_send_skips_video_keeps_control() {
+        let chat = Wire::Chat {
+            from: "a".into(),
+            name: "A".into(),
+            text: "hi".into(),
+            whisper: false,
+            to: None,
+        };
+        let frame = Wire::VideoFrame {
+            from: "a".into(),
+            name: "A".into(),
+            kind: "screen".into(),
+            to: None,
+            crew: None,
+            data: "x".repeat(8000),
+        };
+        assert!(mesh_dual_send(&chat), "small control Wire may dual-send");
+        assert!(
+            !mesh_dual_send(&frame),
+            "VideoFrame must not dual-send on mesh"
+        );
     }
 
     #[test]
