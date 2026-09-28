@@ -86,7 +86,8 @@ pub fn parse_invite(raw: &str) -> Option<Invite> {
         return None;
     }
     let (key, rest) = if let Some((k, rest)) = s.split_once('@') {
-        (decode_key(k).unwrap_or_default(), rest)
+        // Malformed key after @ must not silently downgrade to empty (MITM-able ECDH).
+        (decode_key(k)?, rest)
     } else {
         (vec![], s)
     };
@@ -192,6 +193,11 @@ fn derive(
     server_n: &[u8],
     we_are_server: bool,
 ) -> Option<Cipher> {
+    // Empty / wrong-length table_key makes ECDH MITM-able: both sides would
+    // derive the same attacker-chosen session if the invite carries no secret.
+    if table_key.len() != KEY_LEN {
+        return None;
+    }
     let mut ikm = Vec::with_capacity(shared.len() + table_key.len() + PEPPER.len());
     ikm.extend_from_slice(shared);
     ikm.extend_from_slice(table_key);
@@ -324,5 +330,21 @@ mod tests {
         let client = finish_client(sec, &cn, &reply, &b).unwrap();
         let line = client.seal_line(&serde_json::json!({"type":"chat","text":"secret"})).unwrap();
         assert!(server.open_line::<serde_json::Value>(&line).is_none());
+    }
+
+    #[test]
+    fn empty_or_short_table_key_rejected() {
+        let (sec, pubk, cn) = new_secret();
+        let hello = hello_line(&pubk, &cn);
+        assert!(finish_server(&hello, &[]).is_none());
+        assert!(finish_server(&hello, &[0u8; 8]).is_none());
+        assert!(finish_client(sec, &cn, &hello, &[]).is_none());
+    }
+
+    #[test]
+    fn malformed_at_key_does_not_downgrade() {
+        assert!(parse_invite("blightnet://not-a-valid-key@10.0.0.1:8766").is_none());
+        let legacy = parse_invite("blightnet://10.0.0.1:8766").unwrap();
+        assert!(legacy.key.is_empty());
     }
 }

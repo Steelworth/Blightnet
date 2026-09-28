@@ -4,7 +4,7 @@ use eframe::egui::{
     Stroke, StrokeKind, Vec2,
 };
 use std::sync::Arc;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 const MAP: i32 = 128;
 const LOT: i32 = 8;
@@ -82,6 +82,18 @@ struct Sprite {
     kind: u8,
 }
 
+#[derive(Clone)]
+struct Person {
+    name: String,
+    x: f32,
+    z: f32,
+    yaw: f32,
+    to_x: f32,
+    to_z: f32,
+    to_yaw: f32,
+    seen: Instant,
+}
+
 pub struct Netspace {
     map: Vec<Cell>,
     pub x: f32,
@@ -99,7 +111,8 @@ pub struct Netspace {
     cruise_tx: f32,
     cruise_tz: f32,
     cruise_dir: i32,
-    people: Vec<(String, f32, f32, f32)>,
+    people: Vec<Person>,
+    seed: u32,
     indoors: bool,
     floor: i32,
     ret_x: f32,
@@ -121,9 +134,9 @@ impl Default for Netspace {
 
 impl Netspace {
     pub fn new() -> Self {
-        let map = build_city();
+        let map = build_city(0);
         let (x, z) = spawn(&map);
-        let sprites = scatter(&map);
+        let sprites = scatter(&map, 0);
         Self {
             map,
             x,
@@ -142,6 +155,7 @@ impl Netspace {
             cruise_tz: z,
             cruise_dir: 2,
             people: Vec::new(),
+            seed: 0,
             indoors: false,
             floor: 0,
             ret_x: x,
@@ -165,12 +179,73 @@ impl Netspace {
     }
 
     pub fn note_person(&mut self, name: String, x: f32, z: f32, yaw: f32) {
-        if let Some(slot) = self.people.iter_mut().find(|p| p.0 == name) {
-            *slot = (name, x, z, yaw);
+        let name = if name.trim().is_empty() {
+            "SEAT".into()
+        } else {
+            name
+        };
+        if let Some(slot) = self.people.iter_mut().find(|p| p.name == name) {
+            slot.to_x = x;
+            slot.to_z = z;
+            slot.to_yaw = yaw;
+            slot.seen = Instant::now();
         } else if self.people.len() < 24 {
-            self.people.push((name, x, z, yaw));
+            self.people.push(Person {
+                name,
+                x,
+                z,
+                yaw,
+                to_x: x,
+                to_z: z,
+                to_yaw: yaw,
+                seen: Instant::now(),
+            });
         }
     }
+
+    pub fn cull_people(&mut self) {
+        self.people
+            .retain(|p| p.seen.elapsed() < Duration::from_millis(2800));
+    }
+
+    pub fn aim_toward(&mut self, x: f32, z: f32) {
+        let dx = wrap_delta(x, self.x);
+        let dz = wrap_delta(z, self.z);
+        if dx.abs() + dz.abs() < 0.05 {
+            return;
+        }
+        self.aim_yaw = dx.atan2(dz);
+        self.yaw = self.aim_yaw;
+        self.look_on = true;
+    }
+
+    /// Shared city seed from the live table key so host and guest share topology.
+    pub fn apply_table_seed(&mut self, key: &[u8]) {
+        let seed = if key.is_empty() {
+            0
+        } else {
+            let mut h: u32 = 2166136261;
+            for b in key {
+                h ^= u32::from(*b);
+                h = h.wrapping_mul(16777619);
+            }
+            h
+        };
+        if seed == self.seed && !self.map.is_empty() {
+            return;
+        }
+        self.seed = seed;
+        self.map = build_city(seed);
+        self.sprites = scatter(&self.map, seed);
+        if !self.walkable(self.x, self.z) {
+            let (x, z) = spawn(&self.map);
+            self.x = x;
+            self.z = z;
+            self.cruise_tx = x;
+            self.cruise_tz = z;
+        }
+    }
+
 
     fn at(&self, x: i32, z: i32) -> Cell {
         if self.indoors {
@@ -367,6 +442,13 @@ fn hash2(x: i32, z: i32) -> u32 {
     n ^ (n >> 16)
 }
 
+fn lot_hash(seed: u32, x: i32, z: i32) -> u32 {
+    hash2(
+        x.wrapping_add(seed as i32).wrapping_mul(17),
+        z.wrapping_add((seed >> 16) as i32).wrapping_mul(31),
+    )
+}
+
 fn hash3(x: i32, z: i32, w: i32) -> u32 {
     hash2(x, z.wrapping_add(w.wrapping_mul(197)))
 }
@@ -407,7 +489,7 @@ fn fogged(c: Color32, dist: f32) -> Color32 {
     mix(c, BG, (dist * 0.032).clamp(0.0, 0.82))
 }
 
-fn build_city() -> Vec<Cell> {
+fn build_city(seed: u32) -> Vec<Cell> {
     let empty = Cell {
         kind: Kind::Solid,
         h: 4.0,
@@ -424,7 +506,7 @@ fn build_city() -> Vec<Cell> {
             let bz = z.rem_euclid(LOT);
             let lx = x.div_euclid(LOT);
             let lz = z.div_euclid(LOT);
-            let lot = hash2(lx, lz);
+            let lot = lot_hash(seed, lx, lz);
             let dc = {
                 let dx = (x - MAP / 2) as f32;
                 let dz = (z - MAP / 2) as f32;
@@ -466,7 +548,7 @@ fn build_city() -> Vec<Cell> {
                     ice: false,
                     facade: 0,
                     sign: 0,
-                    var: (hash2(x, z) % 6) as u8,
+                    var: (lot_hash(seed, x, z) % 6) as u8,
                 };
                 continue;
             }
@@ -492,25 +574,25 @@ fn build_city() -> Vec<Cell> {
                 continue;
             }
             if park_lot {
-                let tree = hash2(x, z) % 6 == 0;
+                let tree = lot_hash(seed, x, z) % 6 == 0;
                 map[i] = Cell {
                     kind: if tree { Kind::Solid } else { Kind::Park },
-                    h: if tree { 2.2 + (hash2(x, z) % 3) as f32 * 0.4 } else { 0.0 },
+                    h: if tree { 2.2 + (lot_hash(seed, x, z) % 3) as f32 * 0.4 } else { 0.0 },
                     ice: false,
                     facade: 0,
                     sign: 0,
-                    var: (hash2(x, z) % 7) as u8,
+                    var: (lot_hash(seed, x, z) % 7) as u8,
                 };
                 continue;
             }
             if market_lot {
-                let stall = hash2(x, z) % 4 == 0;
+                let stall = lot_hash(seed, x, z) % 4 == 0;
                 map[i] = Cell {
                     kind: if stall { Kind::Solid } else { Kind::Market },
                     h: if stall { 1.35 } else { 0.0 },
                     ice: false,
                     facade: 0,
-                    sign: if stall { 1 + (hash2(x, z) % SIGNS.len() as u32) as u8 } else { 0 },
+                    sign: if stall { 1 + (lot_hash(seed, x, z) % SIGNS.len() as u32) as u8 } else { 0 },
                     var: 2,
                 };
                 continue;
@@ -612,12 +694,12 @@ fn build_city() -> Vec<Cell> {
                 h += 2.6;
             }
             // slight per-cell roof jitter so lots aren't perfect boxes
-            h += (hash2(x, z) % 5) as f32 * 0.08;
+            h += (lot_hash(seed, x, z) % 5) as f32 * 0.08;
             let ice = facade == 3;
             let sign = if lot % 3 == 0 {
                 1 + (lot % SIGNS.len() as u32) as u8
-            } else if hash2(x, z) % 11 == 0 {
-                1 + (hash2(x, z) % SIGNS.len() as u32) as u8
+            } else if lot_hash(seed, x, z) % 11 == 0 {
+                1 + (lot_hash(seed, x, z) % SIGNS.len() as u32) as u8
             } else {
                 0
             };
@@ -693,7 +775,7 @@ fn build_city() -> Vec<Cell> {
     for z in 0..MAP {
         for x in 0..MAP {
             let i = idx(x, z);
-            if map[i].kind == Kind::Park && hash2(x, z) % 5 == 0 && map[i].h < 0.2 {
+            if map[i].kind == Kind::Park && lot_hash(seed, x, z) % 5 == 0 && map[i].h < 0.2 {
                 map[i].kind = Kind::Garden;
             }
             if map[i].kind == Kind::Sidewalk {
@@ -701,15 +783,15 @@ fn build_city() -> Vec<Cell> {
                     || map[idx(x - 1, z)].kind == Kind::Park
                     || map[idx(x, z + 1)].kind == Kind::Park
                     || map[idx(x, z - 1)].kind == Kind::Park;
-                if n && hash2(x, z) % 3 == 0 {
+                if n && lot_hash(seed, x, z) % 3 == 0 {
                     map[i].kind = Kind::Garden;
                     map[i].h = 0.0;
                 }
             }
-            if map[i].kind == Kind::Park && hash2(x + 3, z) % 7 == 0 && map[i].h < 0.2 {
+            if map[i].kind == Kind::Park && lot_hash(seed, x + 3, z) % 7 == 0 && map[i].h < 0.2 {
                 map[i] = Cell {
                     kind: Kind::Solid,
-                    h: 1.8 + (hash2(x, z) % 3) as f32 * 0.5,
+                    h: 1.8 + (lot_hash(seed, x, z) % 3) as f32 * 0.5,
                     ice: false,
                     facade: 13,
                     sign: 0,
@@ -733,14 +815,14 @@ fn spawn(map: &[Cell]) -> (f32, f32) {
     (c as f32 + 0.5, c as f32 - 2.5)
 }
 
-fn scatter(map: &[Cell]) -> Vec<Sprite> {
+fn scatter(map: &[Cell], seed: u32) -> Vec<Sprite> {
     let mut out = Vec::new();
     let mut booths = 0;
     let mut bikes = 0;
     for z in 0..MAP {
         for x in 0..MAP {
             let c = map[idx(x, z)];
-            let n = hash2(x, z);
+            let n = lot_hash(seed, x, z);
             if matches!(c.kind, Kind::Avenue | Kind::Street) && n % 23 == 0 && out.len() < 48 {
                 let along_x = x.rem_euclid(LOT) == 0 || x.rem_euclid(LOT) == 4;
                 let spd = 1.8 + (n % 6) as f32 * 0.4;
@@ -1597,9 +1679,36 @@ fn sky_tex(col: i32, row: i32, t: f32, near_horizon: bool) -> (char, Color32) {
 }
 
 fn near_booth(ns: &Netspace) -> bool {
-    ns.sprites.iter().any(|s| {
-        s.kind == 14 && wrap_delta(s.x, ns.x).hypot(wrap_delta(s.z, ns.z)) < 1.35
-    })
+    booth_dist(ns).map(|d| d < 1.35).unwrap_or(false)
+}
+
+fn booth_dist(ns: &Netspace) -> Option<f32> {
+    ns.sprites
+        .iter()
+        .filter(|s| s.kind == 14)
+        .map(|s| wrap_delta(s.x, ns.x).hypot(wrap_delta(s.z, ns.z)))
+        .min_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
+}
+
+fn peers_near(ns: &Netspace, x: f32, z: f32, radius: f32) -> Vec<String> {
+    ns.people
+        .iter()
+        .filter(|p| wrap_delta(p.x, x).hypot(wrap_delta(p.z, z)) < radius)
+        .map(|p| truncate_handle(&p.name, 10))
+        .collect()
+}
+
+fn truncate_handle(name: &str, n: usize) -> String {
+    let t = name.trim();
+    if t.chars().count() <= n {
+        t.to_string()
+    } else {
+        format!("{}…", t.chars().take(n.saturating_sub(1)).collect::<String>())
+    }
+}
+
+fn lerp_angle(a: f32, b: f32, t: f32) -> f32 {
+    a + ang_diff(b, a) * t
 }
 
 fn skyline_tex(hit: &Hit, v: f32) -> (char, Color32) {
@@ -1700,6 +1809,15 @@ fn tick(ns: &mut Netspace, ui: &egui::Ui, focused: bool, dt: f32) {
         }
     }
     ns.clock += dt;
+    ns.cull_people();
+    let blend = (dt * 8.0).clamp(0.0, 1.0);
+    for p in &mut ns.people {
+        p.x += wrap_delta(p.to_x, p.x) * blend;
+        p.z += wrap_delta(p.to_z, p.z) * blend;
+        p.x = p.x.rem_euclid(MAP as f32);
+        p.z = p.z.rem_euclid(MAP as f32);
+        p.yaw = lerp_angle(p.yaw, p.to_yaw, blend);
+    }
     let cy = ns.yaw.cos();
     let sy = ns.yaw.sin();
     let moving = mx.abs() + mz.abs() > 0.0;
@@ -1766,7 +1884,7 @@ fn tick(ns: &mut Netspace, ui: &egui::Ui, focused: bool, dt: f32) {
     }
 }
 
-pub fn paint(ui: &mut egui::Ui, ns: &mut Netspace, t: f32, full: bool) {
+pub fn paint(ui: &mut egui::Ui, ns: &mut Netspace, t: f32, full: bool, ping_ms: Option<u128>) {
     let rect = ui.available_rect_before_wrap();
     let resp = ui.allocate_rect(rect, Sense::click_and_drag());
     if resp.clicked() {
@@ -1963,9 +2081,37 @@ pub fn paint(ui: &mut egui::Ui, ns: &mut Netspace, t: f32, full: bool) {
         draw_radar(ns, ui.painter(), radar_rect, full);
     }
     if full {
-        draw_cruise_hud(ui, ns, pad);
+        draw_cruise_hud(ui, ns, pad, ping_ms);
+        draw_presence_strip(ui, ns, pad);
         draw_relay(ui, ns, pad);
+        if let Some(d) = booth_dist(ns) {
+            if d < 3.5 {
+                let tip = Rect::from_min_size(
+                    pad.center_bottom() + Vec2::new(-90.0, -52.0),
+                    Vec2::new(180.0, 28.0),
+                );
+                ui.painter().rect_filled(
+                    tip,
+                    3.0,
+                    Color32::from_rgba_unmultiplied(8, 10, 14, 210),
+                );
+                ui.painter().rect_stroke(tip, 3.0, Stroke::new(1.0, theme::ACID), StrokeKind::Inside);
+                let msg = if d < 1.35 {
+                    format!("BOOTH  {d:.1}u  ·  E RELAY")
+                } else {
+                    format!("BOOTH  {d:.1}u")
+                };
+                ui.painter().text(
+                    tip.center(),
+                    Align2::CENTER_CENTER,
+                    msg,
+                    FontId::new(12.0, theme::mono()),
+                    theme::ACID,
+                );
+            }
+        }
     }
+    let _ = t;
 }
 
 fn draw_relay(ui: &mut egui::Ui, ns: &mut Netspace, pad: Rect) {
@@ -1981,7 +2127,7 @@ fn draw_relay(ui: &mut egui::Ui, ns: &mut Netspace, pad: Rect) {
     let h = 28.0 + booths.len() as f32 * 26.0;
     let plate = Rect::from_min_size(
         pad.left_top() + Vec2::new(12.0, 42.0),
-        Vec2::new(220.0, h.min(pad.height() - 56.0)),
+        Vec2::new(260.0, h.min(pad.height() - 56.0)),
     );
     ui.painter()
         .rect_filled(plate, 4.0, Color32::from_rgba_unmultiplied(8, 10, 14, 230));
@@ -2016,8 +2162,16 @@ fn draw_relay(ui: &mut egui::Ui, ns: &mut Netspace, pad: Rect) {
         ui.painter().text(
             row.left_center() + Vec2::new(8.0, 0.0),
             Align2::LEFT_CENTER,
-            format!("BOOTH {}  {}", i + 1, street_name(*x, *z)),
-            FontId::new(12.0, theme::mono()),
+            {
+                let near = peers_near(ns, *x, *z, 4.0);
+                let peer_bit = if near.is_empty() {
+                    String::new()
+                } else {
+                    format!(" · {}", near.join(","))
+                };
+                format!("BOOTH {}  {}{}", i + 1, street_name(*x, *z), peer_bit)
+            },
+            FontId::new(11.0, theme::mono()),
             col,
         );
         if resp.clicked() {
@@ -2030,7 +2184,7 @@ fn draw_relay(ui: &mut egui::Ui, ns: &mut Netspace, pad: Rect) {
     }
 }
 
-fn draw_cruise_hud(ui: &mut egui::Ui, ns: &mut Netspace, pad: Rect) {
+fn draw_cruise_hud(ui: &mut egui::Ui, ns: &mut Netspace, pad: Rect, ping_ms: Option<u128>) {
     let bar = Rect::from_min_max(
         pad.left_top() + Vec2::new(10.0, 8.0),
         Pos2::new(pad.right() - 12.0, pad.top() + 34.0),
@@ -2044,14 +2198,19 @@ fn draw_cruise_hud(ui: &mut egui::Ui, ns: &mut Netspace, pad: Rect) {
         bar.left_top() + Vec2::new(8.0, 2.0),
         Pos2::new((auto.left() - 8.0).max(bar.left() + 24.0), bar.bottom() - 2.0),
     );
+    let ping_txt = match ping_ms {
+        Some(ms) => format!("{ms}ms"),
+        None => "—".into(),
+    };
     ui.painter().with_clip_rect(text_clip).text(
         text_clip.left_center(),
         Align2::LEFT_CENTER,
         format!(
-            "NETSPACE  ·  {}  ·  {}  ·  {}  ·  CLICK LOOK  M MAP  E BOOTH  F DOOR  C AUTO",
+            "NETSPACE  ·  {}  ·  {}  ·  {}  ·  PING {}  ·  CLICK LOOK  M MAP  E BOOTH  F DOOR  C AUTO",
             ns.district(),
             ns.street(),
-            ns.look
+            ns.look,
+            ping_txt
         ),
         FontId::new(12.0, theme::mono()),
         CYAN,
@@ -2126,10 +2285,10 @@ fn draw_sprites(
         })
         .filter(|(d, _)| *d > 0.32 && *d < 26.0)
         .collect();
-    for (name, px, pz, _) in &ns.people {
+    for p in &ns.people {
         let s = Sprite {
-            x: *px,
-            z: *pz,
+            x: p.x,
+            z: p.z,
             vx: 0.0,
             vz: 0.0,
             kind: 20,
@@ -2139,7 +2298,6 @@ fn draw_sprites(
         let depth = dx * sy + dz * cy;
         if depth > 0.32 && depth < 18.0 {
             order.push((depth, s));
-            let _ = name;
         }
     }
     order.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
@@ -2251,12 +2409,12 @@ fn draw_sprites(
                 blit(painter, atlas, inner, c, row, cw, ch, gch, color);
             }
             if s.kind == 20 {
-                if let Some((name, _, _, _)) = ns.people.iter().find(|p| (p.1 - s.x).abs() < 0.2 && (p.2 - s.z).abs() < 0.2) {
-                    let label = if name.chars().count() > 12 {
-                        name.chars().take(12).collect::<String>()
-                    } else {
-                        name.clone()
-                    };
+                if let Some(p) = ns
+                    .people
+                    .iter()
+                    .find(|p| (p.x - s.x).abs() < 0.25 && (p.z - s.z).abs() < 0.25)
+                {
+                    let label = truncate_handle(&p.name, 12);
                     painter.text(
                         Pos2::new(inner.left() + col as f32 * cw, inner.top() + top.max(0.0) * ch - ch),
                         Align2::CENTER_BOTTOM,
@@ -2380,6 +2538,26 @@ fn draw_radar(ns: &Netspace, painter: &egui::Painter, rect: Rect, rich: bool) {
         };
         painter.rect_filled(Rect::from_center_size(p, Vec2::splat(2.2)), 0.0, col);
     }
+    for p in &ns.people {
+        let dx = wrap_delta(p.x, ns.x).round() as i32;
+        let dz = wrap_delta(p.z, ns.z).round() as i32;
+        if dx.abs() >= cells / 2 || dz.abs() >= cells / 2 {
+            continue;
+        }
+        let pos = Pos2::new(
+            grid.center().x + dx as f32 * cw,
+            grid.center().y + dz as f32 * ch,
+        );
+        painter.circle_filled(pos, 3.2, theme::ACID);
+        painter.circle_stroke(pos, 5.0, Stroke::new(1.0, mix(theme::ACID, BG, 0.35)));
+        painter.text(
+            pos + Vec2::new(0.0, -7.0),
+            Align2::CENTER_BOTTOM,
+            truncate_handle(&p.name, 8),
+            FontId::new(9.0, theme::mono()),
+            theme::ACID,
+        );
+    }
     let tip = cx + facing * (range * 3.2);
     let left_w = cx + Vec2::new(-facing.y, facing.x) * (range * 1.4) - facing * range;
     let right_w = cx + Vec2::new(facing.y, -facing.x) * (range * 1.4) - facing * range;
@@ -2416,20 +2594,91 @@ fn draw_radar(ns: &Netspace, painter: &egui::Painter, rect: Rect, rich: bool) {
     );
 }
 
-pub fn hud(ui: &mut egui::Ui, ns: &Netspace, t: f32) {
-    let ping = 8 + ((t * 1.4).sin().abs() * 10.0) as i32;
+pub fn hud(ui: &mut egui::Ui, ns: &Netspace, t: f32, ping_ms: Option<u128>) {
+    let _ = t;
+    let ping_txt = match ping_ms {
+        Some(ms) => format!("{ms}ms"),
+        None => "—".into(),
+    };
     ui.label(
         RichText::new(format!(
-            "NETSPACE  ·  {}  ·  {:02.0},{:02.0}  ·  LOOK {}  ·  PING {ping}ms  ·  WASD  Q/E  drag  SHIFT",
+            "NETSPACE  ·  {}  ·  {:02.0},{:02.0}  ·  LOOK {}  ·  PING {}  ·  SEATS {}  ·  WASD  Q/E  drag  SHIFT",
             ns.district(),
             ns.x,
             ns.z,
-            ns.look
+            ns.look,
+            ping_txt,
+            ns.people.len()
         ))
         .family(theme::mono())
         .size(11.0)
         .color(CYAN),
     );
+}
+
+fn draw_presence_strip(ui: &mut egui::Ui, ns: &mut Netspace, pad: Rect) {
+    if ns.people.is_empty() {
+        return;
+    }
+    let row_h = 26.0;
+    let h = 28.0 + ns.people.len() as f32 * row_h;
+    let mut plate = Rect::from_min_size(
+        pad.left_top() + Vec2::new(12.0, 44.0),
+        Vec2::new(220.0, h.min(pad.height() * 0.55)),
+    );
+    if ns.relay {
+        plate = plate.translate(Vec2::new(270.0, 0.0));
+    }
+    theme::holo_frame(ui, plate, 8.0);
+    ui.painter().text(
+        plate.left_top() + Vec2::new(10.0, 8.0),
+        Align2::LEFT_TOP,
+        "ONLINE SEATS",
+        FontId::new(12.0, theme::display()),
+        theme::ACID,
+    );
+    let mut aim = None;
+    for (i, p) in ns.people.iter().enumerate() {
+        let row = Rect::from_min_size(
+            plate.left_top() + Vec2::new(8.0, 28.0 + i as f32 * row_h),
+            Vec2::new(plate.width() - 16.0, row_h - 2.0),
+        );
+        if row.bottom() > plate.bottom() - 4.0 {
+            break;
+        }
+        let resp = ui.interact(row, egui::Id::new(("ns-seat", i, p.name.as_str())), Sense::click());
+        let col = if resp.hovered() { theme::ACID } else { CYAN };
+        ui.painter().rect_filled(
+            row,
+            3.0,
+            if resp.hovered() {
+                Color32::from_rgba_unmultiplied(214, 255, 63, 24)
+            } else {
+                Color32::from_rgba_unmultiplied(77, 232, 255, 10)
+            },
+        );
+        let dist = wrap_delta(p.x, ns.x).hypot(wrap_delta(p.z, ns.z));
+        let line = format!(
+            "{}  {} · {}  {:.0}u",
+            truncate_handle(&p.name, 10),
+            district(p.x, p.z),
+            street_name(p.x, p.z),
+            dist
+        );
+        ui.painter().text(
+            row.left_center() + Vec2::new(8.0, 0.0),
+            Align2::LEFT_CENTER,
+            line,
+            FontId::new(11.0, theme::mono()),
+            col,
+        );
+        if resp.clicked() {
+            aim = Some((p.x, p.z));
+        }
+    }
+    if let Some((x, z)) = aim {
+        ns.aim_toward(x, z);
+    }
 }
 
 #[cfg(test)]

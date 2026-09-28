@@ -50,6 +50,27 @@ pub fn ffmpeg_bin() -> Option<PathBuf> {
     None
 }
 
+/// True when `ffmpeg_bin` finds a usable binary (PATH or known Windows paths).
+pub fn ffmpeg_ready() -> bool {
+    ffmpeg_bin().is_some()
+}
+
+/// Short, platform-appropriate install tip when FFmpeg is missing.
+pub fn ffmpeg_install_tip() -> &'static str {
+    #[cfg(windows)]
+    {
+        r"Install FFmpeg from https://ffmpeg.org (or winget install FFmpeg). Put ffmpeg.exe on PATH or in C:\ffmpeg\bin, then press Rescan."
+    }
+    #[cfg(target_os = "macos")]
+    {
+        "Install FFmpeg (brew install ffmpeg), then press Rescan."
+    }
+    #[cfg(not(any(windows, target_os = "macos")))]
+    {
+        "Install FFmpeg (apt/dnf/pacman: ffmpeg), then press Rescan."
+    }
+}
+
 pub fn open_path(path: &Path) -> bool {
     if !path.exists() {
         return false;
@@ -406,5 +427,40 @@ mod tests {
     #[test]
     fn which_finds_nothing_bogus() {
         assert!(which("blightnet-no-such-binary-xyz").is_none());
+    }
+
+    #[test]
+    fn ffmpeg_tip_is_nonempty() {
+        assert!(!ffmpeg_install_tip().is_empty());
+        assert!(ffmpeg_install_tip().contains("Rescan"));
+    }
+
+    #[test]
+    fn ffmpeg_ready_matches_bin() {
+        assert_eq!(ffmpeg_ready(), ffmpeg_bin().is_some());
+    }
+
+    #[test]
+    fn ffmpeg_missing_when_path_has_no_bin() {
+        // Serialize env mutation so parallel tests do not race on PATH.
+        static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+        let _guard = LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let old = std::env::var_os("PATH");
+        std::env::set_var("PATH", "/nonexistent/blight-no-ffmpeg");
+        let bin = ffmpeg_bin();
+        let ready = ffmpeg_ready();
+        let tip = ffmpeg_install_tip();
+        match old {
+            Some(v) => std::env::set_var("PATH", v),
+            None => std::env::remove_var("PATH"),
+        }
+        assert!(bin.is_none(), "ffmpeg_bin should miss when PATH has no ffmpeg: {bin:?}");
+        assert!(!ready, "ffmpeg_ready should be false when bin is missing");
+        assert!(!tip.is_empty());
+        assert!(tip.contains("Rescan"), "tip should mention Rescan: {tip}");
+        assert!(
+            tip.contains("FFmpeg") || tip.contains("ffmpeg"),
+            "tip should name FFmpeg: {tip}"
+        );
     }
 }

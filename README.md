@@ -71,6 +71,13 @@ chmod +x packaging/build-appimage.sh
 
 That writes `Blightnet-x86_64.AppImage` in this folder. Keep `audio/`, `assets/`, and `data/` beside the image, then double-click it. If FUSE is missing: `APPIMAGE_EXTRACT_AND_RUN=1 ./Blightnet-x86_64.AppImage`.
 
+#### Steam Deck
+
+1. Copy the AppImage plus `audio/`, `assets/`, and `data/` into one folder (Desktop or an SD card folder).
+2. In Desktop Mode: `chmod +x Blightnet-x86_64.AppImage`, then run with `APPIMAGE_EXTRACT_AND_RUN=1 ./Blightnet-x86_64.AppImage` if FUSE is missing.
+3. Press **Online**, then **Host** or **Join** on the same Deck to verify the local node. Check the node with `./Blightnet-x86_64.AppImage daemon-status` (or `blightnet daemon-status` from a build).
+4. Game Mode / gamescope is **untested** — use Desktop Mode for now.
+
 ### macOS
 
 You need **Rust** (`cargo`) for the first build.
@@ -124,7 +131,7 @@ Both worlds:
 - **TERMINAL**, a local shell. Its text is not sent to the table.
 - Nethooks you can post to the table board. Private notes stay local.
 
-Chat, the mix, sheets, map tokens, fog, and a posted nethook sync between seats. Invites look like `blightnet://`. There is no tunnel program. If friends cannot join across the internet, forward TCP and UDP **8766** on the host.
+Chat, the mix, sheets, map tokens, fog, and a posted nethook sync between seats. Invites look like `blightnet://`. There is no tunnel program. If friends cannot join across the internet, forward TCP and UDP **8766** on the host. Host path health reports UPnP TCP/UDP and STUN/public IP as **best-effort reachability only** — a mapped port is not a trust boundary, and UPnP leases can be finite or denied by the router.
 
 ---
 
@@ -148,7 +155,8 @@ Chat, the mix, sheets, map tokens, fog, and a posted nethook sync between seats.
 | Missing catalog / no sound | Keep `data/`, `audio/`, and `assets/` next to the binary or the AppImage. |
 | Node still running after you close the window | That is the window X. Press **Online** again, or run `blightnet daemon-stop`. **00 DISCONNECT** stops the node and closes. |
 | Wrong painting after Blight | Switch world on the TABLE bar. Place resets to that world’s first location. |
-| Friends cannot join | Both seats need this build. Paste the full `blightnet://` invite. Across the internet, forward TCP and UDP 8766 on the host. |
+| Friends cannot join | Both seats need this build. Paste the full `blightnet://` invite. Across the internet, forward TCP and UDP 8766 on the host. Host status lists UPnP/public IP/udp mesh as reachability hints only. |
+| Deck AppImage node fails | Keep data beside the image. Use `APPIMAGE_EXTRACT_AND_RUN=1`. The UI embeds the node if spawn from the mount path fails. Run `daemon-status` to check. |
 | Cargo errors | `cargo build --release` from the folder that contains `Cargo.toml`. |
 
 ---

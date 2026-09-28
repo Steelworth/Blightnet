@@ -583,6 +583,7 @@ pub struct Blightnet {
     jack_at: Instant,
     netspace: crate::netspace::Netspace,
     cameras: Vec<crate::video::Camera>,
+    ffmpeg_ok: bool,
     cam_name: String,
     cam_on: bool,
     screen_on: bool,
@@ -597,7 +598,14 @@ pub struct Blightnet {
     fps: f32,
     last_frame: Instant,
     visuals_on: bool,
+    chrome: theme::ChromeTheme,
+    theme_pick: bool,
+    /// INDEX 09 trust ledger pane (readout only).
+    index_ledger: bool,
+    ui_scale: f32,
     node_live: bool,
+    /// Last Host path-health Status line (UPnP/public IP/mesh). Kept when later status overwrites.
+    path_health: String,
     node_at: Instant,
     clock_acc: f32,
     net_pos_at: Instant,
@@ -650,6 +658,15 @@ pub struct Blightnet {
     tree_deep: bool,
     tree_drives: bool,
     tree_loaded: bool,
+    tree_chrome: crate::tree::Chrome,
+    tree_tags: crate::deskfile::TagSet,
+    tree_tags_for: Option<PathBuf>,
+    tree_tags_note: String,
+    tree_tags_gen: u64,
+    tree_tags_rx: Option<std::sync::mpsc::Receiver<(u64, Result<crate::deskfile::TagSet, String>)>>,
+    tree_log_tail: String,
+    tree_log_at: Instant,
+    term_cwd: Option<PathBuf>,
     text_body: String,
     text_for: Option<PathBuf>,
     text_dirty: bool,
@@ -1075,6 +1092,7 @@ impl Blightnet {
             jack_at: Instant::now(),
             netspace,
             cameras: vec![],
+            ffmpeg_ok: crate::sys::ffmpeg_ready(),
             cam_name,
             cam_on: false,
             screen_on: false,
@@ -1089,7 +1107,12 @@ impl Blightnet {
             fps: 60.0,
             last_frame: Instant::now(),
             visuals_on: false,
+            chrome: theme::ChromeTheme::NeonDeck,
+            theme_pick: false,
+            index_ledger: true,
+            ui_scale: UI_SCALE_DEFAULT,
             node_live: false,
+            path_health: String::new(),
             node_at: Instant::now(),
             clock_acc: 0.0,
             net_pos_at: Instant::now(),
@@ -1142,6 +1165,15 @@ impl Blightnet {
             tree_deep: false,
             tree_drives: false,
             tree_loaded: false,
+            tree_chrome: crate::tree::Chrome::new(),
+            tree_tags: crate::deskfile::TagSet::default(),
+            tree_tags_for: None,
+            tree_tags_note: String::new(),
+            tree_tags_gen: 0,
+            tree_tags_rx: None,
+            tree_log_tail: String::new(),
+            tree_log_at: Instant::now() - Duration::from_secs(5),
+            term_cwd: None,
             text_body: String::new(),
             text_for: None,
             text_dirty: false,
@@ -1186,6 +1218,10 @@ impl Blightnet {
             meter_at: Instant::now() - Duration::from_secs(2),
         };
         app.chat_saved = app.chat.len();
+        let (chrome, ui_scale) = load_chrome(&app.root);
+        app.chrome = chrome;
+        app.ui_scale = ui_scale;
+        theme::set_chrome(app.chrome);
         app.deck_list = load_deck_lib(&app.root);
         if let Some(v) = load_deck_vol(&app.root) {
             app.deck_vol = v;
@@ -2150,6 +2186,7 @@ impl Blightnet {
         }
         self.net.host(internet, self.root.clone());
         self.net.internet = internet;
+        self.path_health.clear();
         if internet {
             self.chat.push(
                 "Table open. The node is punching an internet path. Friends paste the invite into Join — their node talks to yours.".into(),
@@ -2171,6 +2208,12 @@ impl Blightnet {
             self.chat.push(msg);
             return;
         };
+        if inv.key.len() != crate::crypt::KEY_LEN {
+            let msg = "That invite has no table key. Ask the host for a fresh blightnet://key@… invite.".to_string();
+            self.err = msg.clone();
+            self.chat.push(msg);
+            return;
+        }
         if !self.node_live {
             let msg = "Press Online first. The node stays off until you ask.".to_string();
             self.err = msg.clone();
@@ -2187,6 +2230,7 @@ impl Blightnet {
     fn leave_table(&mut self) {
         self.hang_up();
         self.net.leave();
+        self.path_health.clear();
         self.chat.push("Left the table.".into());
     }
 
@@ -2405,6 +2449,7 @@ impl Blightnet {
         let handle = self.net.handle.clone();
         self.net = crate::net::NetHub::new(handle, &self.root);
         self.node_live = false;
+        self.path_health.clear();
         self.chat.push("Node is offline.".into());
         self.status = "Node offline".into();
     }
@@ -2748,6 +2793,10 @@ impl Blightnet {
                         self.node_live = false;
                         self.net.daemon = false;
                         self.drop_partials();
+                        self.path_health.clear();
+                    }
+                    if s.contains("path health") {
+                        self.path_health = s.clone();
                     }
                     self.status = s;
                 }
@@ -3350,6 +3399,47 @@ impl Blightnet {
         }
     }
 
+    fn refresh_ffmpeg(&mut self) -> bool {
+        self.ffmpeg_ok = crate::sys::ffmpeg_ready();
+        self.ffmpeg_ok
+    }
+
+    fn ui_ffmpeg_missing(&mut self, ui: &mut egui::Ui, for_video: bool) {
+        if self.ffmpeg_ok {
+            return;
+        }
+        let what = if for_video {
+            "Video call, camera, and screen share need FFmpeg on this computer."
+        } else {
+            "In-deck video needs FFmpeg on this computer. Open outside still works."
+        };
+        wrap_text(ui, what, CYAN, 12.0);
+        wrap_text(ui, crate::sys::ffmpeg_install_tip(), MUTED, 11.0);
+        ui.horizontal_wrapped(|ui| {
+            if theme::neon_btn(ui, "Rescan").clicked() {
+                if self.refresh_ffmpeg() {
+                    self.cameras = crate::video::list_cameras();
+                    if self.cam_name.is_empty() {
+                        if let Some(c) = crate::video::default_camera() {
+                            self.set_camera(c.path);
+                        }
+                    }
+                    self.status = "FFmpeg found.".into();
+                    if !for_video {
+                        self.media_msg.clear();
+                        if let Some(p) = self.deck_list.get(self.deck_i).cloned() {
+                            if media_kind(&p) == "video" {
+                                self.start_video(&p);
+                            }
+                        }
+                    }
+                } else {
+                    self.status = "FFmpeg still missing.".into();
+                }
+            }
+        });
+    }
+
     fn ensure_devices(&mut self) {
         if self.devices_on {
             return;
@@ -3490,10 +3580,14 @@ impl Blightnet {
         self.media_rx = None;
         self.media_slot = None;
         let Some(bin) = crate::sys::ffmpeg_bin() else {
+            self.ffmpeg_ok = false;
             self.media_run = false;
-            self.media_msg = "ffmpeg is not on this computer. The video can still open in the system player.".into();
+            self.media_msg =
+                "FFmpeg is missing, so this deck cannot play the video here. Open outside still works."
+                    .into();
             return;
         };
+        self.ffmpeg_ok = true;
         self.tex.forget("media-stage");
         self.media_stamp = None;
         self.ask_len(path);
@@ -3801,6 +3895,9 @@ impl Blightnet {
         if !self.media_msg.is_empty() {
             wrap_text(ui, &self.media_msg, CYAN, 12.0);
         }
+        if kind == "video" && !self.ffmpeg_ok {
+            self.ui_ffmpeg_missing(ui, false);
+        }
         let max = Self::stage_size(ui, full);
         if kind == "image" {
             if self.pic.for_path.as_deref() != Some(p.as_path()) {
@@ -3826,6 +3923,8 @@ impl Blightnet {
                 let _ = images::show_fit(ui, &mut self.tex, &path, max);
             }
             self.ui_pic_tools(ui, &path);
+        } else if kind == "video" && !self.ffmpeg_ok {
+            // Tip + Rescan already shown above; skip the "Waiting for a frame…" placeholder.
         } else if let Some(tex) = self.tex.get_key("media-stage") {
             let _ = paint_contain(ui, &tex, max);
         } else {
@@ -4496,7 +4595,7 @@ impl Blightnet {
             return;
         }
         if crate::sys::ffmpeg_bin().is_none() {
-            self.tags_note = "ffmpeg is not on this computer, so tags cannot be changed here.".into();
+            self.tags_note = "FFmpeg is missing, so tags cannot be changed here.".into();
             return;
         }
         let want = if save { 1 } else { 2 };
@@ -5008,6 +5107,23 @@ impl Blightnet {
         );
     }
 
+    fn set_chrome_theme(&mut self, t: theme::ChromeTheme) {
+        self.chrome = t;
+        theme::set_chrome(t);
+        self.visuals_on = false;
+        self.theme_pick = false;
+        save_chrome(&self.root, t, self.ui_scale);
+    }
+
+    fn set_ui_scale(&mut self, scale: f32) {
+        let s = clamp_ui_scale(scale);
+        if (self.ui_scale - s).abs() < 0.001 {
+            return;
+        }
+        self.ui_scale = s;
+        save_chrome(&self.root, self.chrome, s);
+    }
+
     fn set_camera(&mut self, path: String) {
         self.cam_name = path;
         self.persist_devices();
@@ -5018,6 +5134,14 @@ impl Blightnet {
 
     fn start_cam(&mut self) {
         self.cam_cap = None;
+        if !self.refresh_ffmpeg() {
+            self.chat.push(format!(
+                "Camera needs FFmpeg. {}",
+                crate::sys::ffmpeg_install_tip()
+            ));
+            self.cam_on = false;
+            return;
+        }
         let path = if self.cam_name.is_empty() {
             crate::video::default_camera().map(|c| c.path).unwrap_or_default()
         } else {
@@ -5043,6 +5167,14 @@ impl Blightnet {
 
     fn start_screen_share(&mut self) {
         self.screen_cap = None;
+        if !self.refresh_ffmpeg() {
+            self.chat.push(format!(
+                "Screen share needs FFmpeg. {}",
+                crate::sys::ffmpeg_install_tip()
+            ));
+            self.screen_on = false;
+            return;
+        }
         match crate::video::start_screen() {
             Some(cap) => {
                 self.screen_cap = Some(cap);
@@ -5776,6 +5908,7 @@ impl eframe::App for Blightnet {
             });
             self.visuals_on = true;
         }
+        ctx.set_pixels_per_point(self.ui_scale);
         // Never sleep on this thread: Wayland frame callbacks would stall and
         // the boot screen would freeze. Cap rate with a delayed wake instead.
         ctx.request_repaint_after(FRAME);
@@ -5786,19 +5919,20 @@ impl eframe::App for Blightnet {
 impl Blightnet {
     fn ui_shell(&mut self, ctx: &egui::Context) {
         let t = ctx.input(|i| i.time) as f32;
+        let ch = theme::chrome();
         egui::CentralPanel::default()
-            .frame(egui::Frame::NONE.fill(theme::BG))
+            .frame(egui::Frame::NONE.fill(ch.bg))
             .show(ctx, |ui| {
                 let win = ui.max_rect();
-                ui.painter().rect_filled(win, 0.0, theme::BG);
+                ui.painter().rect_filled(win, 0.0, ch.bg);
                 theme::holo_grid(ui, win);
                 ui.painter().rect_stroke(
                     win,
                     0.0,
-                    egui::Stroke::new(1.0, theme::HOT),
+                    egui::Stroke::new(1.0, ch.hot),
                     egui::StrokeKind::Inside,
                 );
-                theme::hud_ticks(ui, win.shrink(8.0), CYAN, 12.0);
+                theme::hud_ticks(ui, win.shrink(8.0), ch.cyan, 12.0);
                 let mut ui = ui.new_child(
                     egui::UiBuilder::new()
                         .max_rect(win.shrink(1.0))
@@ -6147,11 +6281,12 @@ impl Blightnet {
             Vec2::new(ui.available_width().max(1.0), h),
             egui::Sense::hover(),
         );
-        ui.painter().rect_filled(rect, 0.0, RAIL);
+        let ch_bar = theme::chrome();
+        ui.painter().rect_filled(rect, 0.0, ch_bar.rail);
         ui.painter().hline(
             rect.x_range(),
             rect.bottom() - 1.0,
-            egui::Stroke::new(1.0, theme::ACID),
+            egui::Stroke::new(1.0, ch_bar.acid),
         );
         let mut bar = ui.new_child(
             egui::UiBuilder::new()
@@ -6246,6 +6381,7 @@ impl Blightnet {
 
     fn ui_index(&mut self, ui: &mut egui::Ui, t: f32) {
         let page_h = ui.available_height().max(40.0);
+        let ch = theme::chrome();
         egui::ScrollArea::vertical()
             .id_salt("index")
             .max_height(page_h)
@@ -6254,6 +6390,8 @@ impl Blightnet {
                 ui.set_min_width(ui.available_width());
                 ui.spacing_mut().item_spacing = Vec2::new(8.0, 8.0);
                 ui.add_space(8.0);
+
+                // B: status-first deck strip — icon | NETDIR + DECK + NODE | world | theme | kicker
                 ui.horizontal_wrapped(|ui| {
                     ui.add_space(12.0);
                     let icon = self.root.join("assets/icon.png");
@@ -6264,7 +6402,7 @@ impl Blightnet {
                         badge,
                         10.0,
                         Color32::from_rgb(8, 8, 5),
-                        egui::Stroke::new(1.5, theme::ACID),
+                        egui::Stroke::new(1.5, ch.acid),
                     );
                     let mut child = ui.new_child(
                         egui::UiBuilder::new()
@@ -6272,72 +6410,95 @@ impl Blightnet {
                             .layout(egui::Layout::centered_and_justified(egui::Direction::TopDown)),
                     );
                     images::show_fit(&mut child, &mut self.tex, &icon, Vec2::splat(46.0));
+
                     ui.vertical(|ui| {
+                        let netdir = match self.net.role {
+                            Role::Host => "NETDIR://HOST · BLIGHTNET DECK",
+                            Role::Guest => "NETDIR://JOIN · BLIGHTNET DECK",
+                            Role::Presence => "NETDIR://ONLINE · BLIGHTNET DECK",
+                            Role::Idle => "NETDIR://LOCAL · BLIGHTNET DECK",
+                        };
                         ui.label(
-                            RichText::new("NETDIR://LOCAL · BLIGHTNET DECK")
+                            RichText::new(netdir)
                                 .family(theme::mono())
                                 .size(11.0)
-                                .color(CYAN),
+                                .color(ch.cyan),
                         );
-                        ui.label(
-                            RichText::new("DECK")
-                                .family(theme::display())
-                                .size(38.0)
-                                .color(theme::ACID),
-                        );
-                        let (line, _) =
-                            ui.allocate_exact_size(Vec2::new(88.0, 2.0), egui::Sense::hover());
-                        ui.painter().rect_filled(line, 0.0, CYAN);
-                        let world = if self.blight { "BLIGHT" } else { "HEARTHSONG" };
-                        if ui
-                            .add(
-                                egui::Button::new(
-                                    RichText::new(world)
-                                        .family(theme::display())
-                                        .size(14.0)
-                                        .color(CYAN),
+                        ui.horizontal_wrapped(|ui| {
+                            ui.label(
+                                RichText::new("DECK")
+                                    .family(theme::display())
+                                    .size(34.0)
+                                    .color(ch.acid),
+                            );
+                            let node = match self.net.role {
+                                Role::Host => "HOST",
+                                Role::Guest => "JOIN",
+                                Role::Presence => "ONLINE",
+                                Role::Idle => "LOCAL",
+                            };
+                            let node_col = if self.node_live { ch.acid } else { ch.cyan };
+                            egui::Frame::NONE
+                                .fill(theme::glass())
+                                .stroke(egui::Stroke::new(1.0, theme::fade(node_col, 200)))
+                                .inner_margin(egui::Margin::symmetric(10, 4))
+                                .show(ui, |ui| {
+                                    ui.label(
+                                        RichText::new(format!("NODE · {node}"))
+                                            .family(theme::mono())
+                                            .size(12.0)
+                                            .color(node_col),
+                                    );
+                                });
+                        });
+                        ui.horizontal_wrapped(|ui| {
+                            let world = if self.blight { "BLIGHT" } else { "HEARTHSONG" };
+                            if theme::neon_btn_color(ui, world, ch.cyan, self.blight)
+                                .on_hover_text(
+                                    "Switch Hearthsong and Blight. The mix goes quiet and Place resets.",
                                 )
-                                .frame(false),
-                            )
-                            .on_hover_text(
-                                "Switch Hearthsong and Blight. The mix goes quiet and Place resets.",
-                            )
-                            .clicked()
-                        {
-                            self.set_world(!self.blight);
-                            self.broadcast_mix();
+                                .clicked()
+                            {
+                                self.set_world(!self.blight);
+                                self.broadcast_mix();
+                            }
+                            let theme_label = format!("THEME · {}", self.chrome.short());
+                            let theme_resp = theme::neon_btn(ui, &theme_label).on_hover_text(
+                                "Deck chrome. Neon Deck / Void Deeper / Acid Forward / Cyan Ice. Right-click cycles.",
+                            );
+                            if theme_resp.clicked() {
+                                self.theme_pick = !self.theme_pick;
+                            }
+                            if theme_resp.secondary_clicked() {
+                                self.set_chrome_theme(self.chrome.next());
+                            }
+                            meta_c(ui, "CLK", &format_clock(self.clock), ch.cyan);
+                            meta_c(ui, "ICE", "CLEAR", ch.cyan);
+                        });
+                        if self.theme_pick {
+                            ui.horizontal_wrapped(|ui| {
+                                for t in theme::ChromeTheme::ALL {
+                                    let on = self.chrome == t;
+                                    if theme::neon_btn_color(ui, t.label(), ch.cyan, on).clicked()
+                                    {
+                                        self.set_chrome_theme(t);
+                                    }
+                                }
+                            });
                         }
+                        theme::kicker(ui, "Stamp a Handle · Online · Host or Join · JACK IN");
                     });
                 });
-                ui.horizontal_wrapped(|ui| {
-                    ui.add_space(12.0);
-                    meta_c(ui, "CLK", &format_clock(self.clock), CYAN);
-                    meta_c(
-                        ui,
-                        "LINK",
-                        match self.net.role {
-                            Role::Host => "HOST",
-                            Role::Guest => "JOIN",
-                            Role::Presence => "ONLINE",
-                            Role::Idle => "LOCAL",
-                        },
-                        CYAN,
-                    );
-                    meta(ui, "ICE", "CLEAR");
-                    meta_c(ui, "NODE", "8766", CYAN);
-                });
-                ui.add(egui::Separator::default());
+
+                ui.add_space(6.0);
+                self.ui_index_session(ui);
+
                 if !self.err.is_empty() {
-                    wrap_text(ui, &self.err.clone(), CYAN, 13.0);
+                    wrap_text(ui, &self.err.clone(), ch.cyan, 13.0);
                 }
-                ui.add_space(4.0);
-                wrap_text(
-                    ui,
-                    "Local deck. Stamp a Handle. Go Online so contacts can reach you. Host or Join a Blightnexus table to mix. Video Call sits on the systems rail. Catalogs live on Blightnexus.",
-                    theme::CREAM,
-                    15.0,
-                );
-                ui.add_space(12.0);
+                ui.add_space(8.0);
+
+                // A zones: PRIMARY LINK | DECK SYSTEMS | RUN PROTOCOL (+ settings strip under systems)
                 let wide = ui.available_width() >= 980.0;
                 if wide {
                     ui.columns(3, |cols| {
@@ -6365,16 +6526,125 @@ impl Blightnet {
             });
     }
 
+
+    /// Process-manager strip: role, peers, probe RTT, host path health, daemon.
+    /// Reads existing App/net/daemon fields only — no STUN/UPnP reimplementation.
+    fn ui_index_session(&self, ui: &mut egui::Ui) {
+        let ch = theme::chrome();
+        theme::pane().show(ui, |ui| {
+            ui.horizontal_wrapped(|ui| {
+                ui.label(
+                    RichText::new("SESSION · NODE")
+                        .family(theme::mono())
+                        .size(11.0)
+                        .color(ch.acid),
+                );
+                ui.label(
+                    RichText::new("live readout · same signals as Tree / Netspace")
+                        .family(theme::mono())
+                        .size(10.0)
+                        .color(MUTED),
+                );
+            });
+            ui.add_space(4.0);
+
+            let (role_lbl, role_col) = if !self.node_live {
+                ("OFFLINE", theme::DIM)
+            } else {
+                match self.net.role {
+                    Role::Host => ("HOST", theme::ORANGE),
+                    Role::Guest => ("JOIN", theme::ORANGE),
+                    Role::Presence | Role::Idle => ("ONLINE", ch.cyan),
+                }
+            };
+            let (daemon_lbl, daemon_col) = if self.node_live {
+                ("UP", ch.acid)
+            } else {
+                ("DOWN", KILL)
+            };
+
+            let peers: Vec<&net::PeerInfo> = self
+                .net
+                .peers
+                .iter()
+                .filter(|p| p.id != self.net.self_id)
+                .collect();
+            let peer_n = peers.len();
+            let peer_handles: String = {
+                let names: Vec<&str> = peers
+                    .iter()
+                    .map(|p| {
+                        let n = p.name.trim();
+                        if n.is_empty() {
+                            p.id.as_str()
+                        } else {
+                            n
+                        }
+                    })
+                    .take(4)
+                    .collect();
+                if names.is_empty() {
+                    "—".into()
+                } else {
+                    let mut s = names.join(" · ");
+                    if peer_n > names.len() {
+                        s.push_str(&format!(" +{}", peer_n - names.len()));
+                    }
+                    s
+                }
+            };
+            let peers_val = if peer_n == 0 {
+                "0".into()
+            } else {
+                format!("{peer_n} · {peer_handles}")
+            };
+            let peers_col = if peer_n == 0 { MUTED } else { ch.cyan };
+
+            let (rtt_val, rtt_col) = match self.netspace_ping_ms() {
+                Some(ms) => {
+                    let col = if ms < 80 {
+                        ch.acid
+                    } else if ms < 160 {
+                        ch.cyan
+                    } else if ms < 300 {
+                        DIM
+                    } else {
+                        KILL
+                    };
+                    (format!("{ms} ms"), col)
+                }
+                None => ("—".into(), MUTED),
+            };
+
+            let (path_val, path_col) = session_path_readout(
+                self.node_live,
+                self.net.role,
+                self.net.internet,
+                &self.status,
+                &self.path_health,
+            );
+
+            ui.horizontal_wrapped(|ui| {
+                session_chip(ui, "ROLE", role_lbl, role_col);
+                session_chip(ui, "DAEMON", daemon_lbl, daemon_col);
+                session_chip(ui, "PEERS", &peers_val, peers_col);
+                session_chip(ui, "PROBE", &rtt_val, rtt_col);
+                session_chip(ui, "PATH", &path_val, path_col);
+            });
+        });
+    }
+
     fn ui_index_link(&mut self, ui: &mut egui::Ui, t: f32) {
         self.ui_index_link_inner(ui, t);
     }
 
     fn ui_index_link_inner(&mut self, ui: &mut egui::Ui, t: f32) {
+        let ch = theme::chrome();
         ui.label(
             RichText::new("PRIMARY LINK")
                 .family(theme::mono())
                 .size(11.0)
-                .color(theme::ACID),
+                .color(ch.acid),
         );
         if theme::jack_tile(ui, t).clicked() {
             self.page = Page::Table;
@@ -6400,7 +6670,7 @@ impl Blightnet {
             }
         });
         if self.net.role == Role::Host {
-            wrap_text(ui, &self.net.paste_link(), CYAN, 11.0);
+            wrap_text(ui, &self.net.paste_link(), ch.cyan, 11.0);
         }
     }
 
@@ -6409,13 +6679,12 @@ impl Blightnet {
     }
 
     fn ui_index_systems_inner(&mut self, ui: &mut egui::Ui) {
-        self.ensure_devices();
-        self.ensure_cameras();
+        let ch = theme::chrome();
         ui.label(
             RichText::new("DECK SYSTEMS")
                 .family(theme::mono())
                 .size(11.0)
-                .color(theme::ACID),
+                .color(ch.acid),
         );
         ui.columns(2, |g| {
             if theme::sys_tile(&mut g[0], "02", "CONTACTS", "SAVED PEOPLE", "OPEN", false).clicked()
@@ -6451,25 +6720,46 @@ impl Blightnet {
             self.page = Page::Nethooks;
             self.hook_edit = false;
         }
+        if theme::sys_tile(
+            ui,
+            "09",
+            "LEDGER",
+            "TRUST · WIRE VS LOCAL",
+            if self.index_ledger { "HIDE" } else { "READ" },
+            false,
+        )
+        .clicked()
+        {
+            self.index_ledger = !self.index_ledger;
+        }
         ui.add_space(8.0);
+        // DISCONNECT isolated at bottom of systems (A)
+        if theme::sys_tile(ui, "00", "DISCONNECT", "SHUT DOWN BLIGHTNET", "KILL", true).clicked() {
+            self.go_offline();
+            ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
+        }
+        ui.add_space(10.0);
+        self.ui_index_settings(ui);
+        if self.index_ledger {
+            ui.add_space(10.0);
+            self.ui_index_ledger(ui);
+        }
+    }
+
+    fn ui_index_settings(&mut self, ui: &mut egui::Ui) {
+        self.ensure_devices();
+        self.ensure_cameras();
+        let ch = theme::chrome();
         ui.label(
-            RichText::new("DISPLAY ARRAY")
+            RichText::new("SETTINGS")
                 .family(theme::mono())
                 .size(11.0)
-                .color(MUTED),
-        );
-        wrap_text(ui, "This native window · borderless", CREAM, 11.0);
-        ui.add_space(8.0);
-        ui.label(
-            RichText::new("DEVICES")
-                .family(theme::mono())
-                .size(11.0)
-                .color(theme::ACID),
+                .color(ch.acid),
         );
         wrap_text(
             ui,
             &format!(
-                "Auto-detected {} mic{}, {} speaker{}. Rescan devices looks again.",
+                "Devices · {} mic{} · {} speaker{}",
                 self.inputs.len(),
                 if self.inputs.len() == 1 { "" } else { "s" },
                 self.outputs.len(),
@@ -6554,6 +6844,41 @@ impl Blightnet {
         if cam != self.cam_name {
             self.set_camera(cam);
         }
+        ui.add_space(6.0);
+        ui.horizontal(|ui| {
+            ui.label(
+                RichText::new("UI SCALE")
+                    .family(theme::mono())
+                    .size(11.0)
+                    .color(ch.acid),
+            );
+            ui.label(
+                RichText::new(format!("{:.2}×", self.ui_scale))
+                    .family(theme::mono())
+                    .size(11.0)
+                    .color(ch.cyan),
+            );
+        });
+        {
+            let mut scale = self.ui_scale;
+            let slider_w = w.max(160.0);
+            ui.scope(|ui| {
+                ui.spacing_mut().slider_width = slider_w;
+                ui.spacing_mut().interact_size.y = 28.0;
+                let resp = ui
+                    .add(
+                        egui::Slider::new(&mut scale, UI_SCALE_MIN..=UI_SCALE_MAX)
+                            .step_by(0.05)
+                            .show_value(false),
+                    )
+                    .on_hover_text(
+                        "Deck UI scale for Steam Deck / handheld. Touch-drag. Saved with chrome theme.",
+                    );
+                if resp.changed() {
+                    self.set_ui_scale(scale);
+                }
+            });
+        }
         ui.horizontal_wrapped(|ui| {
             if theme::neon_btn(ui, "Rescan devices").clicked() {
                 self.refresh_devices();
@@ -6561,8 +6886,6 @@ impl Blightnet {
             if theme::neon_btn(ui, "Update").clicked() {
                 self.do_update();
             }
-        });
-        ui.horizontal_wrapped(|ui| {
             if self.node_live {
                 if theme::neon_btn_color(ui, "Go offline", KILL, false).clicked() {
                     self.go_offline();
@@ -6571,20 +6894,173 @@ impl Blightnet {
                 self.go_online();
             }
         });
-        ui.add_space(8.0);
-        if theme::sys_tile(ui, "00", "DISCONNECT", "SHUT DOWN BLIGHTNET", "KILL", true).clicked() {
-            self.go_offline();
-            ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
-        }
+    }
+
+    fn ui_index_ledger(&mut self, ui: &mut egui::Ui) {
+        let ch = theme::chrome();
+        let wire = theme::ORANGE;
+        theme::pane().show(ui, |ui| {
+            ui.horizontal_wrapped(|ui| {
+                ui.label(
+                    RichText::new("09 · TRUST LEDGER")
+                        .family(theme::mono())
+                        .size(11.0)
+                        .color(ch.acid),
+                );
+                let (chip, chip_col) = if !self.node_live {
+                    ("OFFLINE", theme::DIM)
+                } else {
+                    match self.net.role {
+                        Role::Host => ("HOST", wire),
+                        Role::Guest => ("JOIN", wire),
+                        Role::Presence | Role::Idle => ("ONLINE", ch.cyan),
+                    }
+                };
+                egui::Frame::NONE
+                    .fill(theme::glass())
+                    .stroke(egui::Stroke::new(1.0, theme::fade(chip_col, 200)))
+                    .inner_margin(egui::Margin::symmetric(8, 3))
+                    .show(ui, |ui| {
+                        ui.label(
+                            RichText::new(chip)
+                                .family(theme::mono())
+                                .size(11.0)
+                                .color(chip_col),
+                        );
+                    });
+            });
+            wrap_text(
+                ui,
+                "Readout only — not a permission toggle. What leaves this deck vs what stays.",
+                MUTED,
+                11.0,
+            );
+            ui.add_space(6.0);
+
+            let leaves: &[&str] = &[
+                "chat · whispers",
+                "voice · calls · PCM",
+                "video · frames",
+                "files · images",
+                "net-pos",
+                "character sheets",
+                "map tokens · fog · marks · image asks",
+                "table mix",
+                "posted nethooks",
+                "peer presence · Pit · Probe · Share",
+            ];
+            let local: &[&str] = &[
+                "TREE",
+                "TERM",
+                "RECON",
+                "ROTN · GGUF · 127.0.0.1",
+                "PLAYER playback",
+                "unposted · private nethooks",
+                "GM role chrome",
+                "daemon IPC · loopback",
+            ];
+
+            let wide = ui.available_width() >= 280.0;
+            if wide {
+                ui.columns(2, |cols| {
+                    cols[0].label(
+                        RichText::new("LEAVES · WIRE")
+                            .family(theme::mono())
+                            .size(11.0)
+                            .color(wire),
+                    );
+                    for line in leaves {
+                        wrap_text(&mut cols[0], line, theme::CREAM, 11.0);
+                    }
+                    cols[1].label(
+                        RichText::new("LOCAL")
+                            .family(theme::mono())
+                            .size(11.0)
+                            .color(ch.acid),
+                    );
+                    for line in local {
+                        wrap_text(&mut cols[1], line, theme::CREAM, 11.0);
+                    }
+                });
+            } else {
+                ui.label(
+                    RichText::new("LEAVES · WIRE")
+                        .family(theme::mono())
+                        .size(11.0)
+                        .color(wire),
+                );
+                for line in leaves {
+                    wrap_text(ui, line, theme::CREAM, 11.0);
+                }
+                ui.add_space(4.0);
+                ui.label(
+                    RichText::new("LOCAL")
+                        .family(theme::mono())
+                        .size(11.0)
+                        .color(ch.acid),
+                );
+                for line in local {
+                    wrap_text(ui, line, theme::CREAM, 11.0);
+                }
+            }
+
+            ui.add_space(6.0);
+            ui.label(
+                RichText::new("ALSO ON THE WIRE")
+                    .family(theme::mono())
+                    .size(11.0)
+                    .color(ch.cyan),
+            );
+            wrap_text(
+                ui,
+                "invite blightnet:// · LAN beacon id+handle+port · mesh/TCP HELLO ECDH · Host STUN/ipify/UPnP · Update→GitHub (user)",
+                MUTED,
+                11.0,
+            );
+            ui.add_space(4.0);
+            wrap_text(
+                ui,
+                "Table traffic is peer-to-peer with invite key + ECDH/ChaCha — not a cloud hub. Helpers are reachability only. Host-shared mix/maps on host disk; chat pics/voice P2P not on a hub.",
+                ch.cyan,
+                11.0,
+            );
+            match (self.node_live, self.net.role) {
+                (false, _) => wrap_text(
+                    ui,
+                    "OFFLINE · no peer wire, beacon, STUN, ipify, or UPnP.",
+                    MUTED,
+                    11.0,
+                ),
+                (true, Role::Host) => wrap_text(
+                    ui,
+                    "HOST · full peer LEAVES; internet host also STUN/ipify/UPnP.",
+                    wire,
+                    11.0,
+                ),
+                (true, Role::Guest) => wrap_text(
+                    ui,
+                    "JOIN · full peer LEAVES once at the table.",
+                    wire,
+                    11.0,
+                ),
+                (true, _) => wrap_text(
+                    ui,
+                    "ONLINE · beacon+listen; no full table sync until Host or Join.",
+                    ch.cyan,
+                    11.0,
+                ),
+            };
+        });
     }
 
     fn ui_index_log(&mut self, ui: &mut egui::Ui) {
+        let ch = theme::chrome();
         theme::pane().show(ui, |ui| {
                 ui.label(
                     RichText::new("DECK LOG")
                         .family(theme::mono())
                         .size(11.0)
-                        .color(theme::ACID),
+                        .color(ch.acid),
                 );
                 ui.label(
                     RichText::new("one date · everything shipped that day")
@@ -6594,6 +7070,7 @@ impl Blightnet {
                 );
                 ui.add_space(6.0);
                 if self.changelog.is_empty() {
+
                     wrap_text(ui, "No changelog on this deck.", MUTED, 14.0);
                 }
                 for (i, (day, bullets)) in self.changelog.iter().take(3).enumerate() {
@@ -6604,11 +7081,11 @@ impl Blightnet {
                         RichText::new(day)
                             .family(theme::display())
                             .size(16.0)
-                            .color(theme::ACID),
+                            .color(ch.acid),
                     );
                     for b in bullets {
                         ui.horizontal_wrapped(|ui| {
-                            ui.label(RichText::new("▸").color(CYAN).size(14.0));
+                            ui.label(RichText::new("▸").color(ch.cyan).size(14.0));
                             wrap_text(ui, b, CREAM, 14.0);
                         });
                     }
@@ -6617,43 +7094,78 @@ impl Blightnet {
     }
 
     fn ui_index_protocol(&mut self, ui: &mut egui::Ui) {
+        let ch = theme::chrome();
+        let handle_ok = !self.handle.trim().is_empty();
+        let online_ok = self.node_live;
+        let table_ok = matches!(self.net.role, Role::Host | Role::Guest);
+        let mix_ok = matches!(self.page, Page::Table);
+        let talk_ok = self.shell != ShellPanel::None || self.chat.len() > 1;
+        let player_ok = !self.deck_list.is_empty();
         theme::pane().show(ui, |ui| {
                 ui.label(
                     RichText::new("RUN PROTOCOL")
                         .family(theme::mono())
                         .size(11.0)
-                        .color(theme::ACID),
+                        .color(ch.acid),
                 );
                 ui.add_space(6.0);
-                for (n, step) in [
-                    "Stamp a Handle in the command bar.",
-                    "Press Online. Nothing listens until you do. Press it again to stop the node.",
-                    "Host or Join from the left rail on TABLE. Closing the window keeps the table. INDEX 00 or daemon-stop ends the node.",
-                    "Press 01 BLIGHTNEXUS or the TABLE tab to mix. NETSPACE is its own tab.",
-                    "Chat, Contacts, Voice, Video, and Player sit on the top row. Press the open one again to close it.",
-                    "Player is the music library. The track name on the status line plays or pauses.",
-                ]
-                .iter()
-                .enumerate()
-                {
+                let steps: [(&str, bool); 6] = [
+                    ("Stamp a Handle in the command bar.", handle_ok),
+                    (
+                        "Press Online. Nothing listens until you do. Press again to stop the node.",
+                        online_ok,
+                    ),
+                    (
+                        "Host or Join a table. Closing the window keeps the table. INDEX 00 ends the node.",
+                        table_ok,
+                    ),
+                    (
+                        "Press 01 BLIGHTNEXUS or the TABLE tab to mix. NETSPACE is its own tab.",
+                        mix_ok,
+                    ),
+                    (
+                        "Chat, Contacts, Voice, Video, and Player sit on the top row. Press again to close.",
+                        talk_ok,
+                    ),
+                    (
+                        "Player is the music library. The track name on the status line plays or pauses.",
+                        player_ok,
+                    ),
+                ];
+                for (n, (step, done)) in steps.iter().enumerate() {
                     ui.horizontal(|ui| {
                         let (r, _) =
                             ui.allocate_exact_size(Vec2::new(22.0, 18.0), egui::Sense::hover());
+                        let fill = if *done {
+                            theme::fade(ch.acid, 80)
+                        } else {
+                            PANEL
+                        };
+                        let stroke = if *done {
+                            ch.acid
+                        } else {
+                            theme::fade(ch.hot, 140)
+                        };
                         theme::fill_chamfer(
                             ui,
                             r,
                             3.0,
-                            PANEL,
-                            egui::Stroke::new(1.0, theme::fade(theme::HOT, 140)),
+                            fill,
+                            egui::Stroke::new(1.0, stroke),
                         );
                         ui.painter().text(
                             r.center(),
                             egui::Align2::CENTER_CENTER,
-                            format!("{n:02}"),
-                            FontId::new(11.0, theme::mono()),
-                            theme::ACID,
+                            if *done { "OK".into() } else { format!("{n:02}") },
+                            FontId::new(10.0, theme::mono()),
+                            if *done { ch.acid } else { ch.cyan },
                         );
-                        wrap_text(ui, step, theme::CREAM, 13.0);
+                        wrap_text(
+                            ui,
+                            step,
+                            if *done { MUTED } else { theme::CREAM },
+                            13.0,
+                        );
                     });
                     ui.add_space(5.0);
                 }
@@ -6669,9 +7181,9 @@ impl Blightnet {
                         RichText::new("LAST LINE")
                             .family(theme::mono())
                             .size(11.0)
-                            .color(theme::ACID),
+                            .color(ch.acid),
                     );
-                    wrap_text(ui, last, CYAN, 11.0);
+                    wrap_text(ui, last, ch.cyan, 11.0);
                 }
             });
     }
@@ -7570,6 +8082,7 @@ impl Blightnet {
         if !self.net.presence && self.net.role == Role::Idle {
             wrap_text(ui, "Go Online or Host / Join first.", CYAN, 12.0);
         }
+        self.ui_ffmpeg_missing(ui, true);
         ui.add_space(6.0);
         ui.label(
             RichText::new("CAMERA")
@@ -7603,6 +8116,7 @@ impl Blightnet {
         }
         ui.horizontal_wrapped(|ui| {
             if theme::neon_btn(ui, "Rescan cameras").clicked() {
+                let _ = self.refresh_ffmpeg();
                 self.cameras = crate::video::list_cameras();
                 if self.cam_name.is_empty() {
                     if let Some(c) = crate::video::default_camera() {
@@ -8481,15 +8995,15 @@ impl Blightnet {
         let _ = pal;
         ui.horizontal_wrapped(|ui| {
             theme::section_head(ui, "09", "JACK-IN");
-            crate::netspace::hud(ui, &self.netspace, self.jack_at.elapsed().as_secs_f32());
+            let ping = self.netspace_ping_ms();
+            let t = self.jack_at.elapsed().as_secs_f32();
+            crate::netspace::hud(ui, &self.netspace, t, ping);
 
         });
-        crate::netspace::paint(
-            ui,
-            &mut self.netspace,
-            self.jack_at.elapsed().as_secs_f32(),
-            false,
-        );
+        self.netspace.apply_table_seed(&self.net.table_key);
+        let ping = self.netspace_ping_ms();
+        let t = self.jack_at.elapsed().as_secs_f32();
+        crate::netspace::paint(ui, &mut self.netspace, t, false, ping);
     }
 
     fn ui_overlay_maps(&mut self, ui: &mut egui::Ui, pal: theme::Palette) {
@@ -10364,122 +10878,332 @@ impl Blightnet {
         }
     }
 
+
+    fn netspace_ping_ms(&self) -> Option<u128> {
+        if !self.node_live {
+            return None;
+        }
+        let mut sum = 0u128;
+        let mut n = 0u32;
+        for (id, ms) in &self.ping_ms {
+            let fresh = self
+                .ping_at
+                .get(id)
+                .map(|t| t.elapsed() < Duration::from_secs(6))
+                .unwrap_or(false);
+            if fresh {
+                sum += *ms;
+                n += 1;
+            }
+        }
+        if n == 0 {
+            None
+        } else {
+            Some(sum / u128::from(n))
+        }
+    }
+
     fn ui_tree(&mut self, ui: &mut egui::Ui) {
         if !self.tree_loaded {
             self.tree_loaded = true;
             self.tree_reload();
         }
-        ui.set_clip_rect(ui.max_rect().intersect(ui.clip_rect()));
-        theme::kicker(ui, "NETDIR://TREE");
-        wrap_text(
-            ui,
-            "Folders and files on this computer. Open a folder to read it. Nothing here is sent to the table.",
-            MUTED,
-            12.0,
-        );
-        ui.horizontal_wrapped(|ui| {
-            if theme::neon_btn(ui, "This deck").clicked() {
-                self.tree_enter(self.root.clone());
-            }
-            if theme::neon_btn(ui, "Home").clicked() {
-                if let Some(home) = crate::tree::home_dir() {
-                    self.tree_enter(home);
-                } else {
-                    self.tree_err = "Home is not on this computer.".into();
-                }
-            }
-            if theme::neon_btn(ui, "Computer").clicked() {
-                let roots = crate::tree::computer_roots();
-                if roots.len() == 1 {
-                    self.tree_enter(roots[0].clone());
-                } else {
-                    self.tree_drives = true;
-                    self.tree_sel = None;
-                    self.tree_arm = None;
-                    self.tree_reload();
-                }
-            }
-            if theme::neon_btn(ui, "Up").clicked() {
-                self.tree_up();
-            }
-        });
-        let place = if self.tree_drives {
-            "Computer".to_string()
-        } else {
-            self.tree_at.display().to_string()
-        };
-        wrap_text(ui, &place, CYAN, 12.0);
-        if !self.tree_err.is_empty() {
-            wrap_text(ui, &self.tree_err, CYAN, 12.0);
+        self.poll_tree_tags();
+        if self.tree_log_at.elapsed() >= Duration::from_secs(2) {
+            self.tree_log_at = Instant::now();
+            self.tree_log_tail = crate::tree::tail_daemon_log(&self.root, 24);
         }
-        ui.horizontal_wrapped(|ui| {
-            ui.add(
-                egui::TextEdit::singleline(&mut self.tree_name)
-                    .hint_text("Name")
-                    .desired_width(180.0),
-            );
-            if theme::neon_btn(ui, "New file").clicked() {
-                self.tree_make(false);
-            }
-            if theme::neon_btn(ui, "New folder").clicked() {
-                self.tree_make(true);
-            }
-        });
-        ui.horizontal_wrapped(|ui| {
-            if theme::neon_btn(ui, "Open").clicked() {
-                if let Some(path) = self.tree_sel.clone() {
-                    self.tree_open(path);
-                }
-            }
-            let armed = self.tree_arm.is_some() && self.tree_arm == self.tree_sel;
-            let label = if armed && self.tree_deep {
-                "Delete all?"
-            } else if armed {
-                "Delete?"
-            } else {
-                "Delete"
-            };
-            if theme::neon_btn_color(ui, label, KILL, armed).clicked() {
-                self.tree_delete();
-            }
-        });
-        let n = self.tree_rows.len();
-        let list_h = ui.available_height().max(40.0);
-        let mut open_dir = None;
-        egui::ScrollArea::vertical()
-            .id_salt("tree-rows")
-            .max_height(list_h)
-            .auto_shrink([false, false])
-            .show_rows(ui, 36.0, n, |ui, range| {
-                for i in range {
-                    let Some(ent) = self.tree_rows.get(i).cloned() else {
-                        continue;
-                    };
-                    let label_sub = if ent.dir {
-                        "folder".to_string()
-                    } else if ent.bytes < 1024 {
-                        format!("{} B", ent.bytes)
+        let root = self.root.clone();
+        let at = self.tree_at.clone();
+        let drives = self.tree_drives;
+        let rows = self.tree_rows.clone();
+        let sel = self.tree_sel.clone();
+        let arm = self.tree_arm.clone();
+        let deep = self.tree_deep;
+        let err = self.tree_err.clone();
+        let role = match self.net.role {
+            Role::Host => "HOST",
+            Role::Guest => "GUEST",
+            Role::Presence => "ONLINE",
+            Role::Idle => "LOCAL",
+        };
+        let invite = if matches!(self.net.role, Role::Host) {
+            self.net.paste_link()
+        } else {
+            String::new()
+        };
+        let pulse = crate::tree::DeckPulse {
+            cpu: self.machine.cpu,
+            ram_used: self.machine.ram_used,
+            ram_total: self.machine.ram_total,
+            disk_free: self.machine.disk_free,
+            disk_total: self.machine.disk_total,
+            node_up: self.node_live,
+            role: role.into(),
+            peers: self.net.peers.len(),
+            invite,
+            log_tail: self.tree_log_tail.clone(),
+        };
+        let tags_note = self.tree_tags_note.clone();
+        let tags_owned = if self
+            .tree_tags_for
+            .as_ref()
+            .zip(sel.as_ref())
+            .is_some_and(|(a, b)| a == b)
+        {
+            Some(self.tree_tags.clone())
+        } else {
+            None
+        };
+        let acts = crate::tree::paint(
+            ui,
+            &mut self.tree_chrome,
+            &root,
+            &at,
+            drives,
+            &rows,
+            sel.as_deref(),
+            arm.as_deref(),
+            deep,
+            &mut self.tree_name,
+            &err,
+            &pulse,
+            tags_owned.as_ref(),
+            &tags_note,
+        );
+        for act in acts {
+            match act {
+                crate::tree::Act::Home => {
+                    if let Some(home) = crate::tree::home_dir() {
+                        self.tree_enter(home);
                     } else {
-                        brief_bytes(ent.bytes)
-                    };
-                    let on = self.tree_sel.as_ref() == Some(&ent.path);
-                    let resp = theme::wide_btn(ui, &ent.name, &label_sub, on);
-                    if resp.double_clicked() && !ent.dir {
-                        self.tree_open(ent.path.clone());
-                    } else if resp.clicked() {
-                        if ent.dir {
-                            open_dir = Some(ent.path);
-                        } else {
-                            if self.tree_sel.as_ref() != Some(&ent.path) {
-                                self.tree_arm = None;
-                            }
-                            self.tree_sel = Some(ent.path);
-                        }
+                        self.tree_err = "Home is not on this computer.".into();
                     }
                 }
-            });
-        if let Some(path) = open_dir {
-            self.tree_enter(path);
+                crate::tree::Act::Computer => {
+                    let roots = crate::tree::computer_roots();
+                    if roots.len() == 1 {
+                        self.tree_enter(roots[0].clone());
+                    } else {
+                        self.tree_drives = true;
+                        self.tree_sel = None;
+                        self.tree_arm = None;
+                        self.tree_reload();
+                    }
+                }
+                crate::tree::Act::Up => self.tree_up(),
+                crate::tree::Act::Refresh => self.tree_reload(),
+                crate::tree::Act::NewFile => self.tree_make(false),
+                crate::tree::Act::NewFolder => self.tree_make(true),
+                crate::tree::Act::Open(path) => self.tree_open(path),
+                crate::tree::Act::Enter(path) | crate::tree::Act::Jump(path) | crate::tree::Act::Bookmark(path) => {
+                    if path.is_dir() {
+                        self.tree_enter(path);
+                    } else if path.exists() {
+                        self.tree_err = "That is not a folder.".into();
+                    } else {
+                        self.tree_err = "That path is not there.".into();
+                    }
+                }
+                crate::tree::Act::Select(path) => {
+                    if self.tree_sel.as_ref() != Some(&path) {
+                        self.tree_arm = None;
+                    }
+                    self.tree_sel = Some(path.clone());
+                    if let Some(name) = path.file_name().and_then(|s| s.to_str()) {
+                        self.tree_chrome.rename_to = name.to_string();
+                    }
+                    if path.is_file() && crate::tree::is_media_path(&path) {
+                        self.queue_tree_tags(path);
+                    } else {
+                        self.tree_tags_for = None;
+                        self.tree_tags_note.clear();
+                    }
+                }
+                crate::tree::Act::Delete => self.tree_delete(),
+                crate::tree::Act::CopyPath(path) => {
+                    ui.ctx().copy_text(path.display().to_string());
+                    self.tree_err = "Path copied.".into();
+                }
+                crate::tree::Act::CopyName(path) => {
+                    let name = path
+                        .file_name()
+                        .map(|s| s.to_string_lossy().into_owned())
+                        .unwrap_or_else(|| path.display().to_string());
+                    ui.ctx().copy_text(name);
+                    self.tree_err = "Name copied.".into();
+                }
+                crate::tree::Act::TogglePin(path) => {
+                    if !self.tree_chrome.pins.remove(&path) {
+                        self.tree_chrome.pins.insert(path);
+                    }
+                }
+                crate::tree::Act::Rename => {
+                    let Some(sel) = self.tree_sel.clone() else {
+                        self.tree_err = "Choose a file first.".into();
+                        continue;
+                    };
+                    match crate::tree::rename_entry(&sel, &self.tree_chrome.rename_to) {
+                        Ok(dest) => {
+                            self.tree_sel = Some(dest);
+                            self.tree_arm = None;
+                            self.tree_err.clear();
+                            self.tree_reload();
+                        }
+                        Err(err) => self.tree_err = err,
+                    }
+                }
+                crate::tree::Act::CopyHere => {
+                    let Some(src) = self.tree_chrome.clip.clone() else {
+                        self.tree_err = "Clip a file first.".into();
+                        continue;
+                    };
+                    if self.tree_drives {
+                        self.tree_err = "Open a folder first.".into();
+                        continue;
+                    }
+                    match crate::tree::copy_entry(&src, &self.tree_at) {
+                        Ok(_) => {
+                            self.tree_err.clear();
+                            self.tree_reload();
+                        }
+                        Err(err) => self.tree_err = err,
+                    }
+                }
+                crate::tree::Act::MoveHere => {
+                    let Some(src) = self.tree_chrome.clip.clone() else {
+                        self.tree_err = "Clip a file first.".into();
+                        continue;
+                    };
+                    if self.tree_drives {
+                        self.tree_err = "Open a folder first.".into();
+                        continue;
+                    }
+                    match crate::tree::move_entry(&src, &self.tree_at) {
+                        Ok(dest) => {
+                            self.tree_chrome.clip = None;
+                            self.tree_sel = Some(dest);
+                            self.tree_arm = None;
+                            self.tree_err.clear();
+                            self.tree_reload();
+                        }
+                        Err(err) => self.tree_err = err,
+                    }
+                }
+                crate::tree::Act::OpenText(path) => {
+                    self.load_text(&path);
+                    self.shell = ShellPanel::Player;
+                    self.add_deck_paths(vec![path.clone()]);
+                    if let Some(i) = self.deck_list.iter().position(|p| p == &path) {
+                        self.deck_i = i;
+                    }
+                }
+                crate::tree::Act::OpenTerminal => {
+                    let cwd = if self.tree_drives {
+                        self.root.clone()
+                    } else {
+                        self.tree_at.clone()
+                    };
+                    self.term_cwd = Some(cwd);
+                    self.term = None;
+                    self.page = Page::Terminal;
+                }
+                crate::tree::Act::ToggleConsole => {
+                    self.tree_chrome.console_open = !self.tree_chrome.console_open;
+                    if self.tree_chrome.console_open {
+                        self.tree_log_tail = crate::tree::tail_daemon_log(&self.root, 24);
+                        self.tree_log_at = Instant::now();
+                    }
+                }
+                crate::tree::Act::SendFile => {
+                    let Some(path) = self.tree_sel.clone() else {
+                        self.tree_err = "Choose a file first.".into();
+                        continue;
+                    };
+                    if !path.is_file() {
+                        self.tree_err = "Choose a file first.".into();
+                        continue;
+                    }
+                    if !self.node_live {
+                        self.tree_err = "Press Online first. Then you can send it.".into();
+                        continue;
+                    }
+                    self.send_path = Some(path);
+                    self.send_ids.clear();
+                }
+                crate::tree::Act::ReconPortrait => {
+                    let Some(path) = self.tree_sel.clone() else {
+                        self.tree_err = "Choose an image first.".into();
+                        continue;
+                    };
+                    if !crate::tree::is_image_path(&path) {
+                        self.tree_err = "Choose an image first.".into();
+                        continue;
+                    }
+                    if self.recon.is_empty() {
+                        self.tree_err = "Open RECON and make a file first.".into();
+                        continue;
+                    }
+                    let i = self.recon_i.min(self.recon.len() - 1);
+                    let id = self.recon[i].id.clone();
+                    match crate::recon::store_picture(&self.root, &id, &path) {
+                        Ok(rel) => {
+                            self.recon[i].portrait = rel;
+                            crate::recon::save(&self.root, &self.recon);
+                            self.tree_err = "Portrait set on RECON file.".into();
+                        }
+                        Err(err) => self.tree_err = err,
+                    }
+                }
+                crate::tree::Act::ProbeTags => {
+                    let Some(path) = self.tree_sel.clone() else {
+                        self.tree_err = "Choose a media file first.".into();
+                        continue;
+                    };
+                    if !crate::tree::is_media_path(&path) {
+                        self.tree_err = "That file has no media tags.".into();
+                        continue;
+                    }
+                    self.queue_tree_tags(path);
+                }
+            }
+        }
+    }
+
+    fn queue_tree_tags(&mut self, path: PathBuf) {
+        if self.tree_tags_for.as_ref() == Some(&path) && self.tree_tags_rx.is_none() {
+            return;
+        }
+        self.tree_tags_gen = self.tree_tags_gen.wrapping_add(1);
+        let gen = self.tree_tags_gen;
+        let (tx, rx) = std::sync::mpsc::channel();
+        self.tree_tags_rx = Some(rx);
+        self.tree_tags_for = Some(path.clone());
+        self.tree_tags_note = "Reading tags…".into();
+        std::thread::spawn(move || {
+            let result = crate::deskfile::read_tags(&path);
+            let _ = tx.send((gen, result));
+        });
+    }
+
+    fn poll_tree_tags(&mut self) {
+        let Some(rx) = self.tree_tags_rx.take() else {
+            return;
+        };
+        match rx.try_recv() {
+            Ok((gen, Ok(tags))) => {
+                if gen == self.tree_tags_gen {
+                    self.tree_tags = tags;
+                    self.tree_tags_note.clear();
+                }
+            }
+            Ok((gen, Err(err))) => {
+                if gen == self.tree_tags_gen {
+                    self.tree_tags_note = err;
+                }
+            }
+            Err(std::sync::mpsc::TryRecvError::Empty) => self.tree_tags_rx = Some(rx),
+            Err(std::sync::mpsc::TryRecvError::Disconnected) => {}
         }
     }
 
@@ -10631,7 +11355,12 @@ impl Blightnet {
         let cols = (main.width() / cw).floor() as u16;
         let rows = (main.height() / ch).floor() as u16;
         if self.term.is_none() {
-            self.term = Some(crate::term::Shell::spawn_in(cols, rows, &self.root));
+            let cwd = self
+                .term_cwd
+                .clone()
+                .filter(|p| p.is_dir())
+                .unwrap_or_else(|| self.root.clone());
+            self.term = Some(crate::term::Shell::spawn_in(cols, rows, &cwd));
             self.term_cmds = crate::term::list_commands();
         }
         if let Some(shell) = self.term.as_mut() {
@@ -10772,12 +11501,10 @@ impl Blightnet {
     }
 
     fn ui_netspace(&mut self, ui: &mut egui::Ui) {
-        crate::netspace::paint(
-            ui,
-            &mut self.netspace,
-            self.jack_at.elapsed().as_secs_f32(),
-            true,
-        );
+        self.netspace.apply_table_seed(&self.net.table_key);
+        let ping = self.netspace_ping_ms();
+        let t = self.jack_at.elapsed().as_secs_f32();
+        crate::netspace::paint(ui, &mut self.netspace, t, true, ping);
     }
 
     fn stop_hook_video(&mut self) {
@@ -10807,7 +11534,7 @@ impl Blightnet {
     fn toggle_hook_video(&mut self, path: &Path) {
         self.stop_hook_video();
         let Some(bin) = crate::sys::ffmpeg_bin() else {
-            self.chat.push("ffmpeg is not on this computer. Open the video outside.".into());
+            self.chat.push("FFmpeg is missing. Open the video outside.".into());
             return;
         };
         let dest = crate::nethook::video_frame(path);
@@ -12138,6 +12865,43 @@ fn save_devices(root: &Path, pref: &DevicePref) {
     }
 }
 
+const UI_SCALE_MIN: f32 = 0.85;
+const UI_SCALE_MAX: f32 = 1.75;
+const UI_SCALE_DEFAULT: f32 = 1.0;
+
+fn clamp_ui_scale(s: f32) -> f32 {
+    let c = s.clamp(UI_SCALE_MIN, UI_SCALE_MAX);
+    (c * 20.0).round() / 20.0
+}
+
+fn load_chrome(root: &Path) -> (theme::ChromeTheme, f32) {
+    let v = std::fs::read_to_string(root.join("data/chrome.json"))
+        .ok()
+        .and_then(|s| serde_json::from_str::<serde_json::Value>(&s).ok());
+    let theme = v
+        .as_ref()
+        .and_then(|v| v.get("theme").and_then(|t| t.as_str()))
+        .map(theme::ChromeTheme::from_id)
+        .unwrap_or(theme::ChromeTheme::NeonDeck);
+    let ui_scale = v
+        .as_ref()
+        .and_then(|v| v.get("ui_scale").and_then(|t| t.as_f64()))
+        .map(|f| clamp_ui_scale(f as f32))
+        .unwrap_or(UI_SCALE_DEFAULT);
+    (theme, ui_scale)
+}
+
+fn save_chrome(root: &Path, theme: theme::ChromeTheme, ui_scale: f32) {
+    let v = serde_json::json!({
+        "theme": theme.id(),
+        "ui_scale": clamp_ui_scale(ui_scale),
+    });
+    if let Ok(s) = serde_json::to_string_pretty(&v) {
+        let _ = std::fs::create_dir_all(root.join("data"));
+        let _ = std::fs::write(root.join("data/chrome.json"), s);
+    }
+}
+
 fn load_crews(root: &Path) -> Vec<Crew> {
     std::fs::read_to_string(root.join("data/crews.json"))
         .ok()
@@ -12224,8 +12988,76 @@ fn status_pair(ui: &mut egui::Ui, k: &str, v: &str, value: Color32) {
     ui.label(RichText::new(v).family(theme::mono()).size(10.0).color(value));
 }
 
-fn meta(ui: &mut egui::Ui, k: &str, v: &str) {
-    meta_c(ui, k, v, CREAM);
+
+fn session_chip(ui: &mut egui::Ui, k: &str, v: &str, value: Color32) {
+    egui::Frame::NONE
+        .fill(theme::glass())
+        .stroke(egui::Stroke::new(1.0, theme::fade(value, 200)))
+        .inner_margin(egui::Margin::symmetric(8, 3))
+        .show(ui, |ui| {
+            ui.horizontal(|ui| {
+                ui.label(RichText::new(k).family(theme::mono()).size(10.0).color(DIM));
+                ui.label(RichText::new(v).family(theme::mono()).size(10.0).color(value));
+            });
+        });
+}
+
+/// Parse Host path-health flags already pushed into `status` by net (UPnP/public IP/mesh).
+fn path_health_flags(status: &str) -> Option<(bool, bool, bool, bool)> {
+    if !status.contains("path health") {
+        return None;
+    }
+    let flag = |key: &str| -> Option<bool> {
+        let i = status.find(key)?;
+        let rest = status[i + key.len()..].trim_start();
+        match rest.chars().next() {
+            Some('Y') | Some('y') => Some(true),
+            Some('N') | Some('n') => Some(false),
+            _ => None,
+        }
+    };
+    Some((
+        flag("UPnP TCP")?,
+        flag("UPnP UDP")?,
+        flag("public IP")?,
+        flag("udp mesh")?,
+    ))
+}
+
+fn session_path_readout(
+    node_live: bool,
+    role: Role,
+    internet: bool,
+    status: &str,
+    cached: &str,
+) -> (String, Color32) {
+    if !node_live {
+        return ("—".into(), MUTED);
+    }
+    match role {
+        Role::Host if internet => {
+            let flags = path_health_flags(status).or_else(|| path_health_flags(cached));
+            if let Some((tcp, udp, ip, mesh)) = flags {
+                let yn = |b: bool| if b { "Y" } else { "N" };
+                let s = format!(
+                    "UPnP {}/{} · IP {} · mesh {}",
+                    yn(tcp),
+                    yn(udp),
+                    yn(ip),
+                    yn(mesh)
+                );
+                let ok = tcp || udp || ip || mesh;
+                (s, if ok { theme::ACID } else { theme::ORANGE })
+            } else if status.contains("building invite") {
+                ("probing…".into(), CYAN)
+            } else {
+                ("internet…".into(), CYAN)
+            }
+        }
+        Role::Host => ("LAN".into(), CYAN),
+        Role::Guest => ("join".into(), MUTED),
+        Role::Presence | Role::Idle => ("—".into(), MUTED),
+    }
 }
 
 fn meta_c(ui: &mut egui::Ui, k: &str, v: &str, value: Color32) {
@@ -13506,6 +14338,19 @@ impl eframe::App for Launch {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn path_health_flags_reads_status_string() {
+        let s = "Hosting · path health · UPnP TCP Y · UPnP UDP N · public IP Y · udp mesh Y · UPnP lease best-effort (reachability only, not trust)";
+        assert_eq!(super::path_health_flags(s), Some((true, false, true, true)));
+        assert_eq!(super::path_health_flags("Hosting · local network"), None);
+        let (v, _) = super::session_path_readout(true, super::Role::Host, false, "Hosting · local network", "");
+        assert_eq!(v, "LAN");
+        let (v, _) = super::session_path_readout(false, super::Role::Host, true, s, "");
+        assert_eq!(v, "—");
+        let (v, _) = super::session_path_readout(true, super::Role::Host, true, "Hosting · invite ready", s);
+        assert!(v.contains("UPnP Y/N"), "{v}");
+    }
+
     use super::*;
 
     #[test]

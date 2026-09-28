@@ -290,7 +290,13 @@ fn read_lock(root: &Path) -> Option<Lock> {
 fn write_lock(root: &Path, lock: &Lock) {
     let _ = std::fs::create_dir_all(root.join("data"));
     if let Ok(s) = serde_json::to_string(lock) {
-        let _ = std::fs::write(lock_path(root), s);
+        let path = lock_path(root);
+        let _ = std::fs::write(&path, s);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let _ = std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600));
+        }
     }
 }
 
@@ -829,9 +835,43 @@ fn clear_stale_lock(root: &Path) {
     let _ = std::fs::remove_file(lock_path(root));
 }
 
+fn path_looks_like_appimage_mount(p: &Path) -> bool {
+    let s = p.to_string_lossy();
+    s.contains("/.mount_") || s.contains("/squashfs-root/")
+}
+
+fn running_from_appimage() -> bool {
+    std::env::var_os("APPIMAGE").is_some()
+        || std::env::var_os("APPDIR").is_some()
+        || std::env::current_exe()
+            .ok()
+            .is_some_and(|p| path_looks_like_appimage_mount(&p))
+}
+
+/// Prefer the outer AppImage (AppRun resolves `--root` beside the image).
+/// Fall back to current_exe. Returns None when only a mount path is available
+/// and re-exec would be unreliable — caller should embed.
+fn daemon_spawn_exe() -> Option<PathBuf> {
+    if let Ok(image) = std::env::var("APPIMAGE") {
+        let p = PathBuf::from(&image);
+        if p.is_file() {
+            return Some(p);
+        }
+    }
+    let exe = std::env::current_exe().ok()?;
+    if path_looks_like_appimage_mount(&exe) {
+        // Mount path without APPIMAGE: do not spawn from squashfs.
+        return None;
+    }
+    Some(exe)
+}
+
 fn spawn_proc(root: &Path) -> bool {
-    let Ok(exe) = std::env::current_exe() else {
-        log_line(root, "node spawn: no current exe");
+    let Some(exe) = daemon_spawn_exe() else {
+        log_line(
+            root,
+            "node spawn: AppImage mount without APPIMAGE; will embed",
+        );
         return false;
     };
     let log = log_path(root);
@@ -850,6 +890,10 @@ fn spawn_proc(root: &Path) -> bool {
     cmd.arg("daemon").arg("--root").arg(root);
     cmd.current_dir(root);
     cmd.env("BLIGHTNET_NODE", "1");
+    // Deck / no-FUSE: re-exec of the AppImage needs extract-and-run.
+    if std::env::var_os("APPIMAGE").is_some() {
+        cmd.env("APPIMAGE_EXTRACT_AND_RUN", "1");
+    }
     cmd.stdin(std::process::Stdio::null());
     cmd.stdout(file);
     cmd.stderr(err);
@@ -907,11 +951,24 @@ pub fn connect_or_spawn(root: &Path, handle: &str) -> Result<TcpStream, String> 
     if let Some(s) = try_connect(root, handle) {
         return Ok(s);
     }
-    let _ = spawn_proc(root);
-    for _ in 0..CONNECT_TRIES {
-        thread::sleep(Duration::from_millis(80));
-        if let Some(s) = try_connect(root, handle) {
-            return Ok(s);
+    let spawned = spawn_proc(root);
+    if spawned {
+        for _ in 0..CONNECT_TRIES {
+            thread::sleep(Duration::from_millis(80));
+            if let Some(s) = try_connect(root, handle) {
+                return Ok(s);
+            }
+        }
+    } else if running_from_appimage() {
+        // AppImage mount spawn is unreliable; embed without burning the full wait.
+        log_line(root, "node: AppImage path — embedding without spawn wait");
+    } else {
+        // Brief wait in case a concurrent spawn won the race.
+        for _ in 0..4 {
+            thread::sleep(Duration::from_millis(80));
+            if let Some(s) = try_connect(root, handle) {
+                return Ok(s);
+            }
         }
     }
     log_line(root, "node spawn did not accept; embedding in this process");
@@ -1495,7 +1552,40 @@ mod tests {
     }
 
     #[test]
+    fn appimage_mount_path_detected() {
+        assert!(path_looks_like_appimage_mount(Path::new(
+            "/tmp/.mount_Blight123/usr/bin/blightnet",
+        )));
+        assert!(path_looks_like_appimage_mount(Path::new(
+            "/tmp/squashfs-root/usr/bin/blightnet",
+        )));
+        assert!(!path_looks_like_appimage_mount(Path::new(
+            "/home/deck/Blightnet/blightnet",
+        )));
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn lock_is_owner_only_on_unix() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = std::env::temp_dir().join(format!("bn-lockmode-{}", rand::random::<u32>()));
+        std::fs::create_dir_all(dir.join("data")).unwrap();
+        write_lock(
+            &dir,
+            &Lock {
+                port: 18766,
+                token: "secret".into(),
+                pid: 1,
+            },
+        );
+        let mode = std::fs::metadata(lock_path(&dir)).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode, 0o600);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
     fn lock_roundtrip() {
+
         let dir = std::env::temp_dir().join(format!("bn-daemon-{}", rand::random::<u32>()));
         std::fs::create_dir_all(&dir).unwrap();
         write_lock(

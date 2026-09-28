@@ -3,6 +3,7 @@ use eframe::egui::{
     Shape, Stroke, StrokeKind, Ui, Vec2,
 };
 use std::borrow::Cow;
+use std::cell::Cell;
 use std::sync::Arc;
 
 pub const ORANGE: Color32 = Color32::from_rgb(255, 106, 18);
@@ -19,10 +20,136 @@ pub const ACID: Color32 = Color32::from_rgb(214, 255, 63);
 pub const HOT: Color32 = NEON_RED;
 
 pub fn glass() -> Color32 {
-    Color32::from_rgba_unmultiplied(PANEL.r(), PANEL.g(), PANEL.b(), 168)
+    let p = chrome().panel;
+    Color32::from_rgba_unmultiplied(p.r(), p.g(), p.b(), 168)
 }
 pub const INK: Color32 = Color32::from_rgb(17, 17, 17);
 pub const RAIL: Color32 = Color32::from_rgb(8, 12, 16);
+
+/// Named INDEX / UI chrome themes. World palettes (Blight / Hearthsong) stay separate.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ChromeTheme {
+    NeonDeck,
+    VoidDeeper,
+    AcidForward,
+    CyanIce,
+}
+
+impl ChromeTheme {
+    pub const ALL: [ChromeTheme; 4] = [
+        ChromeTheme::NeonDeck,
+        ChromeTheme::VoidDeeper,
+        ChromeTheme::AcidForward,
+        ChromeTheme::CyanIce,
+    ];
+
+    pub fn id(self) -> &'static str {
+        match self {
+            ChromeTheme::NeonDeck => "neon_deck",
+            ChromeTheme::VoidDeeper => "void_deeper",
+            ChromeTheme::AcidForward => "acid_forward",
+            ChromeTheme::CyanIce => "cyan_ice",
+        }
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            ChromeTheme::NeonDeck => "NEON DECK",
+            ChromeTheme::VoidDeeper => "VOID DEEPER",
+            ChromeTheme::AcidForward => "ACID FORWARD",
+            ChromeTheme::CyanIce => "CYAN ICE",
+        }
+    }
+
+    pub fn short(self) -> &'static str {
+        match self {
+            ChromeTheme::NeonDeck => "NEON",
+            ChromeTheme::VoidDeeper => "VOID",
+            ChromeTheme::AcidForward => "ACID",
+            ChromeTheme::CyanIce => "ICE",
+        }
+    }
+
+    pub fn from_id(s: &str) -> Self {
+        match s.trim().to_ascii_lowercase().as_str() {
+            "void_deeper" | "void" => ChromeTheme::VoidDeeper,
+            "acid_forward" | "acid" => ChromeTheme::AcidForward,
+            "cyan_ice" | "ice" => ChromeTheme::CyanIce,
+            _ => ChromeTheme::NeonDeck,
+        }
+    }
+
+    pub fn next(self) -> Self {
+        match self {
+            ChromeTheme::NeonDeck => ChromeTheme::VoidDeeper,
+            ChromeTheme::VoidDeeper => ChromeTheme::AcidForward,
+            ChromeTheme::AcidForward => ChromeTheme::CyanIce,
+            ChromeTheme::CyanIce => ChromeTheme::NeonDeck,
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+pub struct Chrome {
+    pub cyan: Color32,
+    pub acid: Color32,
+    pub hot: Color32,
+    pub bg: Color32,
+    pub panel: Color32,
+    pub rail: Color32,
+}
+
+thread_local! {
+    static CHROME: Cell<ChromeTheme> = const { Cell::new(ChromeTheme::NeonDeck) };
+}
+
+pub fn set_chrome(t: ChromeTheme) {
+    CHROME.with(|c| c.set(t));
+}
+
+pub fn chrome_theme() -> ChromeTheme {
+    CHROME.with(|c| c.get())
+}
+
+pub fn chrome() -> Chrome {
+    match chrome_theme() {
+        ChromeTheme::NeonDeck => Chrome {
+            cyan: CYAN,
+            acid: ACID,
+            hot: HOT,
+            bg: BG,
+            panel: PANEL,
+            rail: RAIL,
+        },
+        // Deeper void: near-black deck, violet-cyan lines, sparse acid.
+        ChromeTheme::VoidDeeper => Chrome {
+            cyan: Color32::from_rgb(96, 140, 255),
+            acid: Color32::from_rgb(180, 255, 90),
+            hot: Color32::from_rgb(255, 40, 90),
+            bg: Color32::from_rgb(3, 4, 8),
+            panel: Color32::from_rgb(6, 8, 14),
+            rail: Color32::from_rgb(4, 6, 12),
+        },
+        // Acid-forward: lime leads, cyan rides shotgun.
+        ChromeTheme::AcidForward => Chrome {
+            cyan: Color32::from_rgb(168, 255, 72),
+            acid: Color32::from_rgb(255, 236, 64),
+            hot: Color32::from_rgb(255, 48, 96),
+            bg: Color32::from_rgb(6, 10, 6),
+            panel: Color32::from_rgb(8, 14, 8),
+            rail: Color32::from_rgb(6, 12, 8),
+        },
+        // Cyan-ice: cold deck, ice lines, soft white-blue ember.
+        ChromeTheme::CyanIce => Chrome {
+            cyan: Color32::from_rgb(140, 236, 255),
+            acid: Color32::from_rgb(210, 246, 255),
+            hot: Color32::from_rgb(255, 64, 140),
+            bg: Color32::from_rgb(4, 10, 16),
+            panel: Color32::from_rgb(8, 16, 24),
+            rail: Color32::from_rgb(6, 12, 18),
+        },
+    }
+}
 
 pub fn mono() -> FontFamily {
     FontFamily::Name("share".into())
@@ -125,15 +252,20 @@ impl Palette {
 }
 
 pub fn index_palette() -> Palette {
+    let ch = chrome();
     Palette {
-        gold: CYAN,
-        gold_soft: Color32::from_rgb(186, 244, 255),
-        ember: ACID,
+        gold: ch.cyan,
+        gold_soft: Color32::from_rgb(
+            ch.cyan.r().saturating_add(40).min(255),
+            ch.cyan.g().saturating_add(20).min(255),
+            ch.cyan.b().min(255),
+        ),
+        ember: ch.acid,
         ink: CREAM,
         muted: MUTED,
         dim: DIM,
-        panel: PANEL,
-        bg: BG,
+        panel: ch.panel,
+        bg: ch.bg,
         cut: 8.0,
     }
 }
@@ -143,9 +275,10 @@ pub fn fade(c: Color32, a: u8) -> Color32 {
 }
 
 pub fn pane() -> egui::Frame {
+    let ch = chrome();
     egui::Frame::NONE
         .fill(glass())
-        .stroke(Stroke::new(1.0, fade(NEON_RED, 200)))
+        .stroke(Stroke::new(1.0, fade(ch.hot, 200)))
         .inner_margin(egui::Margin::symmetric(12, 10))
 }
 
@@ -159,23 +292,24 @@ pub fn holo_frame(ui: &Ui, rect: Rect, cut: f32) {
 }
 
 pub fn holo_frame_at(ui: &Ui, rect: Rect, cut: f32, ticks: bool) {
+    let ch = chrome();
     stroke_chamfer(
         ui,
         rect.translate(Vec2::new(1.0, 1.0)),
         cut,
-        Stroke::new(1.0, fade(CYAN, 80)),
+        Stroke::new(1.0, fade(ch.cyan, 80)),
     );
-    fill_chamfer(ui, rect, cut, glass(), Stroke::new(1.0, fade(NEON_RED, 210)));
-    hairline_top(ui, rect.shrink(1.0), fade(CYAN, 180));
+    fill_chamfer(ui, rect, cut, glass(), Stroke::new(1.0, fade(ch.hot, 210)));
+    hairline_top(ui, rect.shrink(1.0), fade(ch.cyan, 180));
     if ticks {
-        hud_ticks(ui, rect.shrink(4.0), fade(CYAN, 110), 8.0);
+        hud_ticks(ui, rect.shrink(4.0), fade(ch.cyan, 110), 8.0);
     }
 }
 
 /// Coarse cyan grid. Drawn once behind the pages. It does not move.
 pub fn holo_grid(ui: &Ui, rect: Rect) {
     let p = ui.painter();
-    let line = Stroke::new(1.0, fade(CYAN, 22));
+    let line = Stroke::new(1.0, fade(chrome().cyan, 22));
     let step = 48.0;
     let mut x = rect.left();
     while x < rect.right() {
@@ -207,11 +341,12 @@ pub fn hatch_bar(ui: &Ui, rect: Rect) {
 }
 
 pub fn wide_btn(ui: &mut Ui, label: &str, sub: &str, on: bool) -> egui::Response {
+    let ch = chrome();
     let w = ui.available_width().max(40.0);
     let h = if sub.is_empty() { 36.0 } else { 52.0 };
     let (rect, resp) = ui.allocate_exact_size(Vec2::new(w, h), Sense::click());
     let hover = resp.hovered();
-    let edge = if on || hover { ACID } else { fade(NEON_RED, 170) };
+    let edge = if on || hover { ch.acid } else { fade(ch.hot, 170) };
     fill_chamfer(
         ui,
         rect,
@@ -222,10 +357,10 @@ pub fn wide_btn(ui: &mut Ui, label: &str, sub: &str, on: bool) -> egui::Response
     ui.painter().hline(
         (rect.left() + 8.0)..=(rect.right() - 8.0),
         rect.bottom() - 1.0,
-        Stroke::new(1.0, if on { ACID } else { fade(CYAN, 70) }),
+        Stroke::new(1.0, if on { ch.acid } else { fade(ch.cyan, 70) }),
     );
-    let fg = if on || hover { ACID } else { CREAM };
-    let muted = CYAN;
+    let fg = if on || hover { ch.acid } else { CREAM };
+    let muted = ch.cyan;
     let clip = rect.shrink2(Vec2::new(12.0, 4.0));
     let p = ui.painter().with_clip_rect(clip);
     p.text(
@@ -253,28 +388,29 @@ pub fn wide_btn(ui: &mut Ui, label: &str, sub: &str, on: bool) -> egui::Response
 }
 
 pub fn section_head(ui: &mut Ui, id: &str, title: &str) {
+    let ch = chrome();
     ui.horizontal(|ui| {
         ui.label(
             egui::RichText::new(id)
                 .family(mono())
                 .size(13.0)
-                .color(CYAN),
+                .color(ch.cyan),
         );
         ui.label(
             egui::RichText::new(title)
                 .family(display())
                 .size(18.0)
-                .color(ACID),
+                .color(ch.acid),
         );
         let (r, _) = ui.allocate_exact_size(
             Vec2::new(ui.available_width().max(8.0), 2.0),
             Sense::hover(),
         );
-        ui.painter().rect_filled(r, 0.0, fade(CYAN, 80));
+        ui.painter().rect_filled(r, 0.0, fade(ch.cyan, 80));
         ui.painter().rect_filled(
             Rect::from_min_size(r.left_top(), Vec2::new((r.width() * 0.22).max(8.0), 2.0)),
             0.0,
-            ACID,
+            ch.acid,
         );
     });
 }
@@ -510,36 +646,45 @@ pub fn place_btn(ui: &mut Ui, label: &str, on: bool, pal: Palette) -> egui::Resp
 }
 
 pub fn visuals() -> egui::Visuals {
+    let ch = chrome();
     let mut v = egui::Visuals::dark();
     v.dark_mode = true;
     v.override_text_color = Some(CREAM);
-    v.panel_fill = BG;
-    v.window_fill = PANEL;
-    v.extreme_bg_color = Color32::from_rgb(5, 7, 12);
-    v.faint_bg_color = Color32::from_rgb(16, 20, 28);
-    v.code_bg_color = Color32::from_rgb(6, 10, 14);
-    v.hyperlink_color = CYAN;
-    v.window_stroke = Stroke::new(1.0, fade(ACID, 180));
+    v.panel_fill = ch.bg;
+    v.window_fill = ch.panel;
+    v.extreme_bg_color = Color32::from_rgb(
+        ch.bg.r().saturating_sub(2),
+        ch.bg.g().saturating_sub(2),
+        ch.bg.b().saturating_sub(2),
+    );
+    v.faint_bg_color = Color32::from_rgb(
+        ch.panel.r().saturating_add(6).min(255),
+        ch.panel.g().saturating_add(8).min(255),
+        ch.panel.b().saturating_add(12).min(255),
+    );
+    v.code_bg_color = ch.bg;
+    v.hyperlink_color = ch.cyan;
+    v.window_stroke = Stroke::new(1.0, fade(ch.acid, 180));
     v.slider_trailing_fill = true;
     v.handle_shape = egui::style::HandleShape::Rect { aspect_ratio: 0.45 };
-    v.widgets.noninteractive.bg_fill = PANEL;
+    v.widgets.noninteractive.bg_fill = ch.panel;
     v.widgets.noninteractive.fg_stroke = Stroke::new(1.0, MUTED);
-    v.widgets.inactive.bg_fill = PANEL;
+    v.widgets.inactive.bg_fill = ch.panel;
     v.widgets.inactive.weak_bg_fill = Color32::from_rgb(8, 14, 18);
-    v.widgets.inactive.bg_stroke = Stroke::new(1.0, fade(NEON_RED, 150));
+    v.widgets.inactive.bg_stroke = Stroke::new(1.0, fade(ch.hot, 150));
     v.widgets.inactive.fg_stroke = Stroke::new(1.0, CREAM);
     v.widgets.hovered.bg_fill = Color32::from_rgb(10, 24, 32);
     v.widgets.hovered.weak_bg_fill = Color32::from_rgb(10, 24, 32);
-    v.widgets.hovered.bg_stroke = Stroke::new(1.0, CYAN);
-    v.widgets.hovered.fg_stroke = Stroke::new(1.0, ACID);
-    v.widgets.active.bg_fill = ACID;
-    v.widgets.active.bg_stroke = Stroke::new(1.0, NEON_RED);
+    v.widgets.hovered.bg_stroke = Stroke::new(1.0, ch.cyan);
+    v.widgets.hovered.fg_stroke = Stroke::new(1.0, ch.acid);
+    v.widgets.active.bg_fill = ch.acid;
+    v.widgets.active.bg_stroke = Stroke::new(1.0, ch.hot);
     v.widgets.active.fg_stroke = Stroke::new(1.0, INK);
     v.widgets.open.bg_fill = Color32::from_rgb(8, 14, 20);
-    v.widgets.open.bg_stroke = Stroke::new(1.0, NEON_RED);
-    v.selection.bg_fill = fade(ACID, 80);
-    v.selection.stroke = Stroke::new(1.0, NEON_RED);
-    v.text_cursor.stroke = Stroke::new(1.6, ACID);
+    v.widgets.open.bg_stroke = Stroke::new(1.0, ch.hot);
+    v.selection.bg_fill = fade(ch.acid, 80);
+    v.selection.stroke = Stroke::new(1.0, ch.hot);
+    v.text_cursor.stroke = Stroke::new(1.6, ch.acid);
     v.popup_shadow = egui::Shadow {
         offset: [2, 3],
         blur: 8,
@@ -623,7 +768,7 @@ pub fn kicker(ui: &mut Ui, text: &str) {
     ui.horizontal(|ui| {
         ui.label(
             egui::RichText::new("▸")
-                .color(CYAN)
+                .color(chrome().cyan)
                 .family(mono())
                 .size(11.0),
         );
@@ -638,17 +783,18 @@ pub fn kicker(ui: &mut Ui, text: &str) {
 
 /// Full-width row for the table rail. Acid edge when it is on or under the pointer.
 pub fn rail_row(ui: &mut Ui, label: &str, on: bool, danger: bool) -> egui::Response {
+    let ch = chrome();
     let w = ui.available_width().max(40.0);
     let (rect, resp) = ui.allocate_exact_size(Vec2::new(w, 26.0), Sense::click());
     let hover = resp.hovered();
     let edge = if danger {
         NEON_RED
     } else if on || hover {
-        ACID
+        ch.acid
     } else {
-        fade(CYAN, 80)
+        fade(ch.cyan, 80)
     };
-    fill_chamfer(ui, rect, 4.0, PANEL, Stroke::new(1.0, edge));
+    fill_chamfer(ui, rect, 4.0, ch.panel, Stroke::new(1.0, edge));
     ui.painter().text(
         rect.left_center() + Vec2::new(10.0, 0.0),
         egui::Align2::LEFT_CENTER,
@@ -657,7 +803,7 @@ pub fn rail_row(ui: &mut Ui, label: &str, on: bool, danger: bool) -> egui::Respo
         if danger {
             NEON_RED
         } else if on || hover {
-            ACID
+            ch.acid
         } else {
             CREAM
         },
@@ -666,7 +812,7 @@ pub fn rail_row(ui: &mut Ui, label: &str, on: bool, danger: bool) -> egui::Respo
 }
 
 pub fn neon_btn(ui: &mut Ui, label: &str) -> egui::Response {
-    neon_btn_color(ui, label, CYAN, false)
+    neon_btn_color(ui, label, chrome().cyan, false)
 }
 
 pub fn neon_btn_color(ui: &mut Ui, label: &str, color: Color32, solid: bool) -> egui::Response {
@@ -674,8 +820,9 @@ pub fn neon_btn_color(ui: &mut Ui, label: &str, color: Color32, solid: bool) -> 
 }
 
 fn neon_btn_paint(ui: &mut Ui, label: &str, color: Color32, solid: bool) -> egui::Response {
+    let ch = chrome();
     let danger = color == KILL || color == NEON_RED;
-    let accent = if danger { NEON_RED } else if solid { ACID } else { HOT };
+    let accent = if danger { NEON_RED } else if solid { ch.acid } else { ch.hot };
     let galley = ui.painter().layout_no_wrap(
         label.to_uppercase(),
         FontId::new(13.0, ui_font()),
@@ -687,9 +834,9 @@ fn neon_btn_paint(ui: &mut Ui, label: &str, color: Color32, solid: bool) -> egui
     let fill = if danger && (solid || hover) {
         fade(NEON_RED, if solid { 255 } else { 48 })
     } else if solid {
-        ACID
+        ch.acid
     } else if hover {
-        fade(CYAN, 36)
+        fade(ch.cyan, 36)
     } else {
         glass()
     };
@@ -700,21 +847,21 @@ fn neon_btn_paint(ui: &mut Ui, label: &str, color: Color32, solid: bool) -> egui
     } else if danger {
         NEON_RED
     } else if hover {
-        ACID
+        ch.acid
     } else {
         CREAM
     };
-    let stroke = if hover && !solid { CYAN } else { accent };
+    let stroke = if hover && !solid { ch.cyan } else { accent };
     if !solid && !danger {
         stroke_chamfer(
             ui,
             rect.translate(Vec2::new(1.0, 1.0)),
             6.0,
-            Stroke::new(1.0, fade(CYAN, 70)),
+            Stroke::new(1.0, fade(ch.cyan, 70)),
         );
     }
     fill_chamfer(ui, rect, 6.0, fill, Stroke::new(if solid { 1.4 } else { 1.0 }, stroke));
-    hairline_top(ui, rect.shrink(1.5), fade(ACID, if solid { 80 } else { 28 }));
+    hairline_top(ui, rect.shrink(1.5), fade(ch.acid, if solid { 80 } else { 28 }));
     ui.painter().galley(
         Pos2::new(
             rect.center().x - galley.size().x * 0.5,
@@ -781,6 +928,8 @@ fn hint_for(label: &str) -> Cow<'static, str> {
         "Voice" => "Open or close mic, mute, and voice calls.",
         "Video" => "Open video chat, or send a video file from this chat.",
         "Update" => "Pull the latest Blightnet from GitHub, then restart.",
+        "THEME" | "Theme" => "Pick deck chrome. Neon Deck, Void Deeper, Acid Forward, or Cyan Ice.",
+        "UI SCALE" | "SCALE" => "Scale the whole deck UI. Handy on Steam Deck / handheld. Saved with chrome.",
         "Rescan devices" => "Look again for mics, speakers, and cameras on this deck.",
         "Play" => "Play or resume your local music player. Does not change the table mix.",
         "Pause" => "Pause the local player. Does not change the table mix.",
@@ -950,21 +1099,22 @@ mod tests {
 }
 
 pub fn sys_tile(ui: &mut Ui, id: &str, title: &str, sub: &str, go: &str, kill: bool) -> egui::Response {
+    let ch = chrome();
     let size = Vec2::new(ui.available_width().max(120.0), 88.0);
     let (rect, resp) = ui.allocate_exact_size(size, Sense::click());
     let hover = resp.hovered();
     let edge = if kill {
         NEON_RED
     } else if hover {
-        ACID
+        ch.acid
     } else {
-        fade(HOT, 70)
+        fade(ch.hot, 70)
     };
     holo_frame_at(ui, rect, 8.0, !kill);
     if hover || kill {
         fill_chamfer(ui, rect, 8.0, Color32::TRANSPARENT, Stroke::new(1.4, edge));
     }
-    let id_c = if kill { NEON_RED } else { ACID };
+    let id_c = if kill { NEON_RED } else { ch.acid };
     let clip = rect.shrink2(Vec2::new(12.0, 8.0));
     let p = ui.painter().with_clip_rect(clip);
     p.text(clip.left_top(), egui::Align2::LEFT_TOP, id, FontId::new(13.0, mono()), id_c);
@@ -980,29 +1130,30 @@ pub fn sys_tile(ui: &mut Ui, id: &str, title: &str, sub: &str, go: &str, kill: b
         egui::Align2::LEFT_TOP,
         sub,
         FontId::new(11.0, mono()),
-        CYAN,
+        ch.cyan,
     );
     p.text(
         clip.right_bottom(),
         egui::Align2::RIGHT_BOTTOM,
         go,
         FontId::new(11.0, ui_font()),
-        if hover { ACID } else { DIM },
+        if hover { ch.acid } else { DIM },
     );
     attach_tip(resp, format!("{title} — {sub}"))
 }
 
 pub fn jack_tile(ui: &mut Ui, t: f32) -> egui::Response {
     let _ = t;
+    let ch = chrome();
     let size = Vec2::new(ui.available_width().max(180.0), 216.0);
     let (rect, resp) = ui.allocate_exact_size(size, Sense::click());
     let hover = resp.hovered();
-    let edge = if hover { ACID } else { fade(HOT, 80) };
+    let edge = if hover { ch.acid } else { fade(ch.hot, 80) };
     holo_frame(ui, rect, 10.0);
     if hover {
         fill_chamfer(ui, rect, 10.0, Color32::TRANSPARENT, Stroke::new(1.6, edge));
     }
-    hud_ticks(ui, rect.shrink(8.0), fade(CYAN, if hover { 210 } else { 130 }), 14.0);
+    hud_ticks(ui, rect.shrink(8.0), fade(ch.cyan, if hover { 210 } else { 130 }), 14.0);
     let c = rect.center();
     let p = ui.painter().with_clip_rect(rect.shrink(8.0));
     p.text(
@@ -1010,7 +1161,7 @@ pub fn jack_tile(ui: &mut Ui, t: f32) -> egui::Response {
         egui::Align2::CENTER_CENTER,
         "01",
         FontId::new(16.0, mono()),
-        ACID,
+        ch.acid,
     );
     p.text(
         c + Vec2::new(0.0, -12.0),
@@ -1024,14 +1175,14 @@ pub fn jack_tile(ui: &mut Ui, t: f32) -> egui::Response {
         egui::Align2::CENTER_CENTER,
         "AMBIENCE // MIXER",
         FontId::new(11.0, mono()),
-        CYAN,
+        ch.cyan,
     );
     p.text(
         c + Vec2::new(0.0, 52.0),
         egui::Align2::CENTER_CENTER,
         "JACK IN",
         FontId::new(13.0, ui_font()),
-        if hover { ACID } else { CREAM },
+        if hover { ch.acid } else { CREAM },
     );
     attach_tip(
         resp,

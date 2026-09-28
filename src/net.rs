@@ -1139,7 +1139,6 @@ pub(crate) fn run_hub(
                             port,
                             stop.clone(),
                             ev_tx.clone(),
-                            table_key.clone(),
                         );
                         mesh_slot = None;
                         if let Some(udp) = crate::mesh::bind_mesh(port) {
@@ -1212,6 +1211,12 @@ pub(crate) fn run_hub(
                     ));
                     continue;
                 };
+                if inv.key.len() != crate::crypt::KEY_LEN {
+                    let _ = ev_tx.send(NetEvent::Error(
+                        "That invite has no table key. Ask the host for a fresh blightnet://key@… invite.".into(),
+                    ));
+                    continue;
+                }
                 table_key = std::sync::Arc::new(inv.key.clone());
                 let (wtx, wrx) = wire_chan();
                 guest_tx = Some(wtx.clone());
@@ -1291,6 +1296,11 @@ pub(crate) fn run_hub(
                                 listener.local_addr().map(|a| a.port()).unwrap_or(DEFAULT_PORT);
                             listen_port = port;
                             listening = true;
+                            // Presence needs a real table key once ECDH rejects empty keys.
+                            // Host remints later; RefreshInvite must not remint.
+                            if table_key.len() != crate::crypt::KEY_LEN {
+                                table_key = std::sync::Arc::new(crate::crypt::mint_key());
+                            }
                             let addrs = advertised_addrs(port);
                             let roster = Arc::new(Mutex::new(vec![PeerInfo {
                                 id: self_id.clone(),
@@ -1313,7 +1323,6 @@ pub(crate) fn run_hub(
                                 port,
                                 stop.clone(),
                                 ev_tx.clone(),
-                                table_key.clone(),
                             );
                             let _ = ev_tx.send(NetEvent::Online { port, addrs });
                             let _ = ev_tx.send(NetEvent::Status("Online".into()));
@@ -1323,13 +1332,15 @@ pub(crate) fn run_hub(
                         }
                     }
                 } else {
+                    if table_key.len() != crate::crypt::KEY_LEN {
+                        table_key = std::sync::Arc::new(crate::crypt::mint_key());
+                    }
                     spawn_beacon(
                         self_id.clone(),
                         handle.clone(),
                         listen_port,
                         stop.clone(),
                         ev_tx.clone(),
-                        table_key.clone(),
                     );
                     let _ = ev_tx.send(NetEvent::Online {
                         port: listen_port,
@@ -1344,8 +1355,9 @@ pub(crate) fn run_hub(
                 let sid = self_id.clone();
                 let hname = handle.clone();
                 let clients_c = clients.clone();
+                let local_key = (*table_key).clone();
                 thread::spawn(move || {
-                    dial_peer(&addr, sid, hname, clients_c, ev, stop_c);
+                    dial_peer(&addr, sid, hname, clients_c, ev, stop_c, local_key);
                 });
             }
             Cmd::Leave => {
@@ -2059,7 +2071,6 @@ fn spawn_beacon(
     tcp_port: u16,
     stop: Arc<AtomicBool>,
     ev_tx: Sender<NetEvent>,
-    table_key: Arc<Vec<u8>>,
 ) {
     thread::spawn(move || {
         let sock = UdpSocket::bind(("0.0.0.0", UDP_PORT))
@@ -2069,27 +2080,16 @@ fn spawn_beacon(
         };
         let _ = sock.set_broadcast(true);
         let _ = sock.set_read_timeout(Some(Duration::from_millis(400)));
-        let pkt = if table_key.len() == crate::crypt::KEY_LEN {
-            format!(
-                "BN|{self_id}|{handle}|{tcp_port}|{}",
-                crate::crypt::encode_key(&table_key)
-            )
-        } else {
-            format!("BN|{self_id}|{handle}|{tcp_port}")
-        };
+        // Never put the table key in a plaintext LAN beacon.
+        let pkt = format!("BN|{self_id}|{handle}|{tcp_port}");
         let mut buf = [0u8; 512];
         while !stop.load(Ordering::SeqCst) {
             let _ = sock.send_to(pkt.as_bytes(), ("255.255.255.255", UDP_PORT));
             if let Ok((n, from)) = sock.recv_from(&mut buf) {
                 if let Ok(text) = std::str::from_utf8(&buf[..n]) {
-                    if let Some((id, name, port, key)) = parse_beacon(text) {
+                    if let Some((id, name, port)) = parse_beacon(text) {
                         if id != self_id {
-                            let host = format!("{}:{port}", from.ip());
-                            let addr = if key.len() == crate::crypt::KEY_LEN {
-                                crate::crypt::encode_invite(&key, &[host])
-                            } else {
-                                host
-                            };
+                            let addr = format!("{}:{port}", from.ip());
                             let _ = ev_tx.send(NetEvent::PeerSeen { id, name, addr });
                         }
                     }
@@ -2099,7 +2099,7 @@ fn spawn_beacon(
     });
 }
 
-fn parse_beacon(text: &str) -> Option<(String, String, u16, Vec<u8>)> {
+fn parse_beacon(text: &str) -> Option<(String, String, u16)> {
     let mut parts = text.trim().split('|');
     if parts.next()? != "BN" {
         return None;
@@ -2107,11 +2107,9 @@ fn parse_beacon(text: &str) -> Option<(String, String, u16, Vec<u8>)> {
     let id = parts.next()?.to_string();
     let name = parts.next()?.to_string();
     let port = parts.next()?.parse().ok()?;
-    let key = parts
-        .next()
-        .and_then(crate::crypt::decode_key)
-        .unwrap_or_default();
-    Some((id, name, port, key))
+    // Ignore any legacy key field — table secrets must not ride the beacon.
+    let _ = parts.next();
+    Some((id, name, port))
 }
 
 fn dial_peer(
@@ -2121,8 +2119,9 @@ fn dial_peer(
     clients: ClientMap,
     ev_tx: Sender<NetEvent>,
     stop: Arc<AtomicBool>,
+    local_key: Vec<u8>,
 ) {
-    let Some(inv) = crate::crypt::parse_invite(addr).or_else(|| {
+    let Some(mut inv) = crate::crypt::parse_invite(addr).or_else(|| {
         parse_addr(addr).map(|a| crate::crypt::Invite {
             key: vec![],
             addrs: vec![a],
@@ -2131,6 +2130,10 @@ fn dial_peer(
     }) else {
         return;
     };
+    // Beacon no longer carries secrets; presence dials use the local table/presence key.
+    if inv.key.len() != crate::crypt::KEY_LEN && local_key.len() == crate::crypt::KEY_LEN {
+        inv.key = local_key;
+    }
     let hello = Wire::Hello {
         id: self_id.clone(),
         name: handle,
@@ -2513,10 +2516,87 @@ fn connect_any(addrs: &[String], timeout: Duration) -> Option<TcpStream> {
     rx.recv_timeout(timeout + Duration::from_millis(250)).ok()
 }
 
+/// Drop listen-port `udp:{ip}:{port}` when a STUN-mapped mesh slot
+/// `udp:{ip}:{mapped}` already exists with mapped != port. Keep TCP `{ip}:{port}`.
+fn filter_listen_udp_when_mapped(addrs: &mut Vec<String>, listen_port: u16, mesh: Option<&str>) {
+    let Some(slot) = mesh else {
+        return;
+    };
+    let Some(rest) = slot.strip_prefix("udp:") else {
+        return;
+    };
+    let Some((ip, mapped_s)) = rest.rsplit_once(':') else {
+        return;
+    };
+    let Ok(mapped) = mapped_s.parse::<u16>() else {
+        return;
+    };
+    if mapped == listen_port {
+        return;
+    }
+    let bad = format!("udp:{ip}:{listen_port}");
+    addrs.retain(|a| a != &bad);
+}
+
+fn merge_internet_addrs(
+    mut addrs: Vec<String>,
+    listen_port: u16,
+    mesh: Option<String>,
+    public_ip: Option<String>,
+) -> Vec<String> {
+    if let Some(ref ip) = public_ip {
+        let wan = format!("{ip}:{listen_port}");
+        if !addrs.iter().any(|a| a == &wan) {
+            addrs.insert(0, wan);
+        }
+        // Only advertise listen-port UDP when we do not already have a
+        // different STUN-mapped mesh slot for the same public IP.
+        let mesh_mapped_differs = mesh.as_deref().is_some_and(|slot| {
+            slot.strip_prefix("udp:")
+                .and_then(|rest| rest.rsplit_once(':'))
+                .is_some_and(|(sip, mapped_s)| {
+                    sip == ip.as_str()
+                        && mapped_s
+                            .parse::<u16>()
+                            .is_ok_and(|m| m != listen_port)
+                })
+        });
+        if !mesh_mapped_differs {
+            let udp = format!("udp:{ip}:{listen_port}");
+            if !addrs.iter().any(|a| a == &udp) {
+                addrs.push(udp);
+            }
+        }
+    }
+    if let Some(ref slot) = mesh {
+        if !addrs.iter().any(|a| a == slot) {
+            addrs.push(slot.clone());
+        }
+    }
+    filter_listen_udp_when_mapped(&mut addrs, listen_port, mesh.as_deref());
+    addrs
+}
+
+fn internet_path_health(
+    upnp_tcp: bool,
+    upnp_udp: bool,
+    public_ip: bool,
+    mesh_udp: bool,
+) -> String {
+    let yn = |v: bool| if v { "Y" } else { "N" };
+    format!(
+        "Hosting · path health · UPnP TCP {} · UPnP UDP {} · public IP {} · udp mesh {} · UPnP lease best-effort (reachability only, not trust)",
+        yn(upnp_tcp),
+        yn(upnp_udp),
+        yn(public_ip),
+        yn(mesh_udp),
+    )
+}
+
 fn open_internet_invite(
     port: u16,
     key: &[u8],
-    mut addrs: Vec<String>,
+    addrs: Vec<String>,
     mesh: Option<String>,
     ev_tx: Sender<NetEvent>,
     stop: Arc<AtomicBool>,
@@ -2528,35 +2608,26 @@ fn open_internet_invite(
         .iter()
         .find(|a| !a.starts_with("127.") && !a.starts_with("[::") && !a.starts_with("udp:"))
         .cloned();
-    let mapped = if let Some(ref local) = lan {
-        let tcp = upnp_map(port, local, "TCP");
-        let udp = upnp_map(port, local, "UDP");
-        tcp || udp
+    let (upnp_tcp, upnp_udp) = if let Some(ref local) = lan {
+        (
+            upnp_map(port, local, "TCP"),
+            upnp_map(port, local, "UDP"),
+        )
     } else {
-        false
+        (false, false)
     };
-    if let Some(ip) = stun_public_ip().or_else(http_public_ip) {
-        let wan = format!("{ip}:{port}");
-        if !addrs.iter().any(|a| a == &wan) {
-            addrs.insert(0, wan);
-        }
-        let udp = format!("udp:{ip}:{port}");
-        if !addrs.iter().any(|a| a == &udp) {
-            addrs.push(udp);
-        }
-    }
-    if let Some(slot) = mesh {
-        if !addrs.iter().any(|a| a == &slot) {
-            addrs.push(slot);
-        }
-    }
+    let public = stun_public_ip().or_else(http_public_ip);
+    let public_ip = public.is_some();
+    let addrs = merge_internet_addrs(addrs, port, mesh.clone(), public);
+    // Usable STUN-mapped mesh slot: udp: entry matching the mesh_slot we kept.
+    let mesh_udp = mesh
+        .as_deref()
+        .is_some_and(|s| s.starts_with("udp:") && addrs.iter().any(|a| a == s));
     let invite = crate::crypt::encode_invite(key, &addrs);
     let _ = ev_tx.send(NetEvent::Relay { url: invite });
-    let _ = ev_tx.send(NetEvent::Status(if mapped {
-        "Hosting · node internet path ready".into()
-    } else {
-        "Hosting · node invite ready. Daemons punch UDP; TCP maps if the router allows it.".into()
-    }));
+    let _ = ev_tx.send(NetEvent::Status(internet_path_health(
+        upnp_tcp, upnp_udp, public_ip, mesh_udp,
+    )));
 }
 
 fn stun_public_ip() -> Option<String> {
@@ -2880,6 +2951,66 @@ mod tests {
     fn advertised_addrs_includes_loopback() {
         let a = advertised_addrs(8766);
         assert!(a.iter().any(|x| x.contains("127.0.0.1:8766")));
+    }
+
+    #[test]
+    fn filter_drops_listen_udp_when_stun_mapped_differs() {
+        let mut addrs = vec![
+            "203.0.113.9:8766".into(),
+            "udp:203.0.113.9:8766".into(),
+            "udp:203.0.113.9:41234".into(),
+            "10.0.0.4:8766".into(),
+        ];
+        filter_listen_udp_when_mapped(&mut addrs, 8766, Some("udp:203.0.113.9:41234"));
+        assert!(!addrs.iter().any(|a| a == "udp:203.0.113.9:8766"));
+        assert!(addrs.iter().any(|a| a == "udp:203.0.113.9:41234"));
+        assert!(addrs.iter().any(|a| a == "203.0.113.9:8766"));
+    }
+
+    #[test]
+    fn merge_skips_bad_listen_udp_keeps_tcp() {
+        let addrs = merge_internet_addrs(
+            vec!["10.0.0.4:8766".into()],
+            8766,
+            Some("udp:198.51.100.7:55555".into()),
+            Some("198.51.100.7".into()),
+        );
+        assert!(addrs.iter().any(|a| a == "198.51.100.7:8766"));
+        assert!(addrs.iter().any(|a| a == "udp:198.51.100.7:55555"));
+        assert!(!addrs.iter().any(|a| a == "udp:198.51.100.7:8766"));
+    }
+
+    #[test]
+    fn merge_keeps_listen_udp_when_mapped_matches() {
+        let addrs = merge_internet_addrs(
+            vec![],
+            8766,
+            Some("udp:198.51.100.7:8766".into()),
+            Some("198.51.100.7".into()),
+        );
+        assert!(addrs.iter().any(|a| a == "udp:198.51.100.7:8766"));
+    }
+
+    #[test]
+    fn internet_path_health_splits_upnp_flags() {
+        let s = internet_path_health(true, false, true, true);
+        assert!(s.contains("UPnP TCP Y"));
+        assert!(s.contains("UPnP UDP N"));
+        assert!(s.contains("public IP Y"));
+        assert!(s.contains("udp mesh Y"));
+        assert!(s.contains("best-effort"));
+    }
+
+    #[test]
+    fn beacon_omits_table_key() {
+        let (id, name, port) = parse_beacon("BN|abc|Ada|8766").unwrap();
+        assert_eq!(id, "abc");
+        assert_eq!(name, "Ada");
+        assert_eq!(port, 8766);
+        // Legacy packets with a key field still parse, but the key is ignored.
+        let (id2, _, _) =
+            parse_beacon("BN|abc|Ada|8766|dGVzdGtleXRlc3RrZXk").unwrap();
+        assert_eq!(id2, "abc");
     }
 
     #[test]
