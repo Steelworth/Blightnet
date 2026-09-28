@@ -4,6 +4,10 @@ The deck writes here so you can see what changed after an update. Newest first. 
 
 ## 2026-09-28
 
+- Players can Level up their own sheets. The GM can still Level up any sheet.
+- Blight Level up spends IP on role rank, stats, and skills. Role rank and Level stay labeled apart.
+- The GM Characters desk can award XP or IP to one sheet or the party, and run a party short or long rest without editing every Bio field.
+- A test that looked for ffmpeg no longer races on PATH.
 - README shows screenshots of INDEX, TABLE, NETSPACE, TREE, TERMINAL, RECON, NETHOOKS, and ROTN.
 - Page tabs are INDEX, TABLE, NETSPACE, TREE, TERMINAL, RECON, NETHOOKS, and ROTN. CHAT, CONTACTS, VOICE, VIDEO, and PLAYER stay pinned on that row.
 - Pages and overlays share one chrome: location id, title, and a short next line. Table overlays and Catalog / Chars follow it.

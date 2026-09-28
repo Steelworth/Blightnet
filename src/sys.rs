@@ -414,6 +414,30 @@ fn win_disk(root: &Path) -> Option<(u64, u64)> {
 mod tests {
     use super::*;
     use std::path::Path;
+    use std::sync::Mutex;
+
+    /// Serialize tests that mutate or observe PATH for ffmpeg detection.
+    /// `ffmpeg_ready` / `ffmpeg_bin` both read PATH; parallel mutation races.
+    static PATH_LOCK: Mutex<()> = Mutex::new(());
+
+    struct PathGuard(Option<std::ffi::OsString>);
+
+    impl PathGuard {
+        fn set(new_path: impl AsRef<std::ffi::OsStr>) -> Self {
+            let old = std::env::var_os("PATH");
+            std::env::set_var("PATH", new_path.as_ref());
+            Self(old)
+        }
+    }
+
+    impl Drop for PathGuard {
+        fn drop(&mut self) {
+            match self.0.take() {
+                Some(v) => std::env::set_var("PATH", v),
+                None => std::env::remove_var("PATH"),
+            }
+        }
+    }
 
     #[test]
     fn machine_sample_sees_memory() {
@@ -437,23 +461,47 @@ mod tests {
 
     #[test]
     fn ffmpeg_ready_matches_bin() {
-        assert_eq!(ffmpeg_ready(), ffmpeg_bin().is_some());
+        let _lock = PATH_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let dir = std::env::temp_dir().join(format!(
+            "blight-ffmpeg-ready-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or(0)
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("create temp PATH dir");
+        #[cfg(windows)]
+        let fake = dir.join("ffmpeg.exe");
+        #[cfg(not(windows))]
+        let fake = dir.join("ffmpeg");
+        std::fs::write(&fake, b"#!/bin/sh\nexit 0\n").expect("write fake ffmpeg");
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mut perms = std::fs::metadata(&fake).expect("stat fake ffmpeg").permissions();
+            perms.set_mode(0o755);
+            std::fs::set_permissions(&fake, perms).expect("chmod fake ffmpeg");
+        }
+        let _path = PathGuard::set(&dir);
+        let ready = ffmpeg_ready();
+        let has_bin = ffmpeg_bin().is_some();
+        drop(_path);
+        let _ = std::fs::remove_dir_all(&dir);
+        assert!(has_bin, "fake ffmpeg on isolated PATH should be found");
+        assert!(ready, "ffmpeg_ready should be true with fake bin on PATH");
+        assert_eq!(ready, has_bin);
     }
 
     #[test]
     fn ffmpeg_missing_when_path_has_no_bin() {
-        // Serialize env mutation so parallel tests do not race on PATH.
-        static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
-        let _guard = LOCK.lock().unwrap_or_else(|e| e.into_inner());
-        let old = std::env::var_os("PATH");
-        std::env::set_var("PATH", "/nonexistent/blight-no-ffmpeg");
+        let _lock = PATH_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _path = PathGuard::set("/nonexistent/blight-no-ffmpeg");
         let bin = ffmpeg_bin();
         let ready = ffmpeg_ready();
         let tip = ffmpeg_install_tip();
-        match old {
-            Some(v) => std::env::set_var("PATH", v),
-            None => std::env::remove_var("PATH"),
-        }
+        drop(_path);
         assert!(bin.is_none(), "ffmpeg_bin should miss when PATH has no ffmpeg: {bin:?}");
         assert!(!ready, "ffmpeg_ready should be false when bin is missing");
         assert!(!tip.is_empty());

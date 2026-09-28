@@ -319,10 +319,15 @@ pub struct Character {
     pub owner: String,
     #[serde(skip)]
     pub tab: usize,
+    /// Level-up panel open. Session-local (not on disk/wire) so mid-spend drafts
+    /// survive overlay close in this seat, but Cancel/Confirm still own the commit.
     #[serde(skip)]
     pub leveling: bool,
+    /// Queued ASI points while leveling (Hearthsong). Session-local — see `leveling`.
     #[serde(skip)]
     pub pending_asi: HashMap<String, i32>,
+    /// Queued IP spends while leveling (Blight): `"role"`, STAT ids, or `"sk:{skill}"`.
+    /// Session-local — see `leveling`.
     #[serde(skip)]
     pub pending_ip: HashMap<String, i32>,
 }
@@ -695,6 +700,113 @@ fn pic(ui: &mut egui::Ui, tex: &mut TexCache, root: &Path, rel: &str, max: Vec2)
     }
 }
 
+
+/// Owner (or empty-claim) and GM may open Level-up. Viewers of others' sheets cannot.
+pub fn can_level_up(c: &Character, is_gm: bool, viewer_id: &str) -> bool {
+    if is_gm {
+        return true;
+    }
+    if c.owner.is_empty() {
+        return true;
+    }
+    !viewer_id.is_empty() && c.owner == viewer_id
+}
+
+/// GM award: XP on Hearthsong sheets, IP on Blight. Amount is clamped non-negative.
+pub fn award_points(c: &mut Character, amount: i32) {
+    let n = amount.max(0);
+    if c.is_blight() {
+        c.ip = (c.ip + n).min(9999);
+    } else {
+        c.xp = (c.xp + n).min(355_000);
+    }
+}
+
+/// Short or long rest every non-NPC sheet (party clerical one-click).
+pub fn party_rest(chars: &mut [Character], long: bool, log: &mut Vec<String>) {
+    for c in chars.iter_mut() {
+        if c.npc {
+            continue;
+        }
+        if long {
+            long_rest(c, log);
+        } else {
+            short_rest(c, log);
+        }
+    }
+}
+
+/// Apply queued Blight IP spend. Returns false if purse cannot cover the queue.
+pub fn confirm_blight_spend(c: &mut Character) -> bool {
+    let total: i32 = c.pending_ip.values().sum();
+    if total > c.ip {
+        return false;
+    }
+    let next = (c.level + 1).min(10);
+    c.ip -= total;
+    if c.pending_ip.contains_key("role") {
+        c.role_rank = (c.role_rank + 1).min(10);
+    }
+    for (id, _) in c.pending_ip.clone() {
+        if id == "role" {
+            continue;
+        }
+        if let Some(sid) = id.strip_prefix("sk:") {
+            let v = (*c.red_skills.get(sid).unwrap_or(&0) + 1).min(10);
+            c.red_skills.insert(sid.to_string(), v);
+            continue;
+        }
+        if CP_STATS.iter().any(|(s, _)| *s == id) {
+            let v = c.red(&id) + 1;
+            c.stats_red.insert(id, v);
+        }
+    }
+    let body = c.red("body");
+    c.hp_max += body.max(1);
+    c.hp = (c.hp + body.max(1)).min(c.hp_max);
+    c.level = next;
+    c.pending_ip.clear();
+    c.leveling = false;
+    true
+}
+
+/// Apply Hearthsong level (+ HD/HP, ASI spend, feature line). False if ASI incomplete.
+pub fn confirm_hearth_level(c: &mut Character) -> bool {
+    let next = (c.level + 1).min(20);
+    let asi = is_asi_level(&c.class_name, next);
+    let spent: i32 = c.pending_asi.values().copied().sum();
+    if asi && spent != 2 {
+        return false;
+    }
+    let hd = class_hd(&c.class_name);
+    let con = Character::modifier(c.abil("con"));
+    let gain = (hd / 2 + 1 + con).max(1);
+    c.level = next;
+    c.hp_max += gain;
+    c.hp += gain;
+    c.hit_dice = format!("{}d{hd}", c.level);
+    for (id, n) in c.pending_asi.clone() {
+        let v = (c.abil(&id) + n).min(20);
+        c.abilities.insert(id, v);
+    }
+    let feat = features_for(&c.class_name, next);
+    if !feat.is_empty() {
+        if !c.features.is_empty() {
+            c.features.push('\n');
+        }
+        c.features.push_str(&format!("Lv{next}: {feat}"));
+    }
+    c.pending_asi.clear();
+    c.leveling = false;
+    true
+}
+
+pub fn cancel_leveling(c: &mut Character) {
+    c.pending_asi.clear();
+    c.pending_ip.clear();
+    c.leveling = false;
+}
+
 pub fn ui_sheet(
     ui: &mut egui::Ui,
     root: &Path,
@@ -705,12 +817,15 @@ pub fn ui_sheet(
     dice: &mut String,
     log: &mut Vec<String>,
     is_gm: bool,
+    viewer_id: &str,
     target: &mut Option<String>,
     luck: &mut crate::dice::Luck,
     roll: &mut Option<crate::dice::Roll>,
     names: &crate::names::Names,
     zoom: &mut Option<PathBuf>,
     send: &mut Option<String>,
+    // Set true when Confirm level/spend lands so the host can flush + push sheets now.
+    sync: &mut bool,
 ) {
     if is_gm {
         let drop = ui.interact(ui.clip_rect(), egui::Id::new("sheet-drop"), egui::Sense::hover());
@@ -743,7 +858,11 @@ pub fn ui_sheet(
                 }
             }
             if theme::neon_btn(ui, "+ New").clicked() {
-                chars.push(Character::new(if blight { "blight" } else { "hearthsong" }));
+                let mut neon = Character::new(if blight { "blight" } else { "hearthsong" });
+                if !viewer_id.is_empty() {
+                    neon.owner = viewer_id.to_string();
+                }
+                chars.push(neon);
                 *char_i = chars.len() - 1;
                 save(root, chars);
             }
@@ -831,6 +950,73 @@ pub fn ui_sheet(
                 save(root, chars);
             }
         });
+        if is_gm {
+            ui.add_space(4.0);
+            wrap(
+                ui,
+                if blight {
+                    "GM award IP / party rest — updates sheets and syncs the table."
+                } else {
+                    "GM award XP / party rest — updates sheets and syncs the table."
+                },
+                MUTED,
+                11.0,
+            );
+            ui.horizontal_wrapped(|ui| {
+                let award_id = egui::Id::new("gm-award-amt");
+                let mut amt = ui.ctx().data(|d| d.get_temp::<i32>(award_id).unwrap_or(100));
+                ui.label(if blight { "Award IP" } else { "Award XP" });
+                ui.add(egui::DragValue::new(&mut amt).range(0..=50_000));
+                ui.ctx().data_mut(|d| d.insert_temp(award_id, amt));
+                let i = (*char_i).min(chars.len().saturating_sub(1));
+                if theme::neon_btn(ui, "This sheet").clicked() {
+                    let named = chars.get_mut(i).map(|c| {
+                        award_points(c, amt);
+                        c.name.clone()
+                    });
+                    if let Some(name) = named {
+                        *sync = true;
+                        save(root, chars);
+                        log.push(format!(
+                            "GM awards {} {} to {}.",
+                            amt,
+                            if blight { "IP" } else { "XP" },
+                            name
+                        ));
+                    }
+                }
+                if theme::neon_btn(ui, "Party").clicked() {
+                    let mut names = Vec::new();
+                    for c in chars.iter_mut() {
+                        if c.npc {
+                            continue;
+                        }
+                        award_points(c, amt);
+                        names.push(c.name.clone());
+                    }
+                    *sync = true;
+                    save(root, chars);
+                    log.push(format!(
+                        "GM awards {} {} to party ({}).",
+                        amt,
+                        if blight { "IP" } else { "XP" },
+                        names.join(", ")
+                    ));
+                }
+            });
+            ui.horizontal_wrapped(|ui| {
+                if theme::neon_btn(ui, "Party short rest").clicked() {
+                    party_rest(chars, false, log);
+                    *sync = true;
+                    save(root, chars);
+                }
+                if theme::neon_btn(ui, "Party long rest").clicked() {
+                    party_rest(chars, true, log);
+                    *sync = true;
+                    save(root, chars);
+                }
+            });
+        }
         wrap(
             ui,
             "Import Roll20 reads a character JSON on this computer. The file stays here.",
@@ -980,14 +1166,17 @@ pub fn ui_sheet(
         if theme::neon_btn_color(ui, "Target this sheet", CYAN, aimed).clicked() {
             *target = Some(c.id.clone());
         }
-        if (is_gm || c.owner.is_empty()) && theme::neon_btn(ui, "Level up").clicked() {
+        if can_level_up(c, is_gm, viewer_id) && theme::neon_btn(ui, "Level up").clicked() {
             c.leveling = true;
             c.pending_asi.clear();
             c.pending_ip.clear();
         }
     });
     if c.leveling {
-        ui_level_up(ui, c, blight_sheet);
+        // Persist via sync flag → app force_sheets (avoid reborrow of chars while `c` is live).
+        if ui_level_up(ui, c, blight_sheet) {
+            *sync = true;
+        }
     }
     let tabs: &[&str] = if blight_sheet {
         &["Bio", "Stats", "Combat", "Skills", "Chrome", "Gear", "Life"]
@@ -1074,7 +1263,7 @@ fn ui_bio(ui: &mut egui::Ui, c: &mut Character, blight: bool, names: &crate::nam
                         ui.selectable_value(&mut c.role, (*r).into(), *r);
                     }
                 });
-            ui.label("Rank");
+            ui.label(RichText::new("Role rank").color(DIM).small());
             ui.add(egui::DragValue::new(&mut c.role_rank).range(1..=10));
         });
     } else {
@@ -1119,13 +1308,14 @@ fn ui_bio(ui: &mut egui::Ui, c: &mut Character, blight: bool, names: &crate::nam
         field(ui, "Deity", &mut c.deity);
     }
     ui.horizontal(|ui| {
-        ui.label(if blight { "Rank" } else { "Level" });
+        // Blight: Level is sheet advancement; Role rank is the role ability (separate field).
+        ui.label(RichText::new("Level").color(DIM).small());
         ui.add(egui::DragValue::new(&mut c.level).range(1..=20));
         if !blight {
-            ui.label("XP");
+            ui.label(RichText::new("XP").color(DIM).small());
             ui.add(egui::DragValue::new(&mut c.xp).range(0..=355_000));
         } else {
-            ui.label("IP");
+            ui.label(RichText::new("IP").color(DIM).small());
             ui.add(egui::DragValue::new(&mut c.ip).range(0..=9999));
         }
     });
@@ -1631,12 +1821,13 @@ fn features_for(class: &str, lv: i32) -> &'static str {
     }
 }
 
-fn ui_level_up(ui: &mut egui::Ui, c: &mut Character, blight: bool) {
+fn ui_level_up(ui: &mut egui::Ui, c: &mut Character, blight: bool) -> bool {
+    let mut confirmed = false;
     let next = (c.level + 1).min(if blight { 10 } else { 20 });
     wrap(
         ui,
         if blight {
-            "Spend IP in one pass, then confirm. Rank, stats, and skills you click are queued until you confirm."
+            "Spend IP in one pass, then confirm. Role rank, STATs, and skills you click are queued until you confirm."
         } else {
             "One level at a time. If this level grants ability points, spend every point here before you confirm."
         },
@@ -1645,50 +1836,68 @@ fn ui_level_up(ui: &mut egui::Ui, c: &mut Character, blight: bool) {
     );
     if blight {
         let spent: i32 = c.pending_ip.values().sum();
-        wrap(ui, &format!("Queued spend {spent} IP  ·  purse {}", c.ip), CYAN, 12.0);
+        wrap(
+            ui,
+            &format!(
+                "Queued spend {spent} IP  ·  purse {}  ·  Level {} → {next}  ·  Role rank {}",
+                c.ip, c.level, c.role_rank
+            ),
+            CYAN,
+            12.0,
+        );
         if c.role_rank < 10 {
             let cost = (c.role_rank + 1) * 20;
-            if theme::neon_btn(ui, &format!("Queue role rank → {} ({cost} IP)", c.role_rank + 1)).clicked()
+            if theme::neon_btn(
+                ui,
+                &format!("Queue role rank → {} ({cost} IP)", c.role_rank + 1),
+            )
+            .clicked()
             {
                 c.pending_ip.insert("role".into(), cost);
             }
         }
-        for (id, lab) in CP_STATS {
-            let now = c.red(id);
-            let cost = (now + 1) * 10;
-            if theme::neon_btn(ui, &format!("{lab} {now}→{} · {cost} IP", now + 1)).clicked() {
-                c.pending_ip.insert((*id).into(), cost);
+        wrap(ui, "STATs", MUTED, 11.0);
+        ui.horizontal_wrapped(|ui| {
+            for (id, lab) in CP_STATS {
+                let now = c.red(id);
+                if now >= 15 {
+                    continue;
+                }
+                let cost = (now + 1) * 10;
+                if theme::neon_btn(ui, &format!("{lab} {now}→{} · {cost} IP", now + 1)).clicked() {
+                    c.pending_ip.insert((*id).into(), cost);
+                }
             }
+        });
+        wrap(ui, "Skills (IP = new rank)", MUTED, 11.0);
+        ui.horizontal_wrapped(|ui| {
+            for (id, name, _) in CP_SKILLS {
+                let now = *c.red_skills.get(*id).unwrap_or(&0);
+                if now >= 10 {
+                    continue;
+                }
+                let cost = now + 1;
+                let key = format!("sk:{id}");
+                if theme::neon_btn(ui, &format!("{name} {now}→{} · {cost} IP", now + 1)).clicked()
+                {
+                    c.pending_ip.insert(key, cost);
+                }
+            }
+        });
+        if CP_SKILLS.is_empty() {
+            wrap(ui, "No skill catalog — skip or write ranks on Skills.", MUTED, 11.0);
         }
         ui.horizontal(|ui| {
             if theme::neon_btn(ui, "Confirm spend").clicked() {
-                let total: i32 = c.pending_ip.values().sum();
-                if total <= c.ip {
-                    c.ip -= total;
-                    if c.pending_ip.contains_key("role") {
-                        c.role_rank = (c.role_rank + 1).min(10);
-                    }
-                    for (id, _) in c.pending_ip.clone() {
-                        if id == "role" {
-                            continue;
-                        }
-                        let v = c.red(&id) + 1;
-                        c.stats_red.insert(id, v);
-                    }
-                    let body = c.red("body");
-                    c.hp_max += body.max(1);
-                    c.hp = (c.hp + body.max(1)).min(c.hp_max);
-                    c.level = next;
-                    c.pending_ip.clear();
-                    c.leveling = false;
+                if confirm_blight_spend(c) {
+                    confirmed = true;
                 }
             }
             if theme::muted_btn(ui, "Cancel").clicked() {
-                c.pending_ip.clear();
-                c.leveling = false;
+                cancel_leveling(c);
             }
         });
-        return;
+        return confirmed;
     }
     let asi = is_asi_level(&c.class_name, next);
     let spent: i32 = c.pending_asi.values().copied().sum();
@@ -1706,12 +1915,30 @@ fn ui_level_up(ui: &mut egui::Ui, c: &mut Character, blight: bool) {
         12.0,
     );
     if asi {
-        wrap(ui, &format!("Ability points {spent}/{need}. Put them all in now — two in one score, or split."), CYAN, 12.0);
+        wrap(
+            ui,
+            &format!(
+                "Ability points {spent}/{need}. Put them all in now — two in one score, or split."
+            ),
+            CYAN,
+            12.0,
+        );
         ui.horizontal_wrapped(|ui| {
             for (id, lab) in ABILS {
                 let now = c.abil(id);
                 let extra = *c.pending_asi.get(*id).unwrap_or(&0);
-                if theme::neon_btn(ui, &format!("{lab} {now}{}", if extra > 0 { format!("+{extra}") } else { String::new() })).clicked()
+                if theme::neon_btn(
+                    ui,
+                    &format!(
+                        "{lab} {now}{}",
+                        if extra > 0 {
+                            format!("+{extra}")
+                        } else {
+                            String::new()
+                        }
+                    ),
+                )
+                .clicked()
                     && spent < need
                     && now + extra < 20
                 {
@@ -1723,32 +1950,15 @@ fn ui_level_up(ui: &mut egui::Ui, c: &mut Character, blight: bool) {
     ui.horizontal(|ui| {
         let ready = !asi || spent == need;
         if ready && theme::neon_btn(ui, "Confirm level").clicked() {
-            let hd = class_hd(&c.class_name);
-            let con = Character::modifier(c.abil("con"));
-            let gain = (hd / 2 + 1 + con).max(1);
-            c.level = next;
-            c.hp_max += gain;
-            c.hp += gain;
-            c.hit_dice = format!("{}d{hd}", c.level);
-            for (id, n) in c.pending_asi.clone() {
-                let v = (c.abil(&id) + n).min(20);
-                c.abilities.insert(id, v);
+            if confirm_hearth_level(c) {
+                confirmed = true;
             }
-            let feat = features_for(&c.class_name, next);
-            if !feat.is_empty() {
-                if !c.features.is_empty() {
-                    c.features.push('\n');
-                }
-                c.features.push_str(&format!("Lv{next}: {feat}"));
-            }
-            c.pending_asi.clear();
-            c.leveling = false;
         }
         if theme::muted_btn(ui, "Cancel").clicked() {
-            c.pending_asi.clear();
-            c.leveling = false;
+            cancel_leveling(c);
         }
     });
+    confirmed
 }
 
 fn json_i32(v: &serde_json::Value, k: &str, default: i32) -> i32 {
@@ -3172,5 +3382,106 @@ mod tests {
         assert_eq!(all[0].name, "Ada");
         assert_eq!(all[0].hp, 5);
         assert_eq!(all[0].hp_max, 9);
+    }
+
+    #[test]
+    fn owner_gate_allows_owner_and_gm() {
+        let mut c = Character::new("hearthsong");
+        c.owner = "seat-a".into();
+        assert!(can_level_up(&c, true, "seat-b"));
+        assert!(can_level_up(&c, false, "seat-a"));
+        assert!(!can_level_up(&c, false, "seat-b"));
+        assert!(!can_level_up(&c, false, ""));
+        c.owner.clear();
+        assert!(can_level_up(&c, false, "seat-b"));
+    }
+
+    #[test]
+    fn award_points_splits_by_world() {
+        let mut h = Character::new("hearthsong");
+        h.xp = 100;
+        award_points(&mut h, 50);
+        assert_eq!(h.xp, 150);
+        award_points(&mut h, -9);
+        assert_eq!(h.xp, 150);
+        let mut b = Character::new("blight");
+        b.ip = 10;
+        award_points(&mut b, 25);
+        assert_eq!(b.ip, 35);
+        assert_eq!(b.xp, 0);
+    }
+
+    #[test]
+    fn party_rest_skips_npc_and_heals() {
+        let mut rows = vec![
+            Character::new("hearthsong"),
+            Character::new("hearthsong"),
+            Character::new("hearthsong"),
+        ];
+        rows[0].name = "A".into();
+        rows[0].hp = 1;
+        rows[0].hp_max = 20;
+        rows[0].level = 4;
+        rows[0].class_name = "Fighter".into();
+        rows[1].name = "B".into();
+        rows[1].npc = true;
+        rows[1].hp = 1;
+        rows[1].hp_max = 20;
+        rows[2].name = "C".into();
+        rows[2].hp = 2;
+        rows[2].hp_max = 20;
+        rows[2].level = 4;
+        rows[2].class_name = "Wizard".into();
+        let mut log = vec![];
+        party_rest(&mut rows, true, &mut log);
+        assert_eq!(rows[0].hp, 20);
+        assert_eq!(rows[1].hp, 1, "NPC untouched");
+        assert_eq!(rows[2].hp, 20);
+        assert!(log.len() >= 2);
+    }
+
+    #[test]
+    fn confirm_blight_spend_applies_role_stat_skill() {
+        let mut c = Character::new("blight");
+        c.ip = 500;
+        c.level = 4;
+        c.role_rank = 4;
+        c.stats_red.insert("body".into(), 6);
+        c.red_skills.insert("handgun".into(), 2);
+        c.pending_ip.insert("role".into(), 100);
+        c.pending_ip.insert("body".into(), 70);
+        c.pending_ip.insert("sk:handgun".into(), 3);
+        c.leveling = true;
+        assert!(confirm_blight_spend(&mut c));
+        assert_eq!(c.role_rank, 5);
+        assert_eq!(c.red("body"), 7);
+        assert_eq!(*c.red_skills.get("handgun").unwrap(), 3);
+        assert_eq!(c.level, 5);
+        assert!(!c.leveling);
+        assert!(c.pending_ip.is_empty());
+        assert_eq!(c.ip, 500 - 173);
+    }
+
+    #[test]
+    fn confirm_hearth_level_needs_asi_and_cancel_safe() {
+        let mut c = Character::new("hearthsong");
+        c.class_name = "Fighter".into();
+        c.level = 3;
+        c.hp = 20;
+        c.hp_max = 20;
+        c.abilities.insert("str".into(), 10);
+        c.leveling = true;
+        c.pending_asi.insert("str".into(), 1);
+        assert!(!confirm_hearth_level(&mut c), "ASI incomplete");
+        c.pending_asi.insert("str".into(), 2);
+        assert!(confirm_hearth_level(&mut c));
+        assert_eq!(c.level, 4);
+        assert_eq!(c.abil("str"), 12);
+        assert!(!c.leveling);
+        c.leveling = true;
+        c.pending_asi.insert("dex".into(), 1);
+        cancel_leveling(&mut c);
+        assert!(!c.leveling);
+        assert!(c.pending_asi.is_empty());
     }
 }

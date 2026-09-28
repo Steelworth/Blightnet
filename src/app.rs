@@ -10695,6 +10695,7 @@ impl Blightnet {
             }
             let mut i = 0;
             let before = self.combat_log.len();
+            let mut remote_sync = false;
             crate::chars::ui_sheet(
                 ui,
                 &self.root,
@@ -10705,12 +10706,14 @@ impl Blightnet {
                 &mut self.dice,
                 &mut self.combat_log,
                 false,
+                "",
                 &mut self.target,
                 &mut self.luck,
                 &mut self.roll,
                 &self.names,
                 &mut self.zoom_path,
                 &mut None,
+                &mut remote_sync,
             );
             self.remote_chars.insert(id, chars);
             if self.zoom_path.is_some() {
@@ -10723,13 +10726,16 @@ impl Blightnet {
         }
         let before = self.combat_log.len();
         let oid = self.net.self_id.clone();
-        for c in &mut self.chars {
-            if c.owner.is_empty() {
+        // Claim only the open sheet when still unowned — do not stamp the whole roster.
+        let claim_i = self.char_i;
+        if let Some(c) = self.chars.get_mut(claim_i) {
+            if c.owner.is_empty() && !oid.is_empty() {
                 c.owner = oid.clone();
             }
         }
         let sheet_before = sheet_sig(&self.chars);
         let mut sheet_send = None;
+        let mut sheet_sync = false;
         crate::chars::ui_sheet(
             ui,
             &self.root,
@@ -10740,12 +10746,14 @@ impl Blightnet {
             &mut self.dice,
             &mut self.combat_log,
             self.is_gm,
+            &oid,
             &mut self.target,
             &mut self.luck,
             &mut self.roll,
             &self.names,
             &mut self.zoom_path,
             &mut sheet_send,
+            &mut sheet_sync,
         );
         if let Some(body) = sheet_send {
             let label = self
@@ -10767,9 +10775,17 @@ impl Blightnet {
             self.push_sheets();
         }
         self.apply_roll_hp();
-        if sheet_sig(&self.chars) != sheet_before {
+        if sheet_sync {
+            self.force_sheets();
+        } else if sheet_sig(&self.chars) != sheet_before {
             self.mark_sheets();
         }
+    }
+
+    fn force_sheets(&mut self) {
+        self.sheet_dirty = false;
+        crate::chars::save(&self.root, &self.chars);
+        self.push_sheets();
     }
 
     fn push_sheets(&self) {
