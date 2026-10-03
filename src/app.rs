@@ -1046,7 +1046,8 @@ impl Blightnet {
         let nethooks = crate::nethook::load_all(&root);
         let rotn = crate::rotn::Rotn::load(&root);
         let recon = crate::recon::load(&root);
-        let net = NetHub::new("Traveller".into(), &root);
+        // Node must listen inside this process. NetHub::new never binds 18766.
+        let net = NetHub::attach("Traveller".into(), &root);
         note(BootMsg::Step("records"));
         let netspace = crate::netspace::Netspace::new();
         note(BootMsg::Step("city"));
@@ -1107,6 +1108,7 @@ impl Blightnet {
             .first()
             .map(|s| s.id.clone())
             .unwrap_or_else(|| "tavern".into());
+        let node_live = net.daemon;
         let mut app = Self {
             mixer,
             catalog,
@@ -1252,7 +1254,7 @@ impl Blightnet {
             theme_pick: false,
             index_ledger: false,
             ui_scale: UI_SCALE_DEFAULT,
-            node_live: false,
+            node_live,
             path_health: String::new(),
             node_at: Instant::now(),
             clock_acc: 0.0,

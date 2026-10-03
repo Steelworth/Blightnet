@@ -74,20 +74,10 @@ struct Persist {
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(tag = "type")]
 enum Ipc {
-    Hello {
-        token: String,
-        handle: String,
-    },
-    Welcome {
-        ok: bool,
-        err: String,
-    },
-    Cmd {
-        cmd: IpcCmd,
-    },
-    Event {
-        event: IpcEvent,
-    },
+    Hello { token: String, handle: String },
+    Welcome { ok: bool, err: String },
+    Cmd { cmd: IpcCmd },
+    Event { event: IpcEvent },
     Ping,
     Pong,
     Bye,
@@ -96,12 +86,20 @@ enum Ipc {
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(tag = "cmd")]
 enum IpcCmd {
-    Host { internet: bool },
-    Join { invite: String },
+    Host {
+        internet: bool,
+    },
+    Join {
+        invite: String,
+    },
     Leave,
     Online,
-    Dial { addr: String },
-    Send { wire: Wire },
+    Dial {
+        addr: String,
+    },
+    Send {
+        wire: Wire,
+    },
     SendMedia {
         from: String,
         opus: String,
@@ -110,24 +108,34 @@ enum IpcCmd {
         #[serde(default)]
         crew: Option<String>,
     },
-    SetHandle { handle: String },
+    SetHandle {
+        handle: String,
+    },
     RefreshInvite,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(tag = "event")]
 enum IpcEvent {
-    Status { text: String },
+    Status {
+        text: String,
+    },
     Hosting {
         port: u16,
         addrs: Vec<String>,
         internet: bool,
         key: String,
     },
-    Relay { url: String },
-    Joined { addr: String },
+    Relay {
+        url: String,
+    },
+    Joined {
+        addr: String,
+    },
     Left,
-    Peers { peers: Vec<PeerInfo> },
+    Peers {
+        peers: Vec<PeerInfo>,
+    },
     Chat {
         from: String,
         name: String,
@@ -156,9 +164,18 @@ enum IpcEvent {
         time: String,
         inside: bool,
     },
-    Error { text: String },
-    Online { port: u16, addrs: Vec<String> },
-    PeerSeen { id: String, name: String, addr: String },
+    Error {
+        text: String,
+    },
+    Online {
+        port: u16,
+        addrs: Vec<String>,
+    },
+    PeerSeen {
+        id: String,
+        name: String,
+        addr: String,
+    },
     Image {
         from: String,
         name: String,
@@ -182,8 +199,13 @@ enum IpcEvent {
         crew: Option<String>,
         data: String,
     },
-    NethookPut { hook: crate::nethook::Nethook },
-    NethookDel { id: String, owner_id: String },
+    NethookPut {
+        hook: crate::nethook::Nethook,
+    },
+    NethookDel {
+        id: String,
+        owner_id: String,
+    },
     NethookAsk,
     FileStart {
         from: String,
@@ -195,15 +217,30 @@ enum IpcEvent {
         id: String,
         size: u64,
     },
-    FileChunk { id: String, data: String },
-    FileStop { id: String },
-    FileDone { id: String },
-    MapMark { mark: crate::maps::Mark },
-    MapMarkDel { id: String },
-    MapMarks { marks: Vec<crate::maps::Mark> },
+    FileChunk {
+        id: String,
+        data: String,
+    },
+    FileStop {
+        id: String,
+    },
+    FileDone {
+        id: String,
+    },
+    MapMark {
+        mark: crate::maps::Mark,
+    },
+    MapMarkDel {
+        id: String,
+    },
+    MapMarks {
+        marks: Vec<crate::maps::Mark>,
+    },
     MapMarksClear,
     MapMarksAsk,
-    MapTokens { tokens: Vec<crate::maps::MapTok> },
+    MapTokens {
+        tokens: Vec<crate::maps::MapTok>,
+    },
     MapTokensAsk,
     Sheet {
         from: String,
@@ -211,9 +248,19 @@ enum IpcEvent {
     },
     SheetAsk,
     MapImageAsk,
-    Pit { from: String, game: String, body: String },
-    Probe { from: String, n: u64 },
-    ProbeBack { from: String, n: u64 },
+    Pit {
+        from: String,
+        game: String,
+        body: String,
+    },
+    Probe {
+        from: String,
+        n: u64,
+    },
+    ProbeBack {
+        from: String,
+        n: u64,
+    },
     Share {
         from: String,
         name: String,
@@ -579,7 +626,13 @@ fn event_out(ev: &NetEvent) -> IpcEvent {
             kind: kind.clone(),
             body: body.clone(),
         },
-        NetEvent::NetPos { from, name, x, z, yaw } => IpcEvent::NetPos {
+        NetEvent::NetPos {
+            from,
+            name,
+            x,
+            z,
+            yaw,
+        } => IpcEvent::NetPos {
             from: from.clone(),
             name: name.clone(),
             x: *x,
@@ -631,7 +684,12 @@ fn event_in(ev: IpcEvent) -> NetEvent {
             to,
             crew,
         },
-        IpcEvent::VoicePcm { from, pcm, to, crew } => NetEvent::VoicePcm {
+        IpcEvent::VoicePcm {
+            from,
+            pcm,
+            to,
+            crew,
+        } => NetEvent::VoicePcm {
             from,
             samples: pcm_from_b64(&pcm),
             to,
@@ -734,7 +792,19 @@ fn event_in(ev: IpcEvent) -> NetEvent {
         IpcEvent::Sheet { from, chars } => NetEvent::Sheet { from, chars },
         IpcEvent::SheetAsk => NetEvent::SheetAsk,
         IpcEvent::MapImageAsk => NetEvent::MapImageAsk,
-        IpcEvent::NetPos { from, name, x, z, yaw } => NetEvent::NetPos { from, name, x, z, yaw },
+        IpcEvent::NetPos {
+            from,
+            name,
+            x,
+            z,
+            yaw,
+        } => NetEvent::NetPos {
+            from,
+            name,
+            x,
+            z,
+            yaw,
+        },
         IpcEvent::Pit { from, game, body } => NetEvent::Pit { from, game, body },
         IpcEvent::Probe { from, n } => NetEvent::Probe { from, n },
         IpcEvent::ProbeBack { from, n } => NetEvent::ProbeBack { from, n },
@@ -778,7 +848,12 @@ fn cmd_from_ipc(c: IpcCmd, root: &Path) -> Cmd {
         IpcCmd::Online => Cmd::Online,
         IpcCmd::Dial { addr } => Cmd::Dial(addr),
         IpcCmd::Send { wire } => Cmd::Send(wire),
-        IpcCmd::SendMedia { from, opus, to, crew } => Cmd::SendMedia {
+        IpcCmd::SendMedia {
+            from,
+            opus,
+            to,
+            crew,
+        } => Cmd::SendMedia {
             from,
             opus: unb64(&opus),
             to,
@@ -799,7 +874,12 @@ fn ipc_from_cmd(c: &Cmd) -> Option<IpcCmd> {
         Cmd::Online => IpcCmd::Online,
         Cmd::Dial(a) => IpcCmd::Dial { addr: a.clone() },
         Cmd::Send(w) => IpcCmd::Send { wire: w.clone() },
-        Cmd::SendMedia { from, opus, to, crew } => IpcCmd::SendMedia {
+        Cmd::SendMedia {
+            from,
+            opus,
+            to,
+            crew,
+        } => IpcCmd::SendMedia {
             from: from.clone(),
             opus: b64(opus),
             to: to.clone(),
@@ -876,12 +956,18 @@ fn path_looks_like_appimage_mount(p: &Path) -> bool {
     s.contains("/.mount_") || s.contains("/squashfs-root/")
 }
 
+fn running_from_appimage_parts(appimage: bool, appdir: bool, exe_is_mount: bool) -> bool {
+    appimage || appdir || exe_is_mount
+}
+
 fn running_from_appimage() -> bool {
-    std::env::var_os("APPIMAGE").is_some()
-        || std::env::var_os("APPDIR").is_some()
-        || std::env::current_exe()
+    running_from_appimage_parts(
+        std::env::var_os("APPIMAGE").is_some(),
+        std::env::var_os("APPDIR").is_some(),
+        std::env::current_exe()
             .ok()
-            .is_some_and(|p| path_looks_like_appimage_mount(&p))
+            .is_some_and(|p| path_looks_like_appimage_mount(&p)),
+    )
 }
 
 /// Prefer the outer AppImage (AppRun resolves `--root` beside the image).
@@ -903,6 +989,15 @@ fn daemon_spawn_exe() -> Option<PathBuf> {
 }
 
 fn spawn_proc(root: &Path) -> bool {
+    // $APPIMAGE re-exec is a second runtime, not this process's embedded node.
+    // It shares or drops the FUSE mount and leaves nothing on 18766.
+    if running_from_appimage() {
+        log_line(
+            root,
+            "node spawn: refused inside AppImage; node stays in-process",
+        );
+        return false;
+    }
     let Some(exe) = daemon_spawn_exe() else {
         log_line(
             root,
@@ -912,10 +1007,7 @@ fn spawn_proc(root: &Path) -> bool {
     };
     let log = log_path(root);
     let _ = std::fs::create_dir_all(root.join("data"));
-    log_line(
-        root,
-        &format!("node spawn: {exe:?} daemon --root {root:?}"),
-    );
+    log_line(root, &format!("node spawn: {exe:?} daemon --root {root:?}"));
     let Ok(file) = OpenOptions::new().create(true).append(true).open(&log) else {
         return false;
     };
@@ -926,10 +1018,6 @@ fn spawn_proc(root: &Path) -> bool {
     cmd.arg("daemon").arg("--root").arg(root);
     cmd.current_dir(root);
     cmd.env("BLIGHTNET_NODE", "1");
-    // Deck / no-FUSE: re-exec of the AppImage needs extract-and-run.
-    if std::env::var_os("APPIMAGE").is_some() {
-        cmd.env("APPIMAGE_EXTRACT_AND_RUN", "1");
-    }
     cmd.stdin(std::process::Stdio::null());
     cmd.stdout(file);
     cmd.stderr(err);
@@ -987,32 +1075,23 @@ pub fn connect_or_spawn(root: &Path, handle: &str) -> Result<TcpStream, String> 
     if let Some(s) = try_connect(root, handle) {
         return Ok(s);
     }
-    let spawned = spawn_proc(root);
-    if spawned {
-        for _ in 0..CONNECT_TRIES {
-            thread::sleep(Duration::from_millis(80));
-            if let Some(s) = try_connect(root, handle) {
-                return Ok(s);
-            }
-        }
-    } else if running_from_appimage() {
-        // AppImage mount spawn is unreliable; embed without burning the full wait.
-        log_line(root, "node: AppImage path — embedding without spawn wait");
-    } else {
-        // Brief wait in case a concurrent spawn won the race.
-        for _ in 0..4 {
-            thread::sleep(Duration::from_millis(80));
-            if let Some(s) = try_connect(root, handle) {
-                return Ok(s);
-            }
-        }
-    }
-    log_line(root, "node spawn did not accept; embedding in this process");
+    // Bind inside this process (the UI / AppImage). A detached re-exec of the
+    // AppImage dies with the FUSE mount: exit 0 and nothing left on 18766.
+    // spawn_proc refuses that re-exec; the fallback below is for a normal binary.
+    log_line(root, "node: embedding in this process");
     start_embedded(root.to_path_buf());
     for _ in 0..CONNECT_TRIES {
         thread::sleep(Duration::from_millis(80));
         if let Some(s) = try_connect(root, handle) {
             return Ok(s);
+        }
+    }
+    if spawn_proc(root) {
+        for _ in 0..CONNECT_TRIES {
+            thread::sleep(Duration::from_millis(80));
+            if let Some(s) = try_connect(root, handle) {
+                return Ok(s);
+            }
         }
     }
     Err("could not start the Blightnet node".into())
@@ -1081,14 +1160,25 @@ fn run_node(root: PathBuf) -> i32 {
     let _ = std::fs::create_dir_all(root.join("data"));
     eprintln!("blightnet node starting in {}", root.display());
     let _ = std::io::stderr().flush();
-    let listener = match TcpListener::bind(ipc_addr(IPC_PORT))
-        .or_else(|_| TcpListener::bind(ipc_addr(0)))
-    {
+    // Do not fall back to an ephemeral port when 18766 is already ours.
+    // That overwrite replaced the lock, the real listener saw a foreign pid,
+    // exited 0, and deleted the lock — nothing left on 18766.
+    let listener = match TcpListener::bind(ipc_addr(IPC_PORT)) {
         Ok(l) => l,
         Err(e) => {
-            eprintln!("blightnet node bind: {e}");
-            let _ = std::io::stderr().flush();
-            return 1;
+            if try_tcp(IPC_PORT).is_some() {
+                eprintln!("blightnet node: 127.0.0.1:{IPC_PORT} already open ({e})");
+                let _ = std::io::stderr().flush();
+                return 0;
+            }
+            match TcpListener::bind(ipc_addr(0)) {
+                Ok(l) => l,
+                Err(e2) => {
+                    eprintln!("blightnet node bind: {e2}");
+                    let _ = std::io::stderr().flush();
+                    return 1;
+                }
+            }
         }
     };
     let port = listener.local_addr().map(|a| a.port()).unwrap_or(IPC_PORT);
@@ -1187,7 +1277,10 @@ fn run_node(root: PathBuf) -> i32 {
         }
     }
     alive.store(false, Ordering::SeqCst);
-    let _ = std::fs::remove_file(lock_path(&root));
+    // Only unlink a lock this process still owns. A successor's lock must stay.
+    if read_lock(&root).is_some_and(|l| l.pid == std::process::id()) {
+        let _ = std::fs::remove_file(lock_path(&root));
+    }
     0
 }
 
@@ -1522,17 +1615,40 @@ pub fn print_status(root: &Path) -> i32 {
 
 pub fn stop(root: &Path) -> i32 {
     if let Some(lock) = read_lock(root) {
-        #[cfg(unix)]
-        unsafe {
-            libc::kill(lock.pid as i32, libc::SIGTERM);
+        // Ask the node loop to drop the socket. SIGTERM first would kill the
+        // UI when the node is embedded in that process.
+        write_lock(
+            root,
+            &Lock {
+                port: lock.port,
+                token: lock.token.clone(),
+                pid: 0,
+            },
+        );
+        for _ in 0..50 {
+            if try_tcp(lock.port).is_none() && try_tcp(IPC_PORT).is_none() {
+                break;
+            }
+            thread::sleep(Duration::from_millis(40));
         }
-        #[cfg(windows)]
+        // A lock already stored as pid 0 is the drop-socket handshake.
+        // kill(0, SIGTERM) would signal this process group, including the UI.
+        if lock.pid != 0
+            && lock.pid != std::process::id()
+            && (try_tcp(lock.port).is_some() || try_tcp(IPC_PORT).is_some())
         {
-            let mut c = Command::new("taskkill");
-            crate::sys::hide(&mut c);
-            let _ = c.args(["/PID", &lock.pid.to_string(), "/F"]).status();
+            #[cfg(unix)]
+            unsafe {
+                libc::kill(lock.pid as i32, libc::SIGTERM);
+            }
+            #[cfg(windows)]
+            {
+                let mut c = Command::new("taskkill");
+                crate::sys::hide(&mut c);
+                let _ = c.args(["/PID", &lock.pid.to_string(), "/F"]).status();
+            }
+            thread::sleep(Duration::from_millis(200));
         }
-        thread::sleep(Duration::from_millis(200));
         let _ = std::fs::remove_file(lock_path(root));
         println!("NODE  stopped");
         0
@@ -1579,7 +1695,12 @@ mod tests {
             crew: None,
         };
         match event_in(event_out(&pcm)) {
-            NetEvent::VoicePcm { from, to, crew, samples } => {
+            NetEvent::VoicePcm {
+                from,
+                to,
+                crew,
+                samples,
+            } => {
                 assert_eq!(from, "a");
                 assert_eq!(to.as_deref(), Some("b"));
                 assert!(crew.is_none());
@@ -1612,6 +1733,14 @@ mod tests {
     }
 
     #[test]
+    fn appimage_never_detached_spawn() {
+        assert!(running_from_appimage_parts(true, false, false));
+        assert!(running_from_appimage_parts(false, true, false));
+        assert!(running_from_appimage_parts(false, false, true));
+        assert!(!running_from_appimage_parts(false, false, false));
+    }
+
+    #[test]
     fn appimage_mount_path_detected() {
         assert!(path_looks_like_appimage_mount(Path::new(
             "/tmp/.mount_Blight123/usr/bin/blightnet",
@@ -1638,14 +1767,17 @@ mod tests {
                 pid: 1,
             },
         );
-        let mode = std::fs::metadata(lock_path(&dir)).unwrap().permissions().mode() & 0o777;
+        let mode = std::fs::metadata(lock_path(&dir))
+            .unwrap()
+            .permissions()
+            .mode()
+            & 0o777;
         assert_eq!(mode, 0o600);
         let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
     fn lock_roundtrip() {
-
         let dir = std::env::temp_dir().join(format!("bn-daemon-{}", rand::random::<u32>()));
         std::fs::create_dir_all(&dir).unwrap();
         write_lock(
